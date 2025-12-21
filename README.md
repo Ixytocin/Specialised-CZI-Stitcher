@@ -23,6 +23,14 @@ Standard stitching routines often fail with Zeiss .czi files by:
 - **Unicode Safety:** Robust handling of file paths containing spaces or special characters.
 - **Audio Feedback:** Plays a MIDI triad (E-G#-C) on the system synthesizer upon completion.
 
+### Technical Background: The Hybrid Solution
+The decision to implement a **2D-Registration / 3D-Fusion Hybrid** was born out of necessity. 
+
+Traditional 3D-stitching in Fiji often struggles with:
+1. **Dimension Interleaving:** Losing the distinction between Channels and Z-Slices during the fusion process of raw .czi data.
+2. **Computational Overhead:** Attempting to calculate overlaps on full 3D multichannel volumes is memory-intensive and prone to failure on standard workstations.
+
+**The Ixytocin Approach:** By decoupling the *Registration* (using 2D Maximum Intensity Projections) from the *Fusion* (applying calculated coordinates to 3D volumes), we ensure 100% metadata integrity and significantly higher processing stability for large-scale brain sections.
 
 
 ## Requirements
