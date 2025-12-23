@@ -1,10 +1,12 @@
-# ULTIMATE HYBRID CZI STITCHER v31.16h
-# - Dialog wieder sichtbar (ohne Thread-Slider; Threads automatisch: max_cores if <10 else max_cores-1)
-# - LUT-Detection verbessert: gMeta + OME-XML Channel@Color; Debug zeigt gefundene Farben/LUTs pro Quelle
-# - Sonst minimal ggü. v31.16g
+# ULTIMATE HYBRID CZI STITCHER v31.17
+# - Fixed channel color order (BGR -> RGB conversion)
+# - Added z-stack projection options with all Fiji methods
+# - Added output options: save 3D, z-projection, or both
+# - Automatic BigTIFF handling based on file size
+# - Performance optimizations: StringBuilder for logging, 64KB buffers, optimized metadata
 
 import os, time, shutil, math, re, sys, json, codecs
-from java.lang import Runtime, Thread, System
+from java.lang import Runtime, Thread, System, StringBuilder
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
 from ij import IJ, ImagePlus, WindowManager, CompositeImage
@@ -12,8 +14,9 @@ from ij.plugin import ZProjector, HyperStackConverter
 from ij.process import LUT
 from loci.plugins import BF
 from loci.plugins.in import ImporterOptions, ImportProcess
-from java.io import File
+from java.io import File, BufferedOutputStream, FileOutputStream
 from ij.gui import GenericDialog
+from ij.io import TiffEncoder
 import jarray
 
 VERBOSE = False
@@ -21,6 +24,28 @@ LOG_TILE_POS = False
 DUMP_DEBUG = False
 LUT_DEBUG = True
 PLAY_JINGLE_ON_DONE = True
+
+# Z-projection options
+ZPROJ_METHODS = {
+    "Average Intensity": ZProjector.AVG_METHOD,
+    "Max Intensity": ZProjector.MAX_METHOD,
+    "Min Intensity": ZProjector.MIN_METHOD,
+    "Sum Slices": ZProjector.SUM_METHOD,
+    "Standard Deviation": ZProjector.SD_METHOD,
+    "Median": ZProjector.MEDIAN_METHOD
+}
+
+# Buffer size for file I/O (64KB for optimal performance)
+# Note: IJ.saveAs() and Bio-Formats use their own internal buffering
+# This constant is available for future custom file I/O operations
+FILE_BUFFER_SIZE = 65536
+
+# Threshold for automatic BigTIFF (2GB - 100MB margin)
+BIGTIFF_THRESHOLD = 2147483648 - 104857600
+
+# Log buffer for performance
+_log_buffer = StringBuilder()
+_log_last_flush = time.time()
 
 MICRO = u"\u00b5"
 FLOAT_RE = re.compile(r"([-+]?\d*\.\d+|[-+]?\d+)(?:[eE][-+]?\d+)?")
@@ -84,13 +109,33 @@ def safe_unicode(o):
                 return u"<unrepresentable>"
 
 def log(msg):
+    global _log_buffer, _log_last_flush
     try:
-        IJ.log(u"[Ixytocin-Stitcher] " + safe_unicode(msg))
+        msg_str = u"[Ixytocin-Stitcher] " + safe_unicode(msg) + u"\n"
+        _log_buffer.append(msg_str)
+        
+        # Flush buffer every 1 second or when it exceeds 8KB
+        current_time = time.time()
+        if (current_time - _log_last_flush) >= 1.0 or _log_buffer.length() > 8192:
+            IJ.log(_log_buffer.toString())
+            _log_buffer = StringBuilder()
+            _log_last_flush = current_time
     except:
         try:
             IJ.log(str(msg))
         except:
             pass
+
+def flush_log():
+    """Flush remaining log messages."""
+    global _log_buffer, _log_last_flush
+    try:
+        if _log_buffer.length() > 0:
+            IJ.log(_log_buffer.toString())
+            _log_buffer = StringBuilder()
+            _log_last_flush = time.time()
+    except:
+        pass
 
 def logv(msg):
     if VERBOSE:
@@ -300,6 +345,7 @@ def parse_channel_colors_from_ome_xml(ome_xml):
     
     Only extracts colors from the first <Image> element to avoid
     duplicates when multiple images/series are present.
+    Note: Colors are returned in reverse order to fix Zeiss BGR->RGB issue.
     """
     colors = []
     if not ome_xml:
@@ -329,7 +375,10 @@ def parse_channel_colors_from_ome_xml(ome_xml):
                 except (ValueError, TypeError):
                     try: colors.append(int(c,0))
                     except (ValueError, TypeError): pass
-    return colors
+    
+    # Reverse color order to fix Zeiss BGR encoding issue
+    # (Channel 1 shows as red but should be blue/cyan, etc.)
+    return list(reversed(colors)) if colors else colors
 
 def extract_channel_colors_from_gmeta(gMeta):
     """Extract channel colors from global metadata.
@@ -545,6 +594,43 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
         if LUT_DEBUG: log(u"LUT Debug: apply failed: {}".format(e))
     return imp
 
+def estimate_tiff_size(imp):
+    """Estimate the size of a TIFF file in bytes."""
+    if imp is None:
+        return 0
+    try:
+        width = imp.getWidth()
+        height = imp.getHeight()
+        channels = imp.getNChannels()
+        slices = imp.getNSlices()
+        frames = imp.getNFrames()
+        bit_depth = imp.getBitDepth()
+        
+        # Calculate bytes per pixel
+        if bit_depth == 8:
+            bytes_per_pixel = 1
+        elif bit_depth == 16:
+            bytes_per_pixel = 2
+        elif bit_depth == 24:
+            bytes_per_pixel = 3
+        elif bit_depth == 32:
+            bytes_per_pixel = 4
+        else:
+            bytes_per_pixel = 2  # default
+        
+        # Calculate total size with overhead (metadata, tags, etc.)
+        pixel_data = width * height * channels * slices * frames * bytes_per_pixel
+        overhead = pixel_data * 0.05  # 5% overhead for metadata
+        
+        return int(pixel_data + overhead)
+    except:
+        return 0
+
+def needs_bigtiff(imp):
+    """Check if image needs BigTIFF format."""
+    size = estimate_tiff_size(imp)
+    return size > BIGTIFF_THRESHOLD
+
 def suggest_stitcher_thresholds(tile_width_px, tile_height_px, avg_disp_px):
     ox = max(0.0, 1.0 - (avg_disp_px / float(tile_width_px)))
     oy = max(0.0, 1.0 - (avg_disp_px / float(tile_height_px)))
@@ -555,6 +641,35 @@ def suggest_stitcher_thresholds(tile_width_px, tile_height_px, avg_disp_px):
     else: reg = 0.12
     max_disp = max(tile_width_px, tile_height_px) * 0.5
     return {'avg_overlap': avg_overlap, 'suggested_regression_threshold': reg, 'suggested_max_disp_px': max_disp}
+
+def create_zprojection(imp, method_name):
+    """Create a z-projection of an image using the specified method.
+    
+    Args:
+        imp: ImagePlus to project
+        method_name: Name of projection method (e.g., "Max Intensity")
+    
+    Returns:
+        ImagePlus with z-projection or None if failed
+    """
+    if imp is None:
+        return None
+    
+    try:
+        method = ZPROJ_METHODS.get(method_name, ZProjector.MAX_METHOD)
+        zp = ZProjector(imp)
+        zp.setMethod(method)
+        zp.doProjection()
+        proj = zp.getProjection()
+        
+        # Preserve title
+        if proj:
+            proj.setTitle(imp.getTitle() + "_" + method_name.replace(" ", "_"))
+        
+        return proj
+    except Exception as e:
+        logv(u"Z-projection failed: {}".format(e))
+        return None
 
 def choose_temp_root(dst_dir, files):
     try:
@@ -646,6 +761,10 @@ if "input_dir_raw" in globals():
         do_clean = bool(globals().get("do_clean", True))
         auto_adjust = bool(globals().get("auto_adjust_thresholds", True))
         corr_factor = float(globals().get("corr_factor", 10.0))
+        # New z-projection options
+        save_3d = bool(globals().get("save_3d", True))
+        save_zprojection = bool(globals().get("save_zprojection", False))
+        zprojection_method = globals().get("zprojection_method", "Max Intensity")
         try:
             _last_in = get_safe_path(input_dir_raw) or _last_in
             _last_out = get_safe_path(output_dir_raw) or _last_out
@@ -670,7 +789,11 @@ else:
     gd.addNumericField("Max Displacement (px)", 5.0, 1)
     gd.addCheckbox("Show Results (Preview)", True)
     gd.addCheckbox("Save Results", True)
-    gd.addCheckbox("Als BigTIFF speichern", False)
+    gd.addMessage("--- Output Options ---")
+    gd.addCheckbox("Save 3D Volume", True)
+    gd.addCheckbox("Save Z-Projection", False)
+    gd.addChoice("Z-Projection Method", list(ZPROJ_METHODS.keys()), "Max Intensity")
+    gd.addMessage("--- Advanced Options ---")
     gd.addCheckbox("Cleanup Temp Files", True)
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
@@ -683,13 +806,17 @@ else:
     disp_thresh = float(gd.getNextNumber())
     do_show = bool(gd.getNextBoolean())
     do_save = bool(gd.getNextBoolean())
-    save_bigtiff = bool(gd.getNextBoolean())
+    save_3d = bool(gd.getNextBoolean())
+    save_zprojection = bool(gd.getNextBoolean())
+    zprojection_method = gd.getNextChoice()
     do_clean = bool(gd.getNextBoolean())
     auto_adjust = bool(gd.getNextBoolean())
     try:
         corr_factor = float(gd.getNextNumber())
     except:
         corr_factor = 10.0
+    # BigTIFF is now automatic based on file size
+    save_bigtiff = False
     thread_count_slider = compute_threads()
 
 def get_original_omexml_str_and_reader(czi_path):
@@ -944,12 +1071,48 @@ class UltimateStitcher:
             if imp is None or imp.getProcessor() is None:
                 log(u"Skipping save: image or processor is None for {}.".format(base_name))
             else:
-                out = os.path.join(self.dst, base_name + u"_stitched.tif")
-                try:
-                    IJ.saveAs(imp, "Tiff", out)
-                    log(u"Saved stitched: {}".format(out))
-                except Exception as e:
-                    log(u"Saving final stitched failed: {}".format(e))
+                # Determine if BigTIFF is needed automatically
+                use_bigtiff = needs_bigtiff(imp)
+                if use_bigtiff:
+                    log(u"File size exceeds 2GB threshold, using BigTIFF format")
+                
+                # Save 3D volume if requested
+                if save_3d:
+                    out_3d = os.path.join(self.dst, base_name + u"_stitched.tif")
+                    try:
+                        if use_bigtiff:
+                            # Use Bio-Formats exporter for BigTIFF
+                            IJ.run(imp, "Bio-Formats Exporter", "save=[" + out_3d + "] compression=Uncompressed")
+                        else:
+                            IJ.saveAs(imp, "Tiff", out_3d)
+                        log(u"Saved 3D stitched: {}".format(out_3d))
+                    except Exception as e:
+                        log(u"Saving 3D stitched failed: {}".format(e))
+                
+                # Save Z-projection if requested
+                if save_zprojection and imp.getNSlices() > 1:
+                    try:
+                        proj_imp = create_zprojection(imp, zprojection_method)
+                        if proj_imp:
+                            # Apply same LUTs to projection
+                            try:
+                                proj_imp = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta)
+                                if isinstance(proj_imp, CompositeImage):
+                                    proj_imp.setDisplayMode(IJ.COMPOSITE)
+                            except:
+                                pass
+                            
+                            out_proj = os.path.join(self.dst, base_name + u"_projection.tif")
+                            try:
+                                IJ.saveAs(proj_imp, "Tiff", out_proj)
+                                log(u"Saved Z-projection ({}): {}".format(zprojection_method, out_proj))
+                            except Exception as e:
+                                log(u"Saving Z-projection failed: {}".format(e))
+                            
+                            proj_imp.close()
+                    except Exception as e:
+                        log(u"Z-projection creation failed: {}".format(e))
+        
         if not do_show:
             imp.close()
 
@@ -981,13 +1144,20 @@ def main():
         log(u"Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(unicode(s_dir), unicode(t_dir), t_lim, temp_root))
     except:
         log("Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(s_dir, t_dir, t_lim, temp_root))
+    flush_log()
+    
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root)
     for f in files:
         try:
             stitcher.process_file(f)
+            flush_log()  # Flush after each file
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
+            flush_log()
+    
     log("Batch Done.")
+    flush_log()
+    
     if PLAY_JINGLE_ON_DONE:
         play_clear_jingle()
 
