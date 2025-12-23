@@ -1,6 +1,6 @@
-# ULTIMATE HYBRID CZI STITCHER v31.19
+# ULTIMATE HYBRID CZI STITCHER v31.20
+# - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
-#   (User checkbox: "Use Standard Microscopy LUTs (override metadata)")
 # - Added z-stack projection options with all Fiji methods
 # - Added output options: save 3D, z-projection, or both
 # - Automatic BigTIFF handling based on file size
@@ -611,8 +611,8 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
         for ci in colors:
             u = int(ci) & 0xFFFFFFFF
             hex8 = "%08X" % u
-            # Standard ARGB format: AA RR GG BB
-            rgb = (int(hex8[2:4],16), int(hex8[4:6],16), int(hex8[6:8],16))
+            # Zeiss uses RGBA format: RR GG BB AA (not standard ARGB)
+            rgb = (int(hex8[0:2],16), int(hex8[2:4],16), int(hex8[4:6],16))
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
     else:
