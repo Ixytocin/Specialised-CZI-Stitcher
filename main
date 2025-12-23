@@ -296,18 +296,92 @@ def try_ome_stage_labels_from_xml(xml, reader, series_index):
     return None
 
 def parse_channel_colors_from_ome_xml(ome_xml):
+    """Parse channel colors from OME-XML.
+    
+    Only extracts colors from the first <Image> element to avoid
+    duplicates when multiple images/series are present.
+    """
     colors = []
     if not ome_xml:
         return colors
     xml = ensure_unicode(ome_xml)
-    for m in _CHANNEL_COLOR_RE.finditer(xml):
-        attrs = dict(ATTR_RE.findall(m.group(1)))
-        c = attrs.get('Color') or attrs.get('color')
-        if c:
-            try: colors.append(int(c))
-            except:
-                try: colors.append(int(c,0))
-                except: pass
+    
+    # Find the first <Image> element
+    image_match = re.search(r'<(?:[A-Za-z0-9_]+:)?Image\b[^>]*>(.*?)</(?:[A-Za-z0-9_]+:)?Image>', xml, re.IGNORECASE | re.DOTALL)
+    if image_match:
+        # Only search for channels within the first image
+        image_content = image_match.group(1)
+        for m in _CHANNEL_COLOR_RE.finditer(image_content):
+            attrs = dict(ATTR_RE.findall(m.group(1)))
+            c = attrs.get('Color') or attrs.get('color')
+            if c:
+                try: colors.append(int(c))
+                except (ValueError, TypeError):
+                    try: colors.append(int(c,0))
+                    except (ValueError, TypeError): pass
+    else:
+        # Fallback: search all Channel tags if no Image tag found
+        for m in _CHANNEL_COLOR_RE.finditer(xml):
+            attrs = dict(ATTR_RE.findall(m.group(1)))
+            c = attrs.get('Color') or attrs.get('color')
+            if c:
+                try: colors.append(int(c))
+                except (ValueError, TypeError):
+                    try: colors.append(int(c,0))
+                    except (ValueError, TypeError): pass
+    return colors
+
+def extract_channel_colors_from_gmeta(gMeta):
+    """Extract channel colors from global metadata.
+    
+    Looks for keys containing 'channel' and 'color' or similar patterns
+    that indicate color information per channel.
+    """
+    colors = []
+    if not gMeta:
+        return colors
+    
+    # Try to find channel color information in global metadata
+    color_map = {}
+    try:
+        for k in gMeta.keySet():
+            try:
+                keystr = safe_unicode(k)
+                val = safe_unicode(gMeta.get(k))
+            except (AttributeError, TypeError):
+                continue
+            
+            lkey = keystr.lower()
+            
+            # Look for keys that contain channel and color information
+            # e.g., "Channel 0 Color", "ChannelColor0", "DisplaySetting|Channels|Channel 0|Color"
+            if ('channel' in lkey or 'ch' in lkey) and 'color' in lkey:
+                # Try to extract channel index
+                match = re.search(r'(\d+)', keystr)
+                if match:
+                    ch_idx = int(match.group(1))
+                    # Try to parse the color value
+                    try:
+                        # Could be hex string or integer
+                        if val.startswith('#'):
+                            color_int = int(val[1:], 16)
+                        elif val.startswith('0x'):
+                            color_int = int(val, 16)
+                        else:
+                            color_int = int(val)
+                        color_map[ch_idx] = color_int
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+    except Exception as e:
+        logv(u"extract_channel_colors_from_gmeta error: {}".format(e))
+    
+    # Convert to ordered list
+    if color_map:
+        max_idx = max(color_map.keys())
+        for i in range(max_idx + 1):
+            if i in color_map:
+                colors.append(color_map[i])
+    
     return colors
 
 def get_full_res_series_indices(reader):
