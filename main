@@ -1,8 +1,9 @@
-# SPECIALISED BATCH STITCHER WITH Z-PROJECTION v32.0
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v33.0
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
 # - Z-stack projection: 6 methods with save/view options
+# - Sharp-slice detection: ROI-based or global sharpness analysis for selective z-range fusion
 # - Output options: save 3D, z-projection, or both; view projections
 # - Automatic BigTIFF handling based on file size
 # - Enhanced filenames: include processing parameters in output
@@ -37,6 +38,13 @@ ZPROJ_METHODS = {
     "Sum Slices": ZProjector.SUM_METHOD,
     "Standard Deviation": ZProjector.SD_METHOD,
     "Median": ZProjector.MEDIAN_METHOD
+}
+
+# Sharp-slice detection methods
+SHARPNESS_METHODS = {
+    "Laplacian Variance": "laplacian",
+    "Tenengrad Gradient": "tenengrad",
+    "Normalized Variance": "variance"
 }
 
 # Buffer size for file I/O (64KB for optimal performance)
@@ -115,7 +123,7 @@ def safe_unicode(o):
 def log(msg):
     global _log_buffer, _log_last_flush
     try:
-        msg_str = u"[Specialised Batch Stitcher] " + safe_unicode(msg) + u"\n"
+        msg_str = u"[Specialised CZI Stitcher] " + safe_unicode(msg) + u"\n"
         _log_buffer.append(msg_str)
         
         # Flush buffer every 1 second or when it exceeds 8KB
@@ -144,6 +152,167 @@ def flush_log():
 def logv(msg):
     if VERBOSE:
         log(msg)
+
+def compute_sharpness_laplacian(imp_slice):
+    """Compute sharpness using Laplacian variance method."""
+    from ij.plugin.filter import Convolver
+    from ij.process import FloatProcessor
+    ip = imp_slice.getProcessor().convertToFloat()
+    kernel = [-1, -1, -1, -1, 8, -1, -1, -1, -1]
+    convolver = Convolver()
+    convolver.convolve(ip, kernel, 3, 3)
+    pixels = ip.getPixels()
+    mean_val = sum(pixels) / len(pixels)
+    variance = sum([(p - mean_val) ** 2 for p in pixels]) / len(pixels)
+    return variance
+
+def compute_sharpness_tenengrad(imp_slice):
+    """Compute sharpness using Tenengrad gradient method."""
+    from ij.plugin.filter import Convolver
+    ip = imp_slice.getProcessor().convertToFloat()
+    # Sobel X kernel
+    kernelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1]
+    # Sobel Y kernel
+    kernelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1]
+    convolver = Convolver()
+    ipX = ip.duplicate()
+    ipY = ip.duplicate()
+    convolver.convolve(ipX, kernelX, 3, 3)
+    convolver.convolve(ipY, kernelY, 3, 3)
+    pixelsX = ipX.getPixels()
+    pixelsY = ipY.getPixels()
+    gradient_magnitude = sum([math.sqrt(px**2 + py**2) for px, py in zip(pixelsX, pixelsY)])
+    return gradient_magnitude / len(pixelsX)
+
+def compute_sharpness_variance(imp_slice):
+    """Compute sharpness using normalized variance method."""
+    ip = imp_slice.getProcessor()
+    pixels = ip.getPixels()
+    mean_val = sum(pixels) / float(len(pixels))
+    if mean_val == 0:
+        return 0
+    variance = sum([(p - mean_val) ** 2 for p in pixels]) / float(len(pixels))
+    return variance / mean_val if mean_val > 0 else 0
+
+def compute_sharpness(imp_slice, method="laplacian"):
+    """Compute sharpness of a single slice using specified method."""
+    if method == "laplacian":
+        return compute_sharpness_laplacian(imp_slice)
+    elif method == "tenengrad":
+        return compute_sharpness_tenengrad(imp_slice)
+    elif method == "variance":
+        return compute_sharpness_variance(imp_slice)
+    else:
+        return compute_sharpness_laplacian(imp_slice)
+
+def detect_sharp_slices_global(imp, threshold, method="laplacian"):
+    """Detect sharp slices using global sharpness analysis.
+    
+    Args:
+        imp: ImagePlus with z-stack
+        threshold: Sharpness threshold (0.0-1.0)
+        method: Sharpness detection method
+    
+    Returns:
+        (start_slice, end_slice) tuple (1-indexed)
+    """
+    nSlices = imp.getNSlices()
+    if nSlices <= 1:
+        return (1, 1)
+    
+    log("Computing global sharpness for %d slices (method: %s)..." % (nSlices, method))
+    sharpness_scores = []
+    
+    # Compute sharpness for each slice
+    for z in range(1, nSlices + 1):
+        imp.setSlice(z)
+        score = compute_sharpness(imp, method)
+        sharpness_scores.append(score)
+    
+    # Find threshold value
+    max_score = max(sharpness_scores)
+    min_score = min(sharpness_scores)
+    threshold_value = min_score + (max_score - min_score) * threshold
+    
+    # Find continuous range of sharp slices
+    sharp_indices = [i for i, score in enumerate(sharpness_scores) if score >= threshold_value]
+    
+    if not sharp_indices:
+        log("Warning: No slices met sharpness threshold, using all slices")
+        return (1, nSlices)
+    
+    start_slice = sharp_indices[0] + 1  # Convert to 1-indexed
+    end_slice = sharp_indices[-1] + 1
+    
+    log("Sharp slice range (global): Z %d to %d" % (start_slice, end_slice))
+    return (start_slice, end_slice)
+
+def detect_sharp_slices_roi(imp, threshold, method="laplacian", roi_grid_size=3):
+    """Detect sharp slices using ROI-based local sharpness analysis.
+    
+    Args:
+        imp: ImagePlus with z-stack
+        threshold: Sharpness threshold (0.0-1.0)
+        method: Sharpness detection method
+        roi_grid_size: Grid size for ROI analysis (n x n grid)
+    
+    Returns:
+        (start_slice, end_slice) tuple (1-indexed)
+    """
+    from ij.gui import Roi
+    nSlices = imp.getNSlices()
+    if nSlices <= 1:
+        return (1, 1)
+    
+    width = imp.getWidth()
+    height = imp.getHeight()
+    roi_width = width / roi_grid_size
+    roi_height = height / roi_grid_size
+    
+    log("Computing ROI-based sharpness for %d slices (%dx%d grid, method: %s)..." % 
+        (nSlices, roi_grid_size, roi_grid_size, method))
+    
+    all_sharp_ranges = []
+    
+    # Process each ROI
+    for row in range(roi_grid_size):
+        for col in range(roi_grid_size):
+            x = col * roi_width
+            y = row * roi_height
+            roi = Roi(int(x), int(y), int(roi_width), int(roi_height))
+            imp.setRoi(roi)
+            
+            sharpness_scores = []
+            for z in range(1, nSlices + 1):
+                imp.setSlice(z)
+                score = compute_sharpness(imp, method)
+                sharpness_scores.append(score)
+            
+            # Find threshold for this ROI
+            max_score = max(sharpness_scores)
+            min_score = min(sharpness_scores)
+            threshold_value = min_score + (max_score - min_score) * threshold
+            
+            # Find sharp range for this ROI
+            sharp_indices = [i for i, score in enumerate(sharpness_scores) if score >= threshold_value]
+            
+            if sharp_indices:
+                start_z = sharp_indices[0] + 1
+                end_z = sharp_indices[-1] + 1
+                all_sharp_ranges.append((start_z, end_z))
+    
+    imp.killRoi()
+    
+    # Merge all ROI ranges - use union of all sharp regions
+    if not all_sharp_ranges:
+        log("Warning: No sharp regions found in any ROI, using all slices")
+        return (1, nSlices)
+    
+    start_slice = min([r[0] for r in all_sharp_ranges])
+    end_slice = max([r[1] for r in all_sharp_ranges])
+    
+    log("Sharp slice range (ROI %dx%d): Z %d to %d" % (roi_grid_size, roi_grid_size, start_slice, end_slice))
+    return (start_slice, end_slice)
 
 def get_safe_path(f):
     if f is None: return u""
@@ -853,10 +1022,10 @@ if "input_dir_raw" in globals():
         pass
 else:
     # Show initialization message
-    IJ.showStatus("Specialised Batch Stitcher - Initializing, please wait...")
+    IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("\\Clear")
-    IJ.log("[Specialised Batch Stitcher] Initializing...")
-    IJ.log("[Specialised Batch Stitcher] Loading Bio-Formats and stitching plugins...")
+    IJ.log("[Specialised CZI Stitcher] Initializing...")
+    IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     in_path = pick_directory_with_jfilechooser("Select Source Folder (CZI Files)", _last_in)
     if not in_path: log("No source selected. Exiting."); raise SystemExit("Cancelled by user")
@@ -864,18 +1033,24 @@ else:
     if not out_path: log("No target selected. Exiting."); raise SystemExit("Cancelled by user")
     _config["last_input_dir"] = in_path; _config["last_output_dir"] = out_path; _save_config(_config)
     input_dir_raw = File(unicode(in_path)); output_dir_raw = File(unicode(out_path))
-    gd = GenericDialog("Specialised Batch Stitcher - Parameters")
+    gd = GenericDialog("Specialised CZI Stitcher - Parameters")
     gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
     gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
     gd.addNumericField("Regression Threshold", 0.30, 2)
     gd.addNumericField("Max Displacement (px)", 5.0, 1)
-    gd.addCheckbox("Show Results (Preview)", True)
-    gd.addCheckbox("Save Results", True)
-    gd.addMessage("--- Output Options ---")
-    gd.addCheckbox("Save 3D Volume", True)
+    gd.addMessage("--- Stitched Volume Options ---")
+    gd.addCheckbox("Show Stitched Volume", True)
+    gd.addCheckbox("Save Stitched Volume", True)
+    gd.addMessage("--- Z-Projection Options ---")
+    gd.addCheckbox("Show Z-Projection", False)
     gd.addCheckbox("Save Z-Projection", False)
-    gd.addCheckbox("View Z-Projection", False)
     gd.addChoice("Z-Projection Method", list(ZPROJ_METHODS.keys()), "Max Intensity")
+    gd.addMessage("--- Sharp-Slice Detection (optional) ---")
+    gd.addCheckbox("Enable Sharp-Slice Detection", False)
+    gd.addChoice("Detection Mode", ["Global", "ROI-based"], "Global")
+    gd.addNumericField("Sharpness Threshold (0.0-1.0)", 0.3, 2)
+    gd.addChoice("Detection Method", list(SHARPNESS_METHODS.keys()), "Laplacian Variance")
+    gd.addNumericField("ROI Grid Size (n x n, if ROI mode)", 3, 0)
     gd.addMessage("--- Color Options ---")
     gd.addCheckbox("Use Standard Microscopy LUTs (override metadata)", False)
     gd.addMessage("--- Advanced Options ---")
@@ -891,10 +1066,15 @@ else:
     disp_thresh = float(gd.getNextNumber())
     do_show = bool(gd.getNextBoolean())
     do_save = bool(gd.getNextBoolean())
-    save_3d = bool(gd.getNextBoolean())
-    save_zprojection = bool(gd.getNextBoolean())
     view_zprojection = bool(gd.getNextBoolean())
+    save_zprojection = bool(gd.getNextBoolean())
     zprojection_method = gd.getNextChoice()
+    enable_sharp_detection = bool(gd.getNextBoolean())
+    sharp_detection_mode = gd.getNextChoice()
+    sharp_threshold = float(gd.getNextNumber())
+    sharp_method_name = gd.getNextChoice()
+    sharp_method = SHARPNESS_METHODS.get(sharp_method_name, "laplacian")
+    roi_grid_size = int(gd.getNextNumber())
     use_standard_luts = bool(gd.getNextBoolean())
     do_clean = bool(gd.getNextBoolean())
     auto_adjust = bool(gd.getNextBoolean())
@@ -904,6 +1084,8 @@ else:
         corr_factor = 10.0
     # BigTIFF is now automatic based on file size
     save_bigtiff = False
+    # Backward compatibility - save_3d is now do_save
+    save_3d = do_save
     thread_count_slider = compute_threads()
 
 def get_original_omexml_str_and_reader(czi_path):
@@ -1165,6 +1347,27 @@ class UltimateStitcher:
                 if rb_radius > 0:
                     filename_suffix += u"_rb{}".format(rb_radius)
                 
+                # Apply sharp-slice detection if enabled
+                sharp_range_str = ""
+                if enable_sharp_detection and imp.getNSlices() > 1:
+                    try:
+                        if sharp_detection_mode == "ROI-based":
+                            start_z, end_z = detect_sharp_slices_roi(imp, sharp_threshold, sharp_method, roi_grid_size)
+                        else:
+                            start_z, end_z = detect_sharp_slices_global(imp, sharp_threshold, sharp_method)
+                        
+                        # Create substack with only sharp slices
+                        if start_z > 1 or end_z < imp.getNSlices():
+                            log("Extracting sharp z-slices %d to %d..." % (start_z, end_z))
+                            IJ.run(imp, "Make Substack...", "slices=%d-%d" % (start_z, end_z))
+                            imp_sharp = WindowManager.getCurrentImage()
+                            if imp_sharp:
+                                imp.close()
+                                imp = imp_sharp
+                                sharp_range_str = "_z%d-%d" % (start_z, end_z)
+                    except Exception as e:
+                        log("Sharp-slice detection failed: %s" % str(e))
+                
                 # Determine if BigTIFF is needed automatically
                 use_bigtiff = needs_bigtiff(imp)
                 if use_bigtiff:
@@ -1172,7 +1375,7 @@ class UltimateStitcher:
                 
                 # Save 3D volume if requested
                 if save_3d:
-                    out_3d = os.path.join(self.dst, base_name + filename_suffix + u".tif")
+                    out_3d = os.path.join(self.dst, base_name + filename_suffix + sharp_range_str + u".tif")
                     try:
                         if use_bigtiff:
                             # Use Bio-Formats exporter for BigTIFF
@@ -1196,9 +1399,9 @@ class UltimateStitcher:
                             except:
                                 pass
                             
-                            # Build projection filename with method
+                            # Build projection filename with method and sharp range
                             proj_method_short = zprojection_method.replace(" ", "").replace("Intensity", "").lower()
-                            out_proj = os.path.join(self.dst, base_name + filename_suffix + u"_{}_projection.tif".format(proj_method_short))
+                            out_proj = os.path.join(self.dst, base_name + filename_suffix + sharp_range_str + u"_{}_projection.tif".format(proj_method_short))
                             
                             # Save if requested
                             if save_zprojection:
