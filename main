@@ -1,9 +1,11 @@
-# ULTIMATE HYBRID CZI STITCHER v31.20
+# SPECIALISED BATCH STITCHER WITH Z-PROJECTION v32.0
+# A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
-# - Added z-stack projection options with all Fiji methods
-# - Added output options: save 3D, z-projection, or both
+# - Z-stack projection: 6 methods with save/view options
+# - Output options: save 3D, z-projection, or both; view projections
 # - Automatic BigTIFF handling based on file size
+# - Enhanced filenames: include processing parameters in output
 # - Performance optimizations: StringBuilder for logging, optimized metadata
 # - Fail-fast: Process largest file first for early error detection
 
@@ -113,7 +115,7 @@ def safe_unicode(o):
 def log(msg):
     global _log_buffer, _log_last_flush
     try:
-        msg_str = u"[Ixytocin-Stitcher] " + safe_unicode(msg) + u"\n"
+        msg_str = u"[Specialised Batch Stitcher] " + safe_unicode(msg) + u"\n"
         _log_buffer.append(msg_str)
         
         # Flush buffer every 1 second or when it exceeds 8KB
@@ -818,6 +820,7 @@ if "input_dir_raw" in globals():
         # New z-projection options
         save_3d = bool(globals().get("save_3d", True))
         save_zprojection = bool(globals().get("save_zprojection", False))
+        view_zprojection = bool(globals().get("view_zprojection", False))
         zprojection_method = globals().get("zprojection_method", "Max Intensity")
         use_standard_luts = bool(globals().get("use_standard_luts", False))
         try:
@@ -831,13 +834,19 @@ if "input_dir_raw" in globals():
     except Exception:
         pass
 else:
+    # Show initialization message
+    IJ.showStatus("Specialised Batch Stitcher - Initializing, please wait...")
+    IJ.log("\\Clear")
+    IJ.log("[Specialised Batch Stitcher] Initializing...")
+    IJ.log("[Specialised Batch Stitcher] Loading Bio-Formats and stitching plugins...")
+    
     in_path = pick_directory_with_jfilechooser("Select Source Folder (CZI Files)", _last_in)
     if not in_path: log("No source selected. Exiting."); raise SystemExit("Cancelled by user")
     out_path = pick_directory_with_jfilechooser("Select Target Folder (Results)", _last_out)
     if not out_path: log("No target selected. Exiting."); raise SystemExit("Cancelled by user")
     _config["last_input_dir"] = in_path; _config["last_output_dir"] = out_path; _save_config(_config)
     input_dir_raw = File(unicode(in_path)); output_dir_raw = File(unicode(out_path))
-    gd = GenericDialog("Ixytocin Stitcher - Parameters")
+    gd = GenericDialog("Specialised Batch Stitcher - Parameters")
     gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
     gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
     gd.addNumericField("Regression Threshold", 0.30, 2)
@@ -847,6 +856,7 @@ else:
     gd.addMessage("--- Output Options ---")
     gd.addCheckbox("Save 3D Volume", True)
     gd.addCheckbox("Save Z-Projection", False)
+    gd.addCheckbox("View Z-Projection", False)
     gd.addChoice("Z-Projection Method", list(ZPROJ_METHODS.keys()), "Max Intensity")
     gd.addMessage("--- Color Options ---")
     gd.addCheckbox("Use Standard Microscopy LUTs (override metadata)", False)
@@ -865,6 +875,7 @@ else:
     do_save = bool(gd.getNextBoolean())
     save_3d = bool(gd.getNextBoolean())
     save_zprojection = bool(gd.getNextBoolean())
+    view_zprojection = bool(gd.getNextBoolean())
     zprojection_method = gd.getNextChoice()
     use_standard_luts = bool(gd.getNextBoolean())
     do_clean = bool(gd.getNextBoolean())
@@ -1129,6 +1140,11 @@ class UltimateStitcher:
             if imp is None or imp.getProcessor() is None:
                 log(u"Skipping save: image or processor is None for {}.".format(base_name))
             else:
+                # Build filename suffix with processing parameters
+                filename_suffix = u"_stitched"
+                if rb_radius > 0:
+                    filename_suffix += u"_rb{}".format(rb_radius)
+                
                 # Determine if BigTIFF is needed automatically
                 use_bigtiff = needs_bigtiff(imp)
                 if use_bigtiff:
@@ -1136,7 +1152,7 @@ class UltimateStitcher:
                 
                 # Save 3D volume if requested
                 if save_3d:
-                    out_3d = os.path.join(self.dst, base_name + u"_stitched.tif")
+                    out_3d = os.path.join(self.dst, base_name + filename_suffix + u".tif")
                     try:
                         if use_bigtiff:
                             # Use Bio-Formats exporter for BigTIFF
@@ -1147,8 +1163,8 @@ class UltimateStitcher:
                     except Exception as e:
                         log(u"Saving 3D stitched failed: {}".format(e))
                 
-                # Save Z-projection if requested
-                if save_zprojection and imp.getNSlices() > 1:
+                # Create Z-projection if save or view is requested
+                if (save_zprojection or view_zprojection) and imp.getNSlices() > 1:
                     try:
                         proj_imp = create_zprojection(imp, zprojection_method)
                         if proj_imp:
@@ -1160,14 +1176,26 @@ class UltimateStitcher:
                             except:
                                 pass
                             
-                            out_proj = os.path.join(self.dst, base_name + u"_projection.tif")
-                            try:
-                                IJ.saveAs(proj_imp, "Tiff", out_proj)
-                                log(u"Saved Z-projection ({}): {}".format(zprojection_method, out_proj))
-                            except Exception as e:
-                                log(u"Saving Z-projection failed: {}".format(e))
+                            # Build projection filename with method
+                            proj_method_short = zprojection_method.replace(" ", "").replace("Intensity", "").lower()
+                            out_proj = os.path.join(self.dst, base_name + filename_suffix + u"_{}_projection.tif".format(proj_method_short))
                             
-                            proj_imp.close()
+                            # Save if requested
+                            if save_zprojection:
+                                try:
+                                    IJ.saveAs(proj_imp, "Tiff", out_proj)
+                                    log(u"Saved Z-projection ({}): {}".format(zprojection_method, out_proj))
+                                except Exception as e:
+                                    log(u"Saving Z-projection failed: {}".format(e))
+                            
+                            # Show if requested
+                            if view_zprojection:
+                                proj_imp.setTitle(os.path.basename(out_proj))
+                                proj_imp.show()
+                                log(u"Displaying Z-projection ({})".format(zprojection_method))
+                            elif save_zprojection:
+                                # Close if only saving (not viewing)
+                                proj_imp.close()
                     except Exception as e:
                         log(u"Z-projection creation failed: {}".format(e))
         
