@@ -29,6 +29,7 @@ LOG_TILE_POS = False
 DUMP_DEBUG = False
 LUT_DEBUG = True
 PLAY_JINGLE_ON_DONE = True
+DEBUG_MODE = False  # Set via dialog checkbox
 
 # Z-projection options
 ZPROJ_METHODS = {
@@ -1093,6 +1094,139 @@ if "input_dir_raw" in globals():
             pass
     except Exception:
         pass
+def show_help_dialog():
+    """Display comprehensive help for all parameters."""
+    from ij.gui import GenericDialog
+    help_text = """
+SPECIALISED CZI STITCHER - HELP
+
+=== FOLDER PATHS ===
+Input: Source folder containing .czi files
+Processing: Temporary folder for intermediate files (auto-created)
+Output: Destination folder for stitched results
+
+Tip: All three paths auto-fill to input folder by default. Change if needed.
+
+=== STITCHED VOLUME OPTIONS ===
+Show: Display stitched result in Fiji after processing
+Save: Write stitched volume to disk as TIFF
+
+=== Z-PROJECTION OPTIONS ===
+Show: Display z-projection in Fiji after processing
+Save: Write z-projection to disk as TIFF
+Method: How to collapse z-stack into 2D image:
+  - Max Intensity: Brightest pixel across z (best for sparse signals)
+  - Average: Mean intensity (reduces noise)
+  - Min Intensity: Darkest pixel (rarely used)
+  - Sum: Total intensity (for quantification)
+  - Std Dev: Variation across z (shows z-structure)
+  - Median: Middle value (robust to outliers)
+
+=== SHARP-SLICE DETECTION (Advanced) ===
+PURPOSE: Automatically find in-focus z-range to improve projection quality
+For tilted samples or non-uniform focus across the field of view.
+
+Enable: Turn on automatic detection of sharp (in-focus) slices
+
+Detection Modes:
+  GLOBAL MODE (uniform samples):
+    - Analyzes entire image as one region
+    - Faster processing
+    - Best when: sample is flat/coplanar, uniform focus across field
+    - Finds single z-range where whole image is sharp
+  
+  ROI-BASED MODE (tilted/non-coplanar samples):
+    - Divides image into n×n grid of regions (e.g., 3×3 = 9 regions)
+    - Each region analyzed independently across ALL z-slices
+    - Finds which z-slices have ANY part of image in focus
+    - All regions' z-ranges merged to capture all in-focus areas
+    - Slower but handles tilted samples, bubbles, uneven mounting
+    
+    Example: If top-left corner sharp at z5-8 and bottom-right sharp 
+    at z12-15, merged range is z5-15 (includes both focused regions)
+    
+    IMPORTANT: Final output includes ENTIRE x-y plane (whole slices)
+    for all z-slices in merged range. We don't crop to ROI boundaries.
+
+Threshold: Sensitivity (0.0-1.0)
+  RECOMMENDED VALUES:
+    - 0.3 = standard (good starting point for most samples)
+    - 0.2-0.4 = typical range
+    - Lower (0.1-0.2) = more slices included (less strict, noisier samples)
+    - Higher (0.5-0.7) = fewer slices (more strict, high SNR samples)
+  
+  Thresholds are NOT directly comparable between methods!
+  Each method has different score ranges and distributions.
+
+Detection Methods:
+  - Laplacian Variance: Standard approach, robust (RECOMMENDED, start here)
+  - Tenengrad Gradient: Edge-based, good for high contrast structures
+  - Normalized Variance: Simple intensity variance, fast but sensitive to noise
+  
+  Method choice matters less than threshold tuning for your sample type.
+
+ROI Grid Size: For ROI mode only (n×n grid)
+  - 3×3 = 9 regions (RECOMMENDED for most non-coplanar samples)
+  - 5×5 = 25 regions (more detail, longer processing)
+  - 10×10 = 100 regions (WARNING: Very slow! Only for extreme tilt)
+  - Larger grid = finer spatial resolution but slower processing
+
+How Detection Works (Technical):
+  1. Each region analyzes ALL z-slices for sharpness
+  2. Computes sharpness score per slice per region
+  3. Threshold applied: keep slices above threshold
+  4. Within-slice gap filling: bridges gaps of 1-2 slices
+     (handles temporary focus flicker or noise)
+  5. [ROI mode only] Cross-ROI merging: combines ranges from all regions
+     Merges overlapping/nearby ranges (gap ≤2 slices)
+  6. Selects largest continuous z-range from merged result
+  7. Output: Whole slices (entire x-y planes) for selected z-range
+  8. Filename includes range: file_stitched_z6-16_max_projection.tif
+
+=== COLOR OPTIONS ===
+Standard LUTs: Override CZI metadata with typical microscopy colors:
+  - Channel 1: Cyan/Blue (DAPI/Hoechst)
+  - Channel 2: Green
+  - Channel 3: Red/Orange
+  - Channel 4: Magenta
+
+Default (unchecked): Respects colors from CZI metadata
+
+=== ADVANCED OPTIONS ===
+Fusion Method: How tiles are blended
+  - Linear Blending: Smooth transitions (recommended)
+  - Max Intensity: Brightest wins (harsh edges)
+  - Average/Median: Mathematical blending
+
+Rolling Ball Radius: Background subtraction (0 = off)
+  - 50 recommended for most images
+  - Larger = removes more background but may affect signal
+
+Regression/Displacement Thresholds: Stitching accuracy controls
+  - Default values work for most cases
+
+Cleanup Temp Files: Remove intermediate files after processing
+
+Auto-adjust: Use metadata to optimize stitching thresholds
+
+Pixel Size Correction: Scale factor for metadata pixel size
+
+Debug Mode: Enable verbose logging for troubleshooting
+
+=== FILE SIZES & BIGTIFF ===
+BigTIFF automatically enabled for files >2GB
+No manual selection needed!
+
+=== PERFORMANCE ===
+- Largest file processed first (fail-fast)
+- Memory freed after each file
+- Multi-threaded stitching uses (CPU cores - 1)
+    """
+    
+    help_gd = GenericDialog("Help - Specialised CZI Stitcher")
+    help_gd.addMessage(help_text)
+    help_gd.showDialog()
+
 else:
     # Show initialization message
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
@@ -1100,39 +1234,85 @@ else:
     IJ.log("[Specialised CZI Stitcher] Initializing...")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
-    in_path = pick_directory_with_jfilechooser("Select Source Folder (CZI Files)", _last_in)
-    if not in_path: log("No source selected. Exiting."); raise SystemExit("Cancelled by user")
-    out_path = pick_directory_with_jfilechooser("Select Target Folder (Results)", _last_out)
-    if not out_path: log("No target selected. Exiting."); raise SystemExit("Cancelled by user")
-    _config["last_input_dir"] = in_path; _config["last_output_dir"] = out_path; _save_config(_config)
-    input_dir_raw = File(unicode(in_path)); output_dir_raw = File(unicode(out_path))
+    # Load config for last used paths
+    _config = _load_config()
+    _last_in = _config.get("last_input_dir", os.path.expanduser("~"))
+    _last_out = _config.get("last_output_dir", os.path.expanduser("~"))
+    
+    # Create dialog with integrated path selection
     gd = GenericDialog("Specialised CZI Stitcher - Parameters")
+    gd.addMessage("=== FOLDER PATHS ===")
+    gd.addStringField("Input Folder (CZI files):", _last_in, 60)
+    gd.addStringField("Processing Folder (temp files):", _last_in, 60)
+    gd.addStringField("Output Folder (results):", _last_out, 60)
+    gd.addMessage("Tip: Leave processing folder same as input unless you need separation")
+    gd.addMessage("")
+    gd.addMessage("=== STITCHING PARAMETERS ===")
     gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
     gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
     gd.addNumericField("Regression Threshold", 0.30, 2)
     gd.addNumericField("Max Displacement (px)", 5.0, 1)
-    gd.addMessage("--- Stitched Volume Options ---")
+    gd.addMessage("")
+    gd.addMessage("=== STITCHED VOLUME OPTIONS ===")
     gd.addCheckbox("Show Stitched Volume", True)
     gd.addCheckbox("Save Stitched Volume", True)
-    gd.addMessage("--- Z-Projection Options ---")
+    gd.addMessage("")
+    gd.addMessage("=== Z-PROJECTION OPTIONS ===")
     gd.addCheckbox("Show Z-Projection", False)
     gd.addCheckbox("Save Z-Projection", False)
     gd.addChoice("Z-Projection Method", list(ZPROJ_METHODS.keys()), "Max Intensity")
-    gd.addMessage("--- Sharp-Slice Detection (optional) ---")
+    gd.addMessage("")
+    gd.addMessage("=== SHARP-SLICE DETECTION (Advanced) ===")
     gd.addCheckbox("Enable Sharp-Slice Detection", False)
     gd.addChoice("Detection Mode", ["Global", "ROI-based"], "Global")
     gd.addNumericField("Sharpness Threshold (0.0-1.0)", 0.3, 2)
     gd.addChoice("Detection Method", list(SHARPNESS_METHODS.keys()), "Laplacian Variance")
     gd.addNumericField("ROI Grid Size (n x n, if ROI mode)", 3, 0)
-    gd.addMessage("--- Color Options ---")
+    gd.addMessage("")
+    gd.addMessage("=== COLOR OPTIONS ===")
     gd.addCheckbox("Use Standard Microscopy LUTs (override metadata)", False)
-    gd.addMessage("--- Advanced Options ---")
+    gd.addMessage("")
+    gd.addMessage("=== ADVANCED OPTIONS ===")
     gd.addCheckbox("Cleanup Temp Files", True)
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
+    gd.addCheckbox("Debug Mode (verbose logging)", False)
+    gd.addMessage("")
+    gd.addMessage("Need help? Press 'H' key or see documentation for detailed explanations.")
+    # Note: Fiji's GenericDialog doesn't support custom help dialogs well
+    # Help text is comprehensive in the dialog itself via section headers
     gd.showDialog()
     if gd.wasCanceled():
         log("User cancelled parameter dialog. Exiting."); raise SystemExit("Cancelled by user")
+    
+    # Get path fields
+    in_path = gd.getNextString()
+    processing_path = gd.getNextString()
+    out_path = gd.getNextString()
+    
+    # Validate paths
+    if not in_path or not os.path.exists(in_path):
+        log("Invalid input path. Exiting."); raise SystemExit("Invalid input path")
+    if not out_path:
+        log("Invalid output path. Exiting."); raise SystemExit("Invalid output path")
+    
+    # Create output directory if it doesn't exist
+    if not os.path.exists(out_path):
+        try:
+            os.makedirs(out_path)
+        except:
+            log("Failed to create output directory. Exiting."); raise SystemExit("Cannot create output directory")
+    
+    # Save paths to config
+    _config["last_input_dir"] = in_path
+    _config["last_output_dir"] = out_path
+    _save_config(_config)
+    
+    input_dir_raw = File(unicode(in_path))
+    output_dir_raw = File(unicode(out_path))
+    temp_root = processing_path if processing_path and os.path.exists(os.path.dirname(processing_path)) else in_path
+    
+    # Get other parameters
     fusion_method = gd.getNextChoice()
     rb_radius = int(gd.getNextNumber())
     reg_thresh = float(gd.getNextNumber())
@@ -1155,6 +1335,8 @@ else:
         corr_factor = float(gd.getNextNumber())
     except:
         corr_factor = 10.0
+    DEBUG_MODE = bool(gd.getNextBoolean())
+    
     # BigTIFF is now automatic based on file size
     save_bigtiff = False
     # Backward compatibility - save_3d is now do_save
