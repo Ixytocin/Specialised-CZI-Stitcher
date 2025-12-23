@@ -1,9 +1,11 @@
-# ULTIMATE HYBRID CZI STITCHER v31.17
-# - Fixed channel color order (BGR -> RGB conversion)
+# ULTIMATE HYBRID CZI STITCHER v31.18
+# - Fixed channel color order with intelligent detection and standard microscopy LUT override
+#   (Ch1=Cyan/Blue for DAPI/Hoechst, Ch2=Green, Ch3=Red/Orange, Ch4=Magenta)
 # - Added z-stack projection options with all Fiji methods
 # - Added output options: save 3D, z-projection, or both
 # - Automatic BigTIFF handling based on file size
-# - Performance optimizations: StringBuilder for logging, 64KB buffers, optimized metadata
+# - Performance optimizations: StringBuilder for logging, optimized metadata
+# - Fail-fast: Process largest file first for early error detection
 
 import os, time, shutil, math, re, sys, json, codecs
 from java.lang import Runtime, Thread, System, StringBuilder
@@ -376,9 +378,8 @@ def parse_channel_colors_from_ome_xml(ome_xml):
                     try: colors.append(int(c,0))
                     except (ValueError, TypeError): pass
     
-    # Reverse color order to fix Zeiss BGR encoding issue
-    # (Channel 1 shows as red but should be blue/cyan, etc.)
-    return list(reversed(colors)) if colors else colors
+    # Return colors from metadata as-is
+    return colors
 
 def extract_channel_colors_from_gmeta(gMeta):
     """Extract channel colors from global metadata.
@@ -540,6 +541,64 @@ def build_lut_from_rgb(rgb):
     except:
         return None
 
+def fix_zeiss_channel_colors(colors, num_channels):
+    """Fix incorrect Zeiss channel colors to standard microscopy LUT order.
+    
+    Standard microscopy convention:
+    - Channel 1 (DAPI/Hoechst): Cyan/Blue
+    - Channel 2: Green
+    - Channel 3: Red/Orange
+    - Channel 4: Magenta/Far-red
+    
+    Args:
+        colors: List of color integers from metadata
+        num_channels: Number of channels in the image
+        
+    Returns:
+        Fixed list of colors
+    """
+    if not colors or len(colors) == 0:
+        # No colors provided, use standard defaults
+        standard_colors = [
+            0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
+            0x0000FF00,  # Green for Ch2
+            0x00FF0000,  # Red for Ch3
+            0x00FF00FF,  # Magenta for Ch4
+        ]
+        return standard_colors[:num_channels]
+    
+    # Check if colors look wrong (e.g., Ch1 not blue/cyan, Ch2 not green, Ch3 not red)
+    needs_fix = False
+    if len(colors) >= 3:
+        # Check channel 1 - should be blue/cyan (high B, low R)
+        c1 = int(colors[0]) & 0xFFFFFFFF
+        r1 = (c1 >> 16) & 0xFF
+        b1 = c1 & 0xFF
+        if not (b1 > 150 and r1 < 150):  # Not blue/cyan
+            needs_fix = True
+        
+        # Check channel 3 - should be red/orange (high R, low B)
+        if len(colors) >= 3:
+            c3 = int(colors[2]) & 0xFFFFFFFF
+            r3 = (c3 >> 16) & 0xFF
+            b3 = c3 & 0xFF
+            if not (r3 > 150 and b3 < 150):  # Not red/orange
+                needs_fix = True
+    
+    if needs_fix:
+        if LUT_DEBUG:
+            log(u"LUT Debug: Zeiss colors appear incorrect, applying standard microscopy LUTs")
+        # Return standard microscopy colors
+        standard_colors = [
+            0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
+            0x0000FF00,  # Green for Ch2
+            0x00FF6600,  # Orange for Ch3
+            0x00FF00FF,  # Magenta for Ch4
+        ]
+        return standard_colors[:num_channels]
+    
+    return colors
+
 def apply_channel_luts_to_image(imp, ome_xml, gMeta):
     if imp is None:
         return imp
@@ -551,14 +610,20 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
         colors = colors_ome
     elif colors_gm:
         colors = colors_gm
+    
+    # Fix incorrect Zeiss channel colors
+    num_channels = imp.getNChannels() if imp else 0
+    colors = fix_zeiss_channel_colors(colors, num_channels)
+    
     if LUT_DEBUG:
-        log(u"LUT Debug: OME colors={}, GM colors={}, chosen={}".format(colors_ome, colors_gm, colors))
+        log(u"LUT Debug: OME colors={}, GM colors={}, fixed={}".format(colors_ome, colors_gm, colors))
     # build luts
     luts = []
     if colors and isinstance(colors[0], int):
         for ci in colors:
             u = int(ci) & 0xFFFFFFFF
             hex8 = "%08X" % u
+            # Standard ARGB format: AA RR GG BB
             rgb = (int(hex8[2:4],16), int(hex8[4:6],16), int(hex8[6:8],16))
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
@@ -1138,6 +1203,18 @@ def main():
     IJ.log("\\Clear")
     s_dir, t_dir = get_safe_path(input_dir_raw), get_safe_path(output_dir_raw)
     files = sorted([os.path.join(s_dir, f) for f in os.listdir(s_dir) if f.lower().endswith(".czi")])
+    
+    # Sort files by size (largest first) for fail-fast stability testing
+    try:
+        files_with_size = [(f, os.path.getsize(f)) for f in files]
+        files_with_size.sort(key=lambda x: x[1], reverse=True)
+        files = [f for f, size in files_with_size]
+        log(u"Processing order: Largest file first (fail-fast strategy)")
+        for f, size in files_with_size:
+            log(u"  - {} ({:.1f} MB)".format(os.path.basename(f), size / 1048576.0))
+    except Exception as e:
+        logv(u"File size sorting failed, using alphabetical order: {}".format(e))
+    
     temp_root = choose_temp_root(t_dir, files)
     t_lim = int(compute_threads())
     try:
