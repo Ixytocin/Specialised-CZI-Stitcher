@@ -1,9 +1,9 @@
-# Specialised Batch Stitcher
+# Specialised CZI Stitcher
 
-> **⚠️ DEVELOPMENT HISTORY**  
-> **Vision, Requirements & Validation:** [Ixytocin](https://github.com/Ixytocin)  
-> **Implementation Partnership:** ~20 iterations with Gemini (Google AI), followed by GitHub Copilot  
-> **Methodology:** Vibe Coding - Rapid prototyping through iterative AI-assisted development for highly specialized microscopy workflows
+> **⚠️ DEVELOPMENT DISCLAIMER**  
+> **Problem Identification & Testing:** [Ixytocin](https://github.com/Ixytocin)  
+> **Implementation:** ~20 iterations with Gemini (Google AI), followed by GitHub Copilot  
+> **Methodology:** AI-assisted development - The author cannot personally understand or debug the implementation. All credit belongs to the open-source tools being orchestrated and the training data of the LLMs used.
 
 ---
 
@@ -43,25 +43,39 @@ Traditional 3D-stitching in Fiji often struggles with:
 - **Stitching Plugin** (Preibisch et al.)
 
 ## Installation & Usage
-1. Download `main` script.
-2. Place it in your `Fiji.app/scripts/` folder (rename to `Specialised_Batch_Stitcher.py` if desired).
+1. Download `Specialised_CZI_Stitcher` script.
+2. Place it in your `Fiji.app/scripts/` folder.
 3. Restart Fiji and run the script from the menu.
 4. Select Source and Target folders. Use 'Rolling Ball' (Radius ~50-100) if tiling artifacts are visible.
 
 ## Credits & Attribution
-This tool is a specialized wrapper that orchestrates several powerful open-source components:
+This tool is a specialized orchestration wrapper for several powerful open-source components. The author's role was identifying the problem and testing - not creating new solutions:
+
 - **Core Stitching Logic:** [BigStitcher/Stitching Plugin](https://imagej.net/plugins/stitching/) by Stephan Preibisch et al.
 - **Metadata Handling:** [Bio-Formats](https://www.glencoesoftware.com/bio-formats.html) by the Open Microscopy Environment (OME).
-- **Inspiration:** [Viveca Stitching Tool](https://github.com/seiryoku-zenyo) by seiryoku-zenyo - used as a starting point.
-- **Development:** Vibe Coding methodology by **Ixytocin** with AI implementation partners (Gemini, GitHub Copilot).
+- **Platform:** [Fiji/ImageJ](https://fiji.sc/) - The indispensable image processing ecosystem
+- **QuPath Integration:** [QuPath](https://qupath.github.io/) - For downstream analysis
+- **Starting Point:** [Viveca Stitching Tool](https://github.com/seiryoku-zenyo) by seiryoku-zenyo
+- **Implementation:** AI-assisted development via Gemini and GitHub Copilot
+
+The author is merely "the spark" - the real fire comes from these exceptional tools and their creators.
 
 ---
 
-## Vibe Coding Philosophy
-This project demonstrates the power of **Vibe Coding** - a development approach where:
-- Domain experts (researchers/users) drive requirements and validation
-- AI assistants handle implementation details and iteration
-- Rapid prototyping addresses extremely specialized needs
-- Solutions evolve through conversational development
+## Development Approach
+This project was developed through iterative AI-assisted prototyping - a method the author describes as "the blind following a guide that never drank water." 
 
-Perfect for niche scientific tools where traditional development would be prohibitively expensive or time-consuming.
+**What this means:**
+- The author identified a specific problem (cannot stitch CZI files at home without ZEN license)
+- Existing tools (Fiji, QuPath, Stitching, BigStitcher, Bio-Formats) provided *almost* the right functionality
+- AI assistants were used to wire these tools together in a specialized way
+- The author cannot personally understand or fix the implementation code
+- All achievements belong to the training data and the open-source tools being orchestrated
+
+**This approach works when:**
+- The problem is highly specialized
+- Existing powerful tools need custom orchestration
+- Traditional development would be prohibitively expensive or time-consuming
+- The user can validate results even without understanding implementation
+
+**Use with caution:** Errors and limitations reflect both the AI's training and the author's inability to debug.
