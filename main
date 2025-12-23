@@ -316,9 +316,9 @@ def parse_channel_colors_from_ome_xml(ome_xml):
             c = attrs.get('Color') or attrs.get('color')
             if c:
                 try: colors.append(int(c))
-                except:
+                except (ValueError, TypeError):
                     try: colors.append(int(c,0))
-                    except: pass
+                    except (ValueError, TypeError): pass
     else:
         # Fallback: search all Channel tags if no Image tag found
         for m in _CHANNEL_COLOR_RE.finditer(xml):
@@ -326,9 +326,9 @@ def parse_channel_colors_from_ome_xml(ome_xml):
             c = attrs.get('Color') or attrs.get('color')
             if c:
                 try: colors.append(int(c))
-                except:
+                except (ValueError, TypeError):
                     try: colors.append(int(c,0))
-                    except: pass
+                    except (ValueError, TypeError): pass
     return colors
 
 def extract_channel_colors_from_gmeta(gMeta):
@@ -348,7 +348,7 @@ def extract_channel_colors_from_gmeta(gMeta):
             try:
                 keystr = safe_unicode(k)
                 val = safe_unicode(gMeta.get(k))
-            except:
+            except (AttributeError, TypeError):
                 continue
             
             lkey = keystr.lower()
@@ -357,7 +357,6 @@ def extract_channel_colors_from_gmeta(gMeta):
             # e.g., "Channel 0 Color", "ChannelColor0", "DisplaySetting|Channels|Channel 0|Color"
             if ('channel' in lkey or 'ch' in lkey) and 'color' in lkey:
                 # Try to extract channel index
-                import re
                 match = re.search(r'(\d+)', keystr)
                 if match:
                     ch_idx = int(match.group(1))
@@ -371,7 +370,7 @@ def extract_channel_colors_from_gmeta(gMeta):
                         else:
                             color_int = int(val)
                         color_map[ch_idx] = color_int
-                    except:
+                    except (ValueError, TypeError, AttributeError):
                         pass
     except Exception as e:
         logv(u"extract_channel_colors_from_gmeta error: {}".format(e))
