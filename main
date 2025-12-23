@@ -347,7 +347,7 @@ def parse_channel_colors_from_ome_xml(ome_xml):
     
     Only extracts colors from the first <Image> element to avoid
     duplicates when multiple images/series are present.
-    Note: Colors are returned in reverse order to fix Zeiss BGR->RGB issue.
+    Colors are validated and corrected by fix_zeiss_channel_colors() function.
     """
     colors = []
     if not ome_xml:
@@ -578,12 +578,11 @@ def fix_zeiss_channel_colors(colors, num_channels):
             needs_fix = True
         
         # Check channel 3 - should be red/orange (high R, low B)
-        if len(colors) >= 3:
-            c3 = int(colors[2]) & 0xFFFFFFFF
-            r3 = (c3 >> 16) & 0xFF
-            b3 = c3 & 0xFF
-            if not (r3 > 150 and b3 < 150):  # Not red/orange
-                needs_fix = True
+        c3 = int(colors[2]) & 0xFFFFFFFF
+        r3 = (c3 >> 16) & 0xFF
+        b3 = c3 & 0xFF
+        if not (r3 > 150 and b3 < 150):  # Not red/orange
+            needs_fix = True
     
     if needs_fix:
         if LUT_DEBUG:
