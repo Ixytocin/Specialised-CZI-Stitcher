@@ -346,15 +346,45 @@ def detect_sharp_slices_roi(imp, threshold, method="laplacian", roi_grid_size=3)
     
     imp.killRoi()
     
-    # Merge all ROI ranges - use union of all sharp regions
+    # Merge all ROI ranges with hole-filling
     if not all_sharp_ranges:
         log("Warning: No sharp regions found in any ROI, using all slices")
         return (1, nSlices)
     
-    start_slice = min([r[0] for r in all_sharp_ranges])
-    end_slice = max([r[1] for r in all_sharp_ranges])
+    # Sort ranges by start position
+    all_sharp_ranges.sort(key=lambda r: r[0])
     
-    log("Sharp slice range (ROI %dx%d): Z %d to %d" % (roi_grid_size, roi_grid_size, start_slice, end_slice))
+    # Merge overlapping or close ranges (with hole-filling)
+    merged_ranges = []
+    current_start = all_sharp_ranges[0][0]
+    current_end = all_sharp_ranges[0][1]
+    
+    for start, end in all_sharp_ranges[1:]:
+        # Check if ranges overlap or are close (within 2 slices)
+        if start <= current_end + 3:  # Allow gap of up to 2 slices
+            # Merge by extending current range
+            current_end = max(current_end, end)
+        else:
+            # No overlap, save current range and start new one
+            merged_ranges.append((current_start, current_end))
+            current_start = start
+            current_end = end
+    
+    # Add final range
+    merged_ranges.append((current_start, current_end))
+    
+    # Use the largest merged range
+    if len(merged_ranges) == 1:
+        start_slice = merged_ranges[0][0]
+        end_slice = merged_ranges[0][1]
+    else:
+        # Find largest range
+        largest_range = max(merged_ranges, key=lambda r: r[1] - r[0])
+        start_slice = largest_range[0]
+        end_slice = largest_range[1]
+    
+    log("Sharp slice range (ROI %dx%d, %d ROIs analyzed, %d ranges merged): Z %d to %d" % 
+        (roi_grid_size, roi_grid_size, len(all_sharp_ranges), len(merged_ranges), start_slice, end_slice))
     return (start_slice, end_slice)
 
 def get_safe_path(f):
