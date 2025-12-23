@@ -242,14 +242,24 @@ def detect_sharp_slices_global(imp, threshold, method="laplacian"):
         log("Warning: No slices met sharpness threshold, using all slices")
         return (1, nSlices)
     
-    # Find largest continuous range
+    # Find largest continuous range with hole-filling
+    # Allow small gaps (1-2 slices) to be included in continuous ranges
     ranges = []
     start = sharp_indices[0]
+    end = sharp_indices[0]
+    
     for i in range(1, len(sharp_indices)):
-        if sharp_indices[i] != sharp_indices[i-1] + 1:
-            ranges.append((start, sharp_indices[i-1]))
+        gap = sharp_indices[i] - sharp_indices[i-1]
+        if gap <= 3:  # Allow gaps of 1-2 slices to be filled
+            end = sharp_indices[i]
+        else:
+            # Gap too large, finalize current range
+            ranges.append((start, end))
             start = sharp_indices[i]
-    ranges.append((start, sharp_indices[-1]))
+            end = sharp_indices[i]
+    
+    # Add final range
+    ranges.append((start, end))
     
     # Use the longest range
     longest_range = max(ranges, key=lambda r: r[1] - r[0])
@@ -309,8 +319,29 @@ def detect_sharp_slices_roi(imp, threshold, method="laplacian", roi_grid_size=3)
             sharp_indices = [i for i, score in enumerate(sharpness_scores) if score >= threshold_value]
             
             if sharp_indices:
-                start_z = sharp_indices[0] + 1
-                end_z = sharp_indices[-1] + 1
+                # Fill holes: find largest continuous block of sharp slices
+                # allowing small gaps (1-2 slices) to be included
+                continuous_ranges = []
+                current_start = sharp_indices[0]
+                current_end = sharp_indices[0]
+                
+                for i in range(1, len(sharp_indices)):
+                    gap = sharp_indices[i] - sharp_indices[i-1]
+                    if gap <= 3:  # Allow gaps of 1-2 slices to be filled
+                        current_end = sharp_indices[i]
+                    else:
+                        # Gap too large, start new range
+                        continuous_ranges.append((current_start, current_end))
+                        current_start = sharp_indices[i]
+                        current_end = sharp_indices[i]
+                
+                # Add final range
+                continuous_ranges.append((current_start, current_end))
+                
+                # Use the largest continuous range for this ROI
+                largest_range = max(continuous_ranges, key=lambda r: r[1] - r[0])
+                start_z = largest_range[0] + 1  # Convert to 1-indexed
+                end_z = largest_range[1] + 1
                 all_sharp_ranges.append((start_z, end_z))
     
     imp.killRoi()
