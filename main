@@ -1,6 +1,6 @@
-# ULTIMATE HYBRID CZI STITCHER v31.18
-# - Fixed channel color order with intelligent detection and standard microscopy LUT override
-#   (Ch1=Cyan/Blue for DAPI/Hoechst, Ch2=Green, Ch3=Red/Orange, Ch4=Magenta)
+# ULTIMATE HYBRID CZI STITCHER v31.19
+# - Channel colors: Respect metadata by default, optional standard microscopy LUT override
+#   (User checkbox: "Use Standard Microscopy LUTs (override metadata)")
 # - Added z-stack projection options with all Fiji methods
 # - Added output options: save 3D, z-projection, or both
 # - Automatic BigTIFF handling based on file size
@@ -541,8 +541,8 @@ def build_lut_from_rgb(rgb):
     except:
         return None
 
-def fix_zeiss_channel_colors(colors, num_channels):
-    """Fix incorrect Zeiss channel colors to standard microscopy LUT order.
+def get_standard_microscopy_colors(num_channels):
+    """Get standard microscopy LUT colors.
     
     Standard microscopy convention:
     - Channel 1 (DAPI/Hoechst): Cyan/Blue
@@ -551,71 +551,60 @@ def fix_zeiss_channel_colors(colors, num_channels):
     - Channel 4: Magenta/Far-red
     
     Args:
-        colors: List of color integers from metadata
-        num_channels: Number of channels in the image
+        num_channels: Number of channels needed
         
     Returns:
-        Fixed list of colors
+        List of standard color integers
     """
-    if not colors or len(colors) == 0:
-        # No colors provided, use standard defaults
-        standard_colors = [
-            0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
-            0x0000FF00,  # Green for Ch2
-            0x00FF0000,  # Red for Ch3
-            0x00FF00FF,  # Magenta for Ch4
-        ]
-        return standard_colors[:num_channels]
-    
-    # Check if colors look wrong (e.g., Ch1 not blue/cyan, Ch2 not green, Ch3 not red)
-    needs_fix = False
-    if len(colors) >= 3:
-        # Check channel 1 - should be blue/cyan (high B, low R)
-        c1 = int(colors[0]) & 0xFFFFFFFF
-        r1 = (c1 >> 16) & 0xFF
-        b1 = c1 & 0xFF
-        if not (b1 > 150 and r1 < 150):  # Not blue/cyan
-            needs_fix = True
-        
-        # Check channel 3 - should be red/orange (high R, low B)
-        c3 = int(colors[2]) & 0xFFFFFFFF
-        r3 = (c3 >> 16) & 0xFF
-        b3 = c3 & 0xFF
-        if not (r3 > 150 and b3 < 150):  # Not red/orange
-            needs_fix = True
-    
-    if needs_fix:
-        if LUT_DEBUG:
-            log(u"LUT Debug: Zeiss colors appear incorrect, applying standard microscopy LUTs")
-        # Return standard microscopy colors
-        standard_colors = [
-            0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
-            0x0000FF00,  # Green for Ch2
-            0x00FF6600,  # Orange for Ch3
-            0x00FF00FF,  # Magenta for Ch4
-        ]
-        return standard_colors[:num_channels]
-    
-    return colors
+    standard_colors = [
+        0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
+        0x0000FF00,  # Green for Ch2
+        0x00FF6600,  # Orange for Ch3
+        0x00FF00FF,  # Magenta for Ch4
+    ]
+    return standard_colors[:num_channels]
 
-def apply_channel_luts_to_image(imp, ome_xml, gMeta):
+def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
+    """Apply channel LUTs to an image.
+    
+    Args:
+        imp: ImagePlus to apply LUTs to
+        ome_xml: OME-XML metadata string
+        gMeta: Global metadata dictionary
+        use_standard_colors: If True, override metadata colors with standard microscopy LUTs
+    
+    Returns:
+        ImagePlus with LUTs applied
+    """
     if imp is None:
         return imp
-    colors_ome = parse_channel_colors_from_ome_xml(ome_xml)
-    colors_gm = extract_channel_colors_from_gmeta(gMeta)
-    colors = []
-    # prefer OME if present, else gMeta
-    if colors_ome:
-        colors = colors_ome
-    elif colors_gm:
-        colors = colors_gm
     
-    # Fix incorrect Zeiss channel colors
     num_channels = imp.getNChannels() if imp else 0
-    colors = fix_zeiss_channel_colors(colors, num_channels)
     
-    if LUT_DEBUG:
-        log(u"LUT Debug: OME colors={}, GM colors={}, fixed={}".format(colors_ome, colors_gm, colors))
+    # Get colors based on user preference
+    if use_standard_colors:
+        colors = get_standard_microscopy_colors(num_channels)
+        if LUT_DEBUG:
+            log(u"LUT Debug: Using standard microscopy LUTs (user override)")
+    else:
+        colors_ome = parse_channel_colors_from_ome_xml(ome_xml)
+        colors_gm = extract_channel_colors_from_gmeta(gMeta)
+        colors = []
+        # prefer OME if present, else gMeta
+        if colors_ome:
+            colors = colors_ome
+        elif colors_gm:
+            colors = colors_gm
+        
+        # If no colors from metadata, use standard as fallback
+        if not colors or len(colors) == 0:
+            colors = get_standard_microscopy_colors(num_channels)
+            if LUT_DEBUG:
+                log(u"LUT Debug: No metadata colors found, using standard microscopy LUTs")
+        else:
+            if LUT_DEBUG:
+                log(u"LUT Debug: OME colors={}, GM colors={}, using metadata colors".format(colors_ome, colors_gm))
+    
     # build luts
     luts = []
     if colors and isinstance(colors[0], int):
@@ -829,6 +818,7 @@ if "input_dir_raw" in globals():
         save_3d = bool(globals().get("save_3d", True))
         save_zprojection = bool(globals().get("save_zprojection", False))
         zprojection_method = globals().get("zprojection_method", "Max Intensity")
+        use_standard_luts = bool(globals().get("use_standard_luts", False))
         try:
             _last_in = get_safe_path(input_dir_raw) or _last_in
             _last_out = get_safe_path(output_dir_raw) or _last_out
@@ -857,6 +847,8 @@ else:
     gd.addCheckbox("Save 3D Volume", True)
     gd.addCheckbox("Save Z-Projection", False)
     gd.addChoice("Z-Projection Method", list(ZPROJ_METHODS.keys()), "Max Intensity")
+    gd.addMessage("--- Color Options ---")
+    gd.addCheckbox("Use Standard Microscopy LUTs (override metadata)", False)
     gd.addMessage("--- Advanced Options ---")
     gd.addCheckbox("Cleanup Temp Files", True)
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
@@ -873,6 +865,7 @@ else:
     save_3d = bool(gd.getNextBoolean())
     save_zprojection = bool(gd.getNextBoolean())
     zprojection_method = gd.getNextChoice()
+    use_standard_luts = bool(gd.getNextBoolean())
     do_clean = bool(gd.getNextBoolean())
     auto_adjust = bool(gd.getNextBoolean())
     try:
@@ -1125,7 +1118,7 @@ class UltimateStitcher:
         except Exception:
             pass
         try:
-            imp = apply_channel_luts_to_image(imp, ome_xml, gMeta)
+            imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
         except Exception as e:
             logv(u"LUT application failed: {}".format(e))
         imp.setDisplayMode(IJ.COMPOSITE)
@@ -1160,7 +1153,7 @@ class UltimateStitcher:
                         if proj_imp:
                             # Apply same LUTs to projection
                             try:
-                                proj_imp = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta)
+                                proj_imp = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta, use_standard_luts)
                                 if isinstance(proj_imp, CompositeImage):
                                     proj_imp.setDisplayMode(IJ.COMPOSITE)
                             except:
