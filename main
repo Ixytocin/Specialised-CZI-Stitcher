@@ -615,7 +615,11 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             hex8 = "%08X" % u
             # Zeiss uses RGBA format: RR GG BB AA
             # Extract RGB components (alpha channel not used for LUT creation)
-            rgb = (int(hex8[0:2],16), int(hex8[2:4],16), int(hex8[4:6],16))
+            # ImageJ interprets as BGR, so we swap R and B positions
+            r = int(hex8[0:2],16)
+            g = int(hex8[2:4],16)
+            b = int(hex8[4:6],16)
+            rgb = (b, g, r)  # Swap to BGR for ImageJ
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
     else:
