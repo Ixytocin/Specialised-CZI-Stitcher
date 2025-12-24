@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.3
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.4
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -664,7 +664,11 @@ def _parse_pixels_physicalsize_from_xml(ome_xml):
     # Enhanced debugging: log type and sample of XML before conversion
     if DEBUG_MODE:
         xml_type = type(ome_xml).__name__
-        xml_sample = str(ome_xml)[:200] if ome_xml else ""
+        # Use unicode() instead of str() to avoid ASCII encoding errors
+        try:
+            xml_sample = unicode(ome_xml)[:200] if ome_xml else u""
+        except:
+            xml_sample = u"<conversion error>"
         # Check for UTF-8 encoded µ character (0xC2 0xB5)
         has_mu = False
         if isinstance(ome_xml, (str, bytes)):
@@ -675,7 +679,10 @@ def _parse_pixels_physicalsize_from_xml(ome_xml):
                     log(u"XML Debug: Detected UTF-8 encoded µ character (0xC2 0xB5)")
             except:
                 pass
-        log(u"XML Debug: Input type={}, has_mu={}, sample={}".format(xml_type, has_mu, xml_sample[:100]))
+        try:
+            log(u"XML Debug: Input type={}, has_mu={}, sample={}".format(xml_type, has_mu, xml_sample[:100]))
+        except:
+            log(u"XML Debug: Input type={}, has_mu={}, sample=<encoding error>".format(xml_type, has_mu))
     ome_xml = ensure_unicode(ome_xml)
     m = _PIXELS_TAG_RE.search(ome_xml)
     if m:
@@ -760,7 +767,12 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
                 log(u"Pixel size from OME-XML <Pixels>: {} {}".format(px_um, MICRO))
                 return float(px_um)
     except Exception as e:
-        logv(u"OME-XML pixel parse error (fallback): {}".format(e))
+        # Use unicode() to safely convert exception message
+        try:
+            error_msg = unicode(e)
+        except:
+            error_msg = u"<encoding error in exception message>"
+        logv(u"OME-XML pixel parse error (fallback): {}".format(error_msg))
     try:
         if omeMeta is not None:
             q = omeMeta.getPixelsPhysicalSizeX(0)
@@ -1532,7 +1544,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.3")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.4")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -2176,7 +2188,7 @@ def main():
     batch_elapsed_ms = (time.time() - batch_start_time) * 1000
     log(u"")
     log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
-    log(u"[Specialised CZI Stitcher] Script Version: 34.3")
+    log(u"[Specialised CZI Stitcher] Script Version: 34.4")
     flush_log()
     
     # Show completion notification if requested
