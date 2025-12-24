@@ -1288,6 +1288,7 @@ if "input_dir_raw" in globals():
             pass
     except Exception:
         pass
+
 def show_help_dialog():
     """Display comprehensive help for all parameters."""
     from ij.gui import GenericDialog
@@ -1465,7 +1466,8 @@ No manual selection needed!
     help_gd.addMessage(help_text)
     help_gd.showDialog()
 
-else:
+# Main script execution
+if "input_dir_raw" not in globals():
     # Show initialization message
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("\\Clear")
