@@ -31,7 +31,7 @@ import jarray
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v37.0"
+VERSION = "v37.1"
 MICRO = u"\u00b5"
 
 # Debug flags - ALL ENABLED for maximum debugging
@@ -1473,14 +1473,14 @@ def compute_threads():
 # ==============================================================================
 
 def show_splash():
-    """Display ASCII art splash screen"""
+    """Display ASCII art splash screen with corrective padding for proportional fonts"""
     splash = u"""
       +---+---+---+
-      | C | Z | I |   CZI-STITCHER v37.0
-      +---+---+---+   ======================
-      | S | t | i |   > Workflow: v31.16h
-      +---+---+---+   > UTF-8:    v34.8
-      | t | c | h |   > LUTs:     v36.5
+      | C | Z | I  |    CZI-STITCHER v37.1
+      +---+---+---+     ======================
+      | S | t  | i  |   > Workflow: v31.16h
+      +---+---+---+     > UTF-8:    v34.8
+      | t  | c | h |    > LUTs:     v36.5
       +---+---+---+
 
       [Target] Zeiss Zen/CZI Analysis
@@ -1495,6 +1495,12 @@ def main():
     
     # Load config
     _config = _load_config()
+    
+    # Add filesystem loading message for user expectation management
+    log(u"")
+    log(u"Loading filesystem... This might take a while with sleeping HDDs.")
+    log(u"")
+    
     _home = os.path.expanduser("~")
     _last_in = _config.get("last_input_dir", "") or _home
     _last_out = _config.get("last_output_dir", "") or _home
@@ -1531,7 +1537,7 @@ def main():
     gd.addCheckbox("Save Results", True)
     gd.addCheckbox("Als BigTIFF speichern", False)
     gd.addCheckbox("Cleanup Temp Files", True)
-    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
+    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
     gd.showDialog()
     
