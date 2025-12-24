@@ -272,6 +272,10 @@ def play_clear_jingle():
 def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size, all_positions):
     """Extract all tiles from CZI file with positions from pre-parsed list.
     
+    Returns (tiles_2d, tiles_3d) where:
+        tiles_2d: List of (filename, idx, x_um, y_um, z_um) for 2D projections
+        tiles_3d: List of (filename_3d, idx, x_um, y_um, z_um, n_slices) for 3D stacks
+    
     Args:
         all_positions: List of (name, x_um, y_um, z_um) from parse_all_stage_positions_from_xml()
     """
@@ -289,12 +293,12 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
         
         if not imps or len(imps) == 0:
             log(u"  ERROR: No tiles found in file")
-            return []
+            return [], []
         
         log(u"  Found {} tile(s)".format(len(imps)))
         
-        tiles = []
-        tiles_3d = []  # Store 3D stacks for later reconstruction
+        tiles_2d = []  # For stitching registration (2D projections)
+        tiles_3d = []  # For final 3D stitching
         
         # Debug position count
         if verbose:
@@ -303,9 +307,6 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
         
         # Process each tile
         for i, tile_imp in enumerate(imps):
-            tile_filename = "tile_{:04d}.tif".format(i)
-            tile_path = os.path.join(temp_dir, tile_filename)
-            
             # Get position from pre-parsed list (NO API CALLS HERE)
             if i < len(all_positions):
                 name, x_um, y_um, z_um = all_positions[i]
@@ -327,56 +328,69 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
                 log(u"    Tile {}: pos=({:.2f}, {:.2f}, {:.2f}) µm [{}]".format(
                     i, x_um, y_um, z_um, source))
             
-            # Handle z-stacks: Project for stitching, but preserve original
+            # Handle z-stacks: Save BOTH 3D and 2D MIP (v31.16h pattern)
             if tile_imp.getNSlices() > 1:
+                n_slices = tile_imp.getNSlices()
                 if verbose:
-                    log(u"      Z-stack detected: {} slices → projecting".format(tile_imp.getNSlices()))
+                    log(u"      Z-stack: {} slices → saving 3D + MIP".format(n_slices))
                 
-                # Save original 3D stack for later
-                tile_3d_path = os.path.join(temp_dir, "tile_{:04d}_3d.tif".format(i))
+                # Save original 3D stack
+                tile_3d_filename = "S{:03d}_3D.tif".format(i)
+                tile_3d_path = os.path.join(temp_dir, tile_3d_filename)
                 fs_3d = FileSaver(tile_imp)
                 fs_3d.saveAsTiffStack(tile_3d_path)
-                tiles_3d.append((i, tile_3d_path, tile_imp.getNSlices()))
+                tiles_3d.append((tile_3d_filename, i, x_um, y_um, z_um, n_slices))
                 
-                # Create projection for stitching
+                # Create and save MIP for registration
                 IJ.run(tile_imp, "Z Project...", "projection=[Max Intensity]")
                 proj_imp = WindowManager.getCurrentImage()
                 
                 if proj_imp is not None and proj_imp.getNSlices() == 1:
-                    # Projection successful and is 2D
-                    tile_imp.close()
-                    tile_imp = proj_imp
+                    tile_2d_filename = "S{:03d}_MIP.tif".format(i)
+                    tile_2d_path = os.path.join(temp_dir, tile_2d_filename)
+                    fs_2d = FileSaver(proj_imp)
+                    fs_2d.saveAsTiff(tile_2d_path)
+                    tiles_2d.append((tile_2d_filename, i, x_um, y_um, z_um))
+                    proj_imp.close()
                     if verbose:
-                        log(u"      Projection OK: {}x{}x1".format(tile_imp.getWidth(), tile_imp.getHeight()))
+                        log(u"      Saved: {} (3D) + {} (MIP)".format(tile_3d_filename, tile_2d_filename))
                 else:
-                    # Projection failed or still 3D - use first slice
+                    # Fallback: use first slice as 2D
                     if verbose:
                         log(u"      WARNING: Projection failed, using first slice")
                     if proj_imp is not None:
                         proj_imp.close()
                     tile_imp.setSlice(1)
                     IJ.run(tile_imp, "Duplicate...", "duplicate")
-                    tile_imp.close()
-                    tile_imp = WindowManager.getCurrentImage()
-            
-            # Save tile (2D or projection)
-            fs = FileSaver(tile_imp)
-            if tile_imp.getNSlices() > 1:
-                fs.saveAsTiffStack(tile_path)
+                    dup_imp = WindowManager.getCurrentImage()
+                    tile_2d_filename = "S{:03d}_MIP.tif".format(i)
+                    tile_2d_path = os.path.join(temp_dir, tile_2d_filename)
+                    fs_2d = FileSaver(dup_imp)
+                    fs_2d.saveAsTiff(tile_2d_path)
+                    tiles_2d.append((tile_2d_filename, i, x_um, y_um, z_um))
+                    dup_imp.close()
+                
+                tile_imp.close()
             else:
+                # Single slice: use same file for both 2D and 3D
+                tile_filename = "S{:03d}_2D.tif".format(i)
+                tile_path = os.path.join(temp_dir, tile_filename)
+                fs = FileSaver(tile_imp)
                 fs.saveAsTiff(tile_path)
-            
-            tiles.append((tile_filename, i, x_um, y_um, z_um))
-            tile_imp.close()
+                tiles_2d.append((tile_filename, i, x_um, y_um, z_um))
+                tiles_3d.append((tile_filename, i, x_um, y_um, z_um, 1))
+                tile_imp.close()
+                if verbose:
+                    log(u"      Single slice: saved as {}".format(tile_filename))
         
         # Don't close reader here - managed by caller
-        return tiles
+        return tiles_2d, tiles_3d
     
     except Exception as e:
         log(u"  ERROR extracting tiles: {}".format(e))
         import traceback
         traceback.print_exc()
-        return []
+        return [], []
 
 def create_tile_configuration(tiles, config_path, px_size):
     """Create TileConfiguration.txt for stitching plugin"""
@@ -398,7 +412,7 @@ def create_tile_configuration(tiles, config_path, px_size):
         return False
 
 def run_stitching_plugin(temp_dir, config):
-    """Run ImageJ stitching plugin"""
+    """Run ImageJ stitching plugin for 2D"""
     verbose = config.get('verbose', False)
     
     try:
@@ -421,7 +435,7 @@ def run_stitching_plugin(temp_dir, config):
         ).format(temp_dir)
         
         if verbose:
-            log(u"  [VERBOSE] Running stitching plugin...")
+            log(u"  [VERBOSE] Running 2D stitching plugin...")
         
         IJ.run("Grid/Collection stitching", params)
         
@@ -432,13 +446,116 @@ def run_stitching_plugin(temp_dir, config):
             return None
         
         if verbose:
-            log(u"  [VERBOSE] Stitching complete: {} x {} x {}".format(
+            log(u"  [VERBOSE] 2D stitching complete: {} x {} x {}".format(
                 result_imp.getWidth(), result_imp.getHeight(), result_imp.getNSlices()))
         
         return result_imp
     
     except Exception as e:
-        log(u"  ERROR in stitching: {}".format(e))
+        log(u"  ERROR in 2D stitching: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return None
+
+def create_3d_tile_configuration(temp_dir, tiles_3d, px_size):
+    """Create TileConfiguration_3D.txt using registered positions from 2D stitching.
+    
+    This implements the v31.16h pattern:
+    1. Read TileConfiguration.registered.txt from 2D stitching
+    2. Map 2D positions to 3D tile filenames
+    3. Create TileConfiguration_3D.txt with dim=3 and z=0.0
+    """
+    try:
+        # Path to registered positions from 2D stitching
+        reg_config = os.path.join(temp_dir, "TileConfiguration.registered.txt")
+        orig_config = os.path.join(temp_dir, "TileConfiguration.txt")
+        config_3d = os.path.join(temp_dir, "TileConfiguration_3D.txt")
+        
+        # Use registered positions if available, otherwise original
+        source_config = reg_config if os.path.exists(reg_config) else orig_config
+        
+        if not os.path.exists(source_config):
+            log(u"  ERROR: No configuration file found at {}".format(source_config))
+            return False
+        
+        # Parse positions from source config
+        positions = []
+        with open(source_config, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if '.tif' in line and '(' in line and ')' in line:
+                    # Extract coordinates from line like: "S000_MIP.tif; ; (123.45, 678.90)"
+                    match = re.search(r'\(([^,]+),\s*([^)]+)\)', line)
+                    if match:
+                        x = float(match.group(1))
+                        y = float(match.group(2))
+                        positions.append((x, y))
+        
+        if len(positions) == 0:
+            log(u"  ERROR: No positions found in {}".format(source_config))
+            return False
+        
+        # Create 3D configuration
+        with open(config_3d, 'w') as f:
+            f.write("# Generated 3D configuration from 2D registration\n")
+            f.write("dim = 3\n\n")
+            
+            for i, (filename_3d, idx, x_um, y_um, z_um, n_slices) in enumerate(tiles_3d):
+                # Use registered position if available, otherwise original
+                if i < len(positions):
+                    x_px, y_px = positions[i]
+                else:
+                    # Fallback to original position
+                    x_px = x_um / px_size
+                    y_px = y_um / px_size
+                
+                # Write with z=0.0 (all tiles at same z-plane)
+                f.write("{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(filename_3d, x_px, y_px))
+        
+        return True
+    
+    except Exception as e:
+        log(u"  ERROR creating 3D tile configuration: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+def run_stitching_plugin_3d(temp_dir, config):
+    """Run ImageJ stitching plugin for 3D stacks using pre-computed positions"""
+    verbose = config.get('verbose', False)
+    
+    try:
+        # Build stitching command for 3D
+        params = (
+            "type=[Positions from file] "
+            "order=[Defined by TileConfiguration] "
+            "directory=[{}] "
+            "layout_file=[TileConfiguration_3D.txt] "
+            "fusion_method=[Linear Blending] "
+            "subpixel_accuracy "
+            "computation_parameters=[Save memory (but be slower)] "
+            "image_output=[Fuse and display]"
+        ).format(temp_dir)
+        
+        if verbose:
+            log(u"  [VERBOSE] Running 3D stitching plugin...")
+        
+        IJ.run("Grid/Collection stitching", params)
+        
+        # Get result
+        result_imp = WindowManager.getCurrentImage()
+        if result_imp is None:
+            log(u"  ERROR: 3D stitching plugin did not produce an image")
+            return None
+        
+        if verbose:
+            log(u"  [VERBOSE] 3D stitching complete: {} x {} x {}".format(
+                result_imp.getWidth(), result_imp.getHeight(), result_imp.getNSlices()))
+        
+        return result_imp
+    
+    except Exception as e:
+        log(u"  ERROR in 3D stitching: {}".format(e))
         import traceback
         traceback.print_exc()
         return None
@@ -486,19 +603,22 @@ def process_czi_file(czi_path, config):
             log(u"    Positions: {} StageLabels parsed from OME-XML".format(len(all_positions)))
             log(u"    Colors: Cached in accessor for later use")
         
-        # Extract tiles using cached metadata
+        # Extract tiles using cached metadata (returns both 2D and 3D)
         log(u"  Extracting tiles...")
-        tiles = extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size, all_positions)
+        tiles_2d, tiles_3d = extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size, all_positions)
         
-        if not tiles or len(tiles) == 0:
+        if not tiles_2d or len(tiles_2d) == 0:
             log(u"  ERROR: No tiles extracted")
             reader.close()
             return
         
-        if len(tiles) == 1:
-            # Single tile - just apply metadata
+        if len(tiles_2d) == 1:
+            # Single tile - just apply metadata (use 3D if available)
             log(u"  Single tile - skipping stitching")
-            tile_path = os.path.join(temp_dir, tiles[0][0])
+            if tiles_3d and len(tiles_3d) > 0:
+                tile_path = os.path.join(temp_dir, tiles_3d[0][0])
+            else:
+                tile_path = os.path.join(temp_dir, tiles_2d[0][0])
             imp = IJ.openImage(tile_path)
             
             # Apply calibration
@@ -513,12 +633,42 @@ def process_czi_file(czi_path, config):
             if imp.getNChannels() > 1:
                 imp = apply_channel_luts(imp, accessor, series=0)
         else:
-            # Multi-tile - stitch
-            log(u"  Creating tile configuration...")
-            create_tile_configuration(tiles, os.path.join(temp_dir, "TileConfiguration.txt"), px_size)
+            # Multi-tile - stitch (v31.16h 3D workflow)
+            log(u"  Creating 2D tile configuration for registration...")
+            create_tile_configuration(tiles_2d, os.path.join(temp_dir, "TileConfiguration.txt"), px_size)
             
-            log(u"  Stitching {} tiles...".format(len(tiles)))
-            imp = run_stitching_plugin(temp_dir, config)
+            log(u"  Stitching {} 2D projections for registration...".format(len(tiles_2d)))
+            imp_2d = run_stitching_plugin(temp_dir, config)
+            
+            if imp_2d is None:
+                log(u"  ERROR: 2D stitching failed")
+                reader.close()
+                return
+            
+            # Close 2D result (we only needed it for registration)
+            imp_2d.close()
+            
+            # Check if we have 3D stacks to stitch
+            has_3d = tiles_3d and any(t[5] > 1 for t in tiles_3d if len(t) > 5)
+            
+            if has_3d:
+                # Transfer registered positions to 3D configuration
+                log(u"  Transferring registration to 3D stacks...")
+                if not create_3d_tile_configuration(temp_dir, tiles_3d, px_size):
+                    log(u"  ERROR: Failed to create 3D configuration")
+                    reader.close()
+                    return
+                
+                log(u"  Stitching {} 3D stacks...".format(len(tiles_3d)))
+                imp = run_stitching_plugin_3d(temp_dir, config)
+                
+                if imp is None:
+                    log(u"  WARNING: 3D stitching failed, using 2D result")
+                    # Reopen 2D result as fallback
+                    imp = run_stitching_plugin(temp_dir, config)
+            else:
+                # No 3D stacks, reopen 2D result
+                imp = run_stitching_plugin(temp_dir, config)
             
             if imp is None:
                 log(u"  ERROR: Stitching failed")
