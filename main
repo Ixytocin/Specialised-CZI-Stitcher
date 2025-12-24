@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.5
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.6
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -1550,7 +1550,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.5")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.6")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -1635,21 +1635,23 @@ if "input_dir_raw" not in globals():
     rb_radius = int(gd.getNextNumber())
     reg_thresh = float(gd.getNextNumber())
     disp_thresh = float(gd.getNextNumber())
-    do_show = bool(gd.getNextBoolean())
-    do_save = bool(gd.getNextBoolean())
-    view_zprojection = bool(gd.getNextBoolean())
-    save_zprojection = bool(gd.getNextBoolean())
+    # CRITICAL FIX v34.6: In Jython, bool(JavaBoolean) always returns True
+    # Must use int() or direct comparison instead
+    do_show = int(gd.getNextBoolean()) == 1
+    do_save = int(gd.getNextBoolean()) == 1
+    view_zprojection = int(gd.getNextBoolean()) == 1
+    save_zprojection = int(gd.getNextBoolean()) == 1
     zprojection_method = gd.getNextChoice()
-    enable_sharp_detection = bool(gd.getNextBoolean())
+    enable_sharp_detection = int(gd.getNextBoolean()) == 1
     sharp_detection_mode = gd.getNextChoice()
     sharp_threshold = float(gd.getNextNumber())
     sharp_method_name = gd.getNextChoice()
     sharp_method = SHARPNESS_METHODS.get(sharp_method_name, "laplacian")
     
     roi_grid_size = int(gd.getNextNumber())
-    use_standard_luts = bool(gd.getNextBoolean())
-    do_clean = bool(gd.getNextBoolean())
-    auto_adjust = bool(gd.getNextBoolean())
+    use_standard_luts = int(gd.getNextBoolean()) == 1
+    do_clean = int(gd.getNextBoolean()) == 1
+    auto_adjust = int(gd.getNextBoolean()) == 1
     try:
         corr_factor = float(gd.getNextNumber())
     except:
@@ -1667,7 +1669,7 @@ if "input_dir_raw" not in globals():
     log(u"DEBUG MODE VERIFICATION: VERBOSE = {}".format(VERBOSE))
     log(u"=" * 60)
     
-    notify_on_complete = bool(gd.getNextBoolean())
+    notify_on_complete = int(gd.getNextBoolean()) == 1
     
     # BigTIFF is now automatic based on file size
     save_bigtiff = False
@@ -2194,7 +2196,7 @@ def main():
     batch_elapsed_ms = (time.time() - batch_start_time) * 1000
     log(u"")
     log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
-    log(u"[Specialised CZI Stitcher] Script Version: 34.4")
+    log(u"[Specialised CZI Stitcher] Script Version: 34.6")
     flush_log()
     
     # Show completion notification if requested
