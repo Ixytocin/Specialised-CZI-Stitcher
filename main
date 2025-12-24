@@ -2043,41 +2043,25 @@ def main():
     # Show completion notification if requested
     if notify_on_complete:
         from ij.gui import GenericDialog
-        import java.awt.Toolkit
         
         complete_gd = GenericDialog("Processing Complete")
         complete_gd.addMessage("All files have been processed successfully!")
         complete_gd.addMessage("")
         complete_gd.addMessage("Click OK to dismiss this notification.")
         
-        # Play beep repeatedly until user dismisses
-        toolkit = java.awt.Toolkit.getDefaultToolkit()
-        
-        # Show dialog in non-modal way so we can keep beeping
-        def show_with_beep():
-            while not complete_gd.wasOKed() and not complete_gd.wasCanceled():
-                toolkit.beep()
-                try:
-                    from java.lang import Thread
-                    Thread.sleep(3000)  # Wait 3 seconds between beeps
-                except:
-                    pass
-                if complete_gd.wasOKed() or complete_gd.wasCanceled():
-                    break
-        
-        # Start beeping in background
+        # Play jingle repeatedly until user dismisses
         from java.lang import Thread, Runnable
-        class BeepRunnable(Runnable):
+        class JingleRunnable(Runnable):
             def run(self):
                 while not complete_gd.wasOKed() and not complete_gd.wasCanceled():
-                    toolkit.beep()
+                    play_clear_jingle()
                     try:
-                        Thread.sleep(3000)
+                        Thread.sleep(1000)  # Short wait between jingles
                     except:
                         pass
         
-        beeper = Thread(BeepRunnable())
-        beeper.start()
+        jingle_thread = Thread(JingleRunnable())
+        jingle_thread.start()
         
         # Show dialog (blocks until user clicks OK)
         complete_gd.showDialog()
