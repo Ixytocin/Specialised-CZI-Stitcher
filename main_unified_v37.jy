@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER v37.3 - UNIFIED WORKING VERSION
+# SPECIALISED CZI STITCHER v37.4 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
@@ -31,7 +31,7 @@ import jarray
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v37.3"
+VERSION = "v37.4"
 MICRO = u"\u00b5"
 
 # Debug flags - ALL ENABLED for maximum debugging
@@ -884,7 +884,12 @@ class TileWorker(Callable):
             
             # Save 3D stack
             nr = u"S{:03d}_3D.tif".format(self.i)
-            IJ.saveAs(imp, "Tiff", os.path.join(self.out_dir, nr))
+            try:
+                IJ.saveAs(imp, "Tiff", os.path.join(self.out_dir, nr))
+                logd(u"  Saved 3D stack: {}".format(nr))
+            except Exception as e:
+                log(u"  !!! CRITICAL: Failed to save 3D stack for series {}: {}".format(self.i, e))
+                raise  # Re-raise because we can't continue without the 3D stack
             
             # Create and save 2D MIP for registration
             zp = ZProjector(imp)
@@ -1039,7 +1044,8 @@ class UltimateStitcher:
         # Ensure unicode path handling for German characters
         try:
             czi_path_unicode = ensure_unicode(czi_path)
-        except:
+        except Exception as e:
+            logd(u"  Unicode conversion failed for path: {}".format(e))
             czi_path_unicode = czi_path
         
         base_name = os.path.splitext(os.path.basename(czi_path_unicode))[0]
@@ -1069,7 +1075,8 @@ class UltimateStitcher:
         px_um = get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta)
         try:
             cf = float(self.corr_factor)
-        except:
+        except Exception as e:
+            logd(u"  Invalid correction factor, using default 10.0: {}".format(e))
             cf = 10.0
         
         # v34.8: Only apply correction factor if pixel size is NOT from OME-XML
@@ -1106,7 +1113,8 @@ class UltimateStitcher:
                 sl = None
                 try:
                     sl = try_ome_stage_labels_from_xml(ome_xml, reader, s)
-                except:
+                except Exception as e:
+                    logd(u"  Stage label extraction failed for series {}: {}".format(s, e))
                     sl = None
                 if sl:
                     series_to_label[s] = (sl[0], sl[1], sl[2])
@@ -1391,38 +1399,72 @@ class UltimateStitcher:
 
         imp.setTitle(base_name + "_stitched")
         
+        logd(u"")
+        logd(u"=== IMAGE CONVERSION AND LUT APPLICATION ===")
+        logd(u"  Initial image state:")
+        logd(u"    - Stack size: {}".format(imp.getStackSize()))
+        logd(u"    - Is composite: {}".format(imp.isComposite()))
+        logd(u"    - Type: {}".format(imp.getType()))
+        
         # Convert to hyperstack if needed (DO NOT create CompositeImage here - let apply_channel_luts_to_image do it)
         try:
             c_cnt, z_cnt = res[0][4][2], res[0][4][3]
+            logd(u"  Expected: {} channels, {} slices (total: {})".format(c_cnt, z_cnt, c_cnt * z_cnt))
+            
             if imp.getStackSize() == (c_cnt * z_cnt):
                 # Just create basic HyperStack, LUT application will handle CompositeImage conversion
+                logd(u"  Creating HyperStack (NOT CompositeImage yet)...")
                 imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1)
-                logd(u"  Converted to HyperStack: {} channels, {} slices".format(c_cnt, z_cnt))
+                logd(u"  >>> HyperStack created: {} channels, {} slices".format(c_cnt, z_cnt))
+                logd(u"  >>> Is composite after HyperStack creation: {}".format(imp.isComposite()))
+            else:
+                logd(u"  Stack size mismatch, skipping HyperStack conversion")
         except Exception as e:
-            logd(u"  HyperStack conversion exception: {}".format(e))
+            log(u"  !!! HyperStack conversion EXCEPTION: {}".format(e))
+            logd(u"  Stack will remain in original format")
             pass
         
         # Apply LUTs from metadata
+        logd(u"")
+        logd(u"  Applying channel LUTs...")
+        logd(u"  Image before LUT application:")
+        logd(u"    - Is composite: {}".format(imp.isComposite()))
+        logd(u"    - Channels: {}".format(imp.getNChannels()))
+        
         try:
             imp_with_luts = apply_channel_luts_to_image(imp, ome_xml, gMeta)
             if imp_with_luts is not None:
+                logd(u"  LUT application SUCCESS - checking result...")
+                logd(u"    - Returned image is composite: {}".format(imp_with_luts.isComposite()))
+                logd(u"    - Returned image channels: {}".format(imp_with_luts.getNChannels()))
                 imp = imp_with_luts
-                logd(u"  LUTs applied successfully, image updated")
+                log(u"  >>> LUTs applied successfully, CompositeImage created and assigned")
             else:
-                logd(u"  LUT application returned None, keeping original image")
+                log(u"  !!! LUT application returned None - keeping original image")
+                logd(u"  WARNING: No LUTs will be applied to saved image")
         except Exception as e:
-            logv(u"LUT application failed: {}".format(e))
-            logd(u"  Exception during LUT application, keeping original image")
+            log(u"  !!! LUT application EXCEPTION: {}".format(e))
+            logd(u"  Keeping original image without custom LUTs")
+            import traceback
+            for line in traceback.format_exc().split('\n'):
+                logd(u"    {}".format(line))
         
         # Ensure we're in composite mode for multi-channel display
         # Only call this if image is already a CompositeImage (has LUTs applied)
+        logd(u"")
+        logd(u"  Setting display mode...")
         if imp.isComposite():
+            logd(u"  Image IS CompositeImage - setting COMPOSITE display mode")
             imp.setDisplayMode(IJ.COMPOSITE)
             imp.updateAndDraw()
-            logd(u"  Display mode set to COMPOSITE and image updated")
+            log(u"  >>> Display mode set to COMPOSITE, image updated")
         else:
-            logd(u"  Image is not CompositeImage, skipping setDisplayMode")
+            log(u"  !!! Image is NOT CompositeImage - skipping setDisplayMode")
+            logd(u"  WARNING: Image will display with default grayscale/color mode")
             imp.updateAndDraw()
+        
+        logd(u"=== IMAGE CONVERSION COMPLETE ===")
+        logd(u"")
 
         if self.do_save:
             if imp is None or imp.getProcessor() is None:
@@ -1501,7 +1543,7 @@ def show_splash():
     """Display ASCII art splash screen with corrective padding for proportional fonts"""
     splash = u"""
       +---+---+---+
-      | C | Z | I  |    CZI-STITCHER v37.3
+      | C | Z | I  |    CZI-STITCHER v37.4
       +---+---+---+     ======================
       | S | t  | i  |   > Workflow: v31.16h
       +---+---+---+     > UTF-8:    v34.8
