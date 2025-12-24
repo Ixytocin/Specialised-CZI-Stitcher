@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.0
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.1
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -1027,14 +1027,14 @@ def get_standard_microscopy_colors(num_channels):
         List of standard color integers in RGBA format
     """
     standard_colors = [
-        0x0000FFFF,  # Cyan for Ch1 (typical DAPI/Hoechst)
-        0x0000FF00,  # Green for Ch2 (typical Alexa488/FITC)
-        0x00FF6600,  # Orange for Ch3 (typical Cy3/TRITC)
-        0x00FF00FF,  # Far-red/Magenta for Ch4 (typical Alexa647/Cy5 - displayed as magenta for visibility)
+        0x00FFFFFF,  # Cyan for Ch1 (R=0, G=255, B=255) typical DAPI/Hoechst
+        0x00FF00FF,  # Green for Ch2 (R=0, G=255, B=0) typical Alexa488/FITC
+        0xFF8000FF,  # Orange for Ch3 (R=255, G=128, B=0) typical Cy3/TRITC
+        0xFF00FFFF,  # Magenta for Ch4 (R=255, G=0, B=255) typical Alexa647/Cy5 - displayed as magenta for visibility
     ]
     return standard_colors[:num_channels]
 
-def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
+def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False, debug_mode=False):
     """Apply channel LUTs to an image.
     
     Args:
@@ -1042,6 +1042,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
         ome_xml: OME-XML metadata string
         gMeta: Global metadata dictionary
         use_standard_colors: If True, override metadata colors with standard microscopy LUTs
+        debug_mode: If True, log LUT debug information
     
     Returns:
         ImagePlus with LUTs applied
@@ -1054,7 +1055,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
     # Get colors based on user preference
     if use_standard_colors:
         colors = get_standard_microscopy_colors(num_channels)
-        if LUT_DEBUG:
+        if debug_mode:
             log(u"LUT Debug: Using standard microscopy LUTs (user override)")
     else:
         colors_ome = parse_channel_colors_from_ome_xml(ome_xml)
@@ -1069,10 +1070,10 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
         # If no colors from metadata, use standard as fallback
         if not colors or len(colors) == 0:
             colors = get_standard_microscopy_colors(num_channels)
-            if LUT_DEBUG:
+            if debug_mode:
                 log(u"LUT Debug: No metadata colors found, using standard microscopy LUTs")
         else:
-            if LUT_DEBUG:
+            if debug_mode:
                 log(u"LUT Debug: OME colors={}, GM colors={}, using metadata colors".format(colors_ome, colors_gm))
     
     # build luts
@@ -1087,7 +1088,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             g = int(hex8[2:4],16)
             b = int(hex8[4:6],16)
             rgb = (r, g, b)  # Use RGB directly - LUT constructor expects RGB order
-            if LUT_DEBUG:
+            if debug_mode:
                 log(u"LUT Debug: Color[{}] = 0x{} -> RGB({}, {}, {})".format(idx, hex8, r, g, b))
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
@@ -1095,7 +1096,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
         for c in colors:
             lut = build_lut_from_rgb(_hex_to_rgb(c))
             if lut: luts.append(lut)
-    if LUT_DEBUG:
+    if debug_mode:
         log(u"LUT Debug: built {} LUTs".format(len(luts)))
     if not luts:
         return imp
@@ -1104,15 +1105,15 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             try:
                 cimp = CompositeImage(imp)
                 nchan = cimp.getNChannels()
-                if LUT_DEBUG:
+                if debug_mode:
                     log(u"LUT Debug: Applying LUTs to {} channels".format(nchan))
                 for i in range(min(nchan, len(luts))):
                     try:
                         cimp.setChannelLut(luts[i], i+1)
-                        if LUT_DEBUG:
+                        if debug_mode:
                             log(u"LUT Debug: Applied LUT[{}] to ImageJ Channel {}".format(i, i+1))
                     except Exception as e:
-                        if LUT_DEBUG:
+                        if debug_mode:
                             log(u"LUT Debug: setChannelLut failed for ch{}: {}".format(i+1, e))
                         try:
                             cimp.setLut(luts[i], i+1)
@@ -1120,7 +1121,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
                             pass
                 cimp.setDisplayMode(IJ.COMPOSITE)
                 cimp.updateAndDraw()
-                if LUT_DEBUG:
+                if debug_mode:
                     log(u"LUT Debug: CompositeImage created successfully")
                 return cimp
             except Exception as e:
@@ -1500,16 +1501,12 @@ No manual selection needed!
 
 # Main script execution
 if "input_dir_raw" not in globals():
-    # Declare global variables FIRST, before any other code in this scope
-    # This must come before ANY assignments to avoid SyntaxWarning
-    global DEBUG_MODE, LUT_DEBUG, VERBOSE
-    
-    # Show initialization message
-    IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
+    # Clear previous logs FIRST, then show initialization
     IJ.log("\\Clear")
+    IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.1")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.0")
     
     # Load config for last used paths
     _config = _load_config()
@@ -1937,7 +1934,7 @@ class UltimateStitcher:
                 
                 # Apply LUTs to the NEW CompositeImage
                 try:
-                    imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'])
+                    imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'], self.config.get('debug_mode', False))
                     logv(u"LUTs applied to converted HyperStack")
                 except Exception as e:
                     logv(u"LUT application failed: {}".format(e))
@@ -1945,7 +1942,7 @@ class UltimateStitcher:
             logv(u"HyperStack conversion failed: {}".format(e))
             # Try applying LUTs even if conversion failed
             try:
-                imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'])
+                imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'], self.config.get('debug_mode', False))
             except Exception as e2:
                 logv(u"LUT application failed: {}".format(e2))
         
@@ -2127,7 +2124,8 @@ def main():
         'disp_thresh': disp_thresh,
         'auto_adjust': auto_adjust,
         'corr_factor': corr_factor,
-        'use_standard_luts': use_standard_luts
+        'use_standard_luts': use_standard_luts,
+        'debug_mode': DEBUG_MODE
     }
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, config)
