@@ -740,9 +740,9 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
         if imp.getStackSize() > 1 and imp.getNChannels() > 1:
             logd(u"  Image is multi-channel stack, creating CompositeImage")
             try:
-                cimp = CompositeImage(imp)
+                cimp = CompositeImage(imp, CompositeImage.COMPOSITE)
                 nchan = cimp.getNChannels()
-                logd(u"  CompositeImage created with {} channels".format(nchan))
+                logd(u"  CompositeImage created with {} channels in COMPOSITE mode".format(nchan))
                 
                 for i in range(min(nchan, len(luts))):
                     logd(u"  Applying LUT to channel {}".format(i+1))
@@ -750,15 +750,10 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
                         cimp.setChannelLut(luts[i], i+1)
                         logd(u"    setChannelLut succeeded")
                     except Exception as e1:
-                        logd(u"    setChannelLut failed: {}, trying setLut".format(e1))
-                        try: 
-                            cimp.setLut(luts[i], i+1)
-                            logd(u"    setLut succeeded")
-                        except Exception as e2:
-                            logd(u"    setLut also failed: {}".format(e2))
+                        logd(u"    setChannelLut failed: {}".format(e1))
                 
-                logd(u"  Calling updateAndDraw on CompositeImage")
-                cimp.updateAndDraw()
+                logd(u"  Calling updateAllChannelsAndDraw on CompositeImage")
+                cimp.updateAllChannelsAndDraw()
                 logd(u"  Returning CompositeImage (SUCCESS)")
                 logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
                 return cimp
