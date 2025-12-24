@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER v37.1 - UNIFIED WORKING VERSION
+# SPECIALISED CZI STITCHER v37.2 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
@@ -31,7 +31,7 @@ import jarray
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v37.1"
+VERSION = "v37.2"
 MICRO = u"\u00b5"
 
 # Debug flags - ALL ENABLED for maximum debugging
@@ -736,17 +736,20 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
     
     logd(u"  Attempting to apply {} LUTs to image...".format(len(luts)))
     
-    try:
-        if imp.getNChannels() > 1:
-            # --- FIX: Check if it is ALREADY a CompositeImage (created by HyperStackConverter) ---
+    # Multi-channel: Apply LUTs to CompositeImage
+    if imp.getNChannels() > 1:
+        try:
+            # Create CompositeImage if not already one
+            # HyperStackConverter.toHyperStack() creates a basic HyperStack, NOT a CompositeImage
+            # We need to explicitly create CompositeImage to enable per-channel LUTs
             if imp.isComposite():
                 logd(u"  Image is ALREADY a CompositeImage. Using existing instance.")
                 cimp = imp
             else:
-                logd(u"  Image is a stack. Creating new CompositeImage wrapper.")
+                logd(u"  Image is HyperStack. Creating CompositeImage for custom LUTs.")
                 cimp = CompositeImage(imp, CompositeImage.COMPOSITE)
             
-            # Force mode to COMPOSITE just in case
+            # Force mode to COMPOSITE (required for custom LUTs)
             cimp.setMode(CompositeImage.COMPOSITE)
             logd(u"  CompositeImage mode set to COMPOSITE")
             
@@ -768,23 +771,29 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
             logd(u"  Returning CompositeImage (SUCCESS)")
             logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
             return cimp
-        else:
-            logd(u"  Image is single channel")
-            try:
-                imp.getProcessor().setColorModel(luts[0].getColorModel())
-                logd(u"  Set color model from first LUT")
-                imp.updateAndDraw()
-                logd(u"  updateAndDraw called")
-            except Exception as e:
-                logd(u"  setColorModel failed: {}".format(e))
-    except Exception as e:
-        if LUT_DEBUG: 
-            log(u"LUT Debug: apply failed: {}".format(e))
-        logd(u"  LUT application exception: {}".format(e))
+            
+        except Exception as e:
+            if LUT_DEBUG: 
+                log(u"LUT Debug: multi-channel apply failed: {}".format(e))
+            logd(u"  Multi-channel LUT application exception: {}".format(e))
+            logd(u"  Returning original image (exception fallback)")
+            logd(u"=== LUT APPLICATION COMPLETE (exception fallback) ===")
+            return imp
     
-    logd(u"  Returning original image (fallback)")
-    logd(u"=== LUT APPLICATION COMPLETE (fallback) ===")
-    return imp
+    # Single channel: Apply color model
+    else:
+        logd(u"  Image is single channel")
+        try:
+            imp.getProcessor().setColorModel(luts[0].getColorModel())
+            logd(u"  Set color model from first LUT")
+            imp.updateAndDraw()
+            logd(u"  updateAndDraw called")
+            logd(u"=== LUT APPLICATION COMPLETE (single channel) ===")
+            return imp
+        except Exception as e:
+            logd(u"  setColorModel failed: {}".format(e))
+            logd(u"=== LUT APPLICATION COMPLETE (single channel fallback) ===")
+            return imp
 
 # ==============================================================================
 # PART 4: STITCHING SUPPORT (from v31.16h)
@@ -1382,12 +1391,15 @@ class UltimateStitcher:
 
         imp.setTitle(base_name + "_stitched")
         
-        # Convert to hyperstack if needed
+        # Convert to hyperstack if needed (DO NOT create CompositeImage here - let apply_channel_luts_to_image do it)
         try:
             c_cnt, z_cnt = res[0][4][2], res[0][4][3]
             if imp.getStackSize() == (c_cnt * z_cnt):
-                imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1, "grayscale", "Composite")
-        except Exception:
+                # Just create basic HyperStack, LUT application will handle CompositeImage conversion
+                imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1)
+                logd(u"  Converted to HyperStack: {} channels, {} slices".format(c_cnt, z_cnt))
+        except Exception as e:
+            logd(u"  HyperStack conversion exception: {}".format(e))
             pass
         
         # Apply LUTs from metadata
@@ -1476,7 +1488,7 @@ def show_splash():
     """Display ASCII art splash screen with corrective padding for proportional fonts"""
     splash = u"""
       +---+---+---+
-      | C | Z | I  |    CZI-STITCHER v37.1
+      | C | Z | I  |    CZI-STITCHER v37.2
       +---+---+---+     ======================
       | S | t  | i  |   > Workflow: v31.16h
       +---+---+---+     > UTF-8:    v34.8
