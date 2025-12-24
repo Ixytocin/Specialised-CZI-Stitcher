@@ -10,7 +10,7 @@
 # - Performance optimizations: StringBuilder for logging, optimized metadata
 # - Fail-fast: Process largest file first for early error detection
 
-import os, time, shutil, math, re, sys, json, codecs
+import os, time, shutil, math, re, sys, json, codecs, threading
 from java.lang import Runtime, Thread, System, StringBuilder
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
@@ -60,9 +60,10 @@ FILE_BUFFER_SIZE = 65536
 # Threshold for automatic BigTIFF (2GB - 100MB margin)
 BIGTIFF_THRESHOLD = 2147483648 - 104857600
 
-# Log buffer for performance
+# Log buffer for performance (with thread safety)
 _log_buffer = StringBuilder()
 _log_last_flush = time.time()
+_log_lock = threading.Lock()  # Thread-safe logging for parallel tile processing
 
 MICRO = u"\u00b5"
 FLOAT_RE = re.compile(r"([-+]?\d*\.\d+|[-+]?\d+)(?:[eE][-+]?\d+)?")
@@ -127,32 +128,34 @@ def safe_unicode(o):
 
 def log(msg):
     global _log_buffer, _log_last_flush
-    try:
-        msg_str = u"[Specialised CZI Stitcher] " + safe_unicode(msg) + u"\n"
-        _log_buffer.append(msg_str)
-        
-        # Flush buffer every 1 second or when it exceeds 8KB
-        current_time = time.time()
-        if (current_time - _log_last_flush) >= 1.0 or _log_buffer.length() > 8192:
-            IJ.log(_log_buffer.toString())
-            _log_buffer = StringBuilder()
-            _log_last_flush = current_time
-    except:
+    with _log_lock:  # Thread-safe: protect against concurrent writes from TileWorker threads
         try:
-            IJ.log(str(msg))
+            msg_str = u"[Specialised CZI Stitcher] " + safe_unicode(msg) + u"\n"
+            _log_buffer.append(msg_str)
+            
+            # Flush buffer every 1 second or when it exceeds 8KB
+            current_time = time.time()
+            if (current_time - _log_last_flush) >= 1.0 or _log_buffer.length() > 8192:
+                IJ.log(_log_buffer.toString())
+                _log_buffer = StringBuilder()
+                _log_last_flush = current_time
         except:
-            pass
+            try:
+                IJ.log(str(msg))
+            except:
+                pass
 
 def flush_log():
-    """Flush remaining log messages."""
+    """Flush remaining log messages. Thread-safe."""
     global _log_buffer, _log_last_flush
-    try:
-        if _log_buffer.length() > 0:
-            IJ.log(_log_buffer.toString())
-            _log_buffer = StringBuilder()
-            _log_last_flush = time.time()
-    except:
-        pass
+    with _log_lock:  # Thread-safe: protect against concurrent access
+        try:
+            if _log_buffer.length() > 0:
+                IJ.log(_log_buffer.toString())
+                _log_buffer = StringBuilder()
+                _log_last_flush = time.time()
+        except:
+            pass
 
 def format_time_human(ms):
     """Convert milliseconds to human-readable format."""
@@ -1674,8 +1677,9 @@ def get_original_omexml_str_and_reader(czi_path):
         return None, None, None, None, None
 
 class UltimateStitcher:
-    def __init__(self, src, dst, t_limit, temp_root):
+    def __init__(self, src, dst, t_limit, temp_root, config):
         self.src, self.dst, self.t_limit, self.temp_root = src, dst, t_limit, temp_root
+        self.config = config  # Store configuration to avoid implicit global dependencies
 
     def process_file(self, czi_path):
         base_name = os.path.splitext(os.path.basename(czi_path))[0]
@@ -1694,19 +1698,19 @@ class UltimateStitcher:
             if proc:
                 try: proc.close()
                 except: pass
-            if do_clean:
+            if self.config['do_clean']:
                 try: shutil.rmtree(file_dst)
                 except: pass
             return False
 
         px_um = get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta)
         try:
-            cf = float(corr_factor)
+            cf = float(self.config['corr_factor'])
         except:
             cf = 10.0
         px_um_eff = px_um / cf if cf != 1.0 else px_um
         if cf != 1.0:
-            log(u"px = {} {}, corr_factor {}, effective = {} {}".format(px_um, MICRO, cf, px_um_eff, MICRO))
+            log(u"px = {} {}, self.config['corr_factor'] {}, effective = {} {}".format(px_um, MICRO, cf, px_um_eff, MICRO))
         else:
             log(u"px = {} {}".format(px_um_eff, MICRO))
 
@@ -1753,9 +1757,9 @@ class UltimateStitcher:
         if xs and ys:
             log(u"Tiles: {} | px-range x=[{:.1f},{:.1f}] y=[{:.1f},{:.1f}]".format(len(tiles), min(xs), max(xs), min(ys), max(ys)))
 
-        reg_local = reg_thresh
-        disp_local = disp_thresh
-        if auto_adjust and len(tiles)>1:
+        reg_local = self.config['reg_thresh']
+        disp_local = self.config['disp_thresh']
+        if self.config['auto_adjust'] and len(tiles)>1:
             deltas = []
             for i in range(1, len(tiles)):
                 dx = tiles[i]['x_s'] - tiles[i-1]['x_s']
@@ -1775,7 +1779,7 @@ class UltimateStitcher:
 
         num_threads = min(self.t_limit, Runtime.getRuntime().availableProcessors())
         exc = Executors.newFixedThreadPool(num_threads)
-        futs = [exc.submit(TileWorker(czi_path, t['i'], t['x'], t['y'], file_dst, rb_radius)) for t in tiles]
+        futs = [exc.submit(TileWorker(czi_path, t['i'], t['x'], t['y'], file_dst, self.config['rb_radius'])) for t in tiles]
         exc.shutdown()
         while not exc.isTerminated():
             Thread.sleep(200)
@@ -1788,7 +1792,7 @@ class UltimateStitcher:
             if proc:
                 try: proc.close()
                 except: pass
-            if do_clean:
+            if self.config['do_clean']:
                 try: shutil.rmtree(file_dst)
                 except: pass
             return False
@@ -1811,7 +1815,7 @@ class UltimateStitcher:
             if proc:
                 try: proc.close()
                 except: pass
-            if do_clean:
+            if self.config['do_clean']:
                 try: shutil.rmtree(file_dst)
                 except: pass
             return True
@@ -1824,7 +1828,7 @@ class UltimateStitcher:
 
         clean_dir = file_dst.replace(u"\\",u"/")
         try:
-            IJ.run("Grid/Collection stitching", "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + "] layout_file=TileConfiguration.txt fusion_method=[" + fusion_method + "] regression_threshold=" + str(reg_local) + " max/avg_displacement_threshold=" + str(disp_local) + " absolute_displacement_threshold=" + str(disp_local + 1.0) + " compute_overlap subpixel_accuracy image_output=[Fuse and display]")
+            IJ.run("Grid/Collection stitching", "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + "] layout_file=TileConfiguration.txt self.config['fusion_method']=[" + self.config['fusion_method'] + "] regression_threshold=" + str(reg_local) + " max/avg_displacement_threshold=" + str(disp_local) + " absolute_displacement_threshold=" + str(disp_local + 1.0) + " compute_overlap subpixel_accuracy image_output=[Fuse and display]")
         except Exception as e:
             log(u"Stitching (2D) failed: {}".format(e))
 
@@ -1866,7 +1870,7 @@ class UltimateStitcher:
                     fw.write(line)
 
         try:
-            IJ.run("Grid/Collection stitching", "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + "] layout_file=TileConfiguration_3D.txt fusion_method=[" + fusion_method + "] subpixel_accuracy image_output=[Fuse and display]")
+            IJ.run("Grid/Collection stitching", "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + "] layout_file=TileConfiguration_3D.txt self.config['fusion_method']=[" + self.config['fusion_method'] + "] subpixel_accuracy image_output=[Fuse and display]")
         except Exception as e:
             log(u"Stitching (3D) failed: {}".format(e))
 
@@ -1878,7 +1882,7 @@ class UltimateStitcher:
             if proc:
                 try: proc.close()
                 except: pass
-            if do_clean:
+            if self.config['do_clean']:
                 try: shutil.rmtree(file_dst)
                 except Exception as e:
                     logv(u"Cleanup temp dir failed: {}".format(e))
@@ -1906,7 +1910,7 @@ class UltimateStitcher:
                 
                 # Apply LUTs to the NEW CompositeImage
                 try:
-                    imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+                    imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'])
                     logv(u"LUTs applied to converted HyperStack")
                 except Exception as e:
                     logv(u"LUT application failed: {}".format(e))
@@ -1914,7 +1918,7 @@ class UltimateStitcher:
             logv(u"HyperStack conversion failed: {}".format(e))
             # Try applying LUTs even if conversion failed
             try:
-                imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+                imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, self.config['use_standard_luts'])
             except Exception as e2:
                 logv(u"LUT application failed: {}".format(e2))
         
@@ -1923,23 +1927,23 @@ class UltimateStitcher:
             imp.setDisplayMode(IJ.COMPOSITE)
         imp.updateAndDraw()
 
-        if do_save:
+        if self.config['do_save']:
             if imp is None or imp.getProcessor() is None:
                 log(u"Skipping save: image or processor is None for {}.".format(base_name))
             else:
                 # Build filename suffix with processing parameters
                 filename_suffix = u"_stitched"
-                if rb_radius > 0:
-                    filename_suffix += u"_rb{}".format(rb_radius)
+                if self.config['rb_radius'] > 0:
+                    filename_suffix += u"_rb{}".format(self.config['rb_radius'])
                 
                 # Apply sharp-slice detection if enabled
                 sharp_range_str = ""
-                if enable_sharp_detection and imp.getNSlices() > 1:
+                if self.config['enable_sharp_detection'] and imp.getNSlices() > 1:
                     try:
-                        if sharp_detection_mode == "ROI-based":
-                            start_z, end_z = detect_sharp_slices_roi(imp, sharp_threshold, sharp_method, roi_grid_size)
+                        if self.config['sharp_detection_mode'] == "ROI-based":
+                            start_z, end_z = detect_sharp_slices_roi(imp, self.config['sharp_threshold'], self.config['sharp_method'], self.config['roi_grid_size'])
                         else:
-                            start_z, end_z = detect_sharp_slices_global(imp, sharp_threshold, sharp_method)
+                            start_z, end_z = detect_sharp_slices_global(imp, self.config['sharp_threshold'], self.config['sharp_method'])
                         
                         # Create substack with only sharp slices
                         if start_z > 1 or end_z < imp.getNSlices():
@@ -1966,7 +1970,7 @@ class UltimateStitcher:
                     log(u"File size exceeds 2GB threshold, using BigTIFF format")
                 
                 # Save 3D volume if requested
-                if save_3d:
+                if self.config['save_3d']:
                     out_3d = os.path.join(self.dst, base_name + filename_suffix + sharp_range_str + u".tif")
                     try:
                         if use_bigtiff:
@@ -1979,10 +1983,10 @@ class UltimateStitcher:
                         log(u"Saving 3D stitched failed: {}".format(e))
                 
                 # Create Z-projection if save OR view is requested AND stack has multiple slices
-                if (save_zprojection or view_zprojection) and imp.getNSlices() > 1:
+                if (self.config['save_zprojection'] or self.config['view_zprojection']) and imp.getNSlices() > 1:
                     try:
-                        log(u"Creating Z-projection using {} method...".format(zprojection_method))
-                        proj_imp = create_zprojection(imp, zprojection_method)
+                        log(u"Creating Z-projection using {} method...".format(self.config['zprojection_method']))
+                        proj_imp = create_zprojection(imp, self.config['zprojection_method'])
                         if proj_imp:
                             # Projection inherits channel structure but needs LUTs reapplied
                             try:
@@ -1994,23 +1998,23 @@ class UltimateStitcher:
                                 pass
                             
                             # Build projection filename with method and sharp range
-                            proj_method_short = zprojection_method.replace(" ", "").replace("Intensity", "").lower()
+                            proj_method_short = self.config['zprojection_method'].replace(" ", "").replace("Intensity", "").lower()
                             out_proj = os.path.join(self.dst, base_name + filename_suffix + sharp_range_str + u"_{}_projection.tif".format(proj_method_short))
                             
                             # Save if requested
-                            if save_zprojection:
+                            if self.config['save_zprojection']:
                                 try:
                                     IJ.saveAs(proj_imp, "Tiff", out_proj)
-                                    log(u"Saved Z-projection ({}): {}".format(zprojection_method, out_proj))
+                                    log(u"Saved Z-projection ({}): {}".format(self.config['zprojection_method'], out_proj))
                                 except Exception as e:
                                     log(u"Saving Z-projection failed: {}".format(e))
                             
                             # Show if requested
-                            if view_zprojection:
+                            if self.config['view_zprojection']:
                                 proj_imp.setTitle(os.path.basename(out_proj))
                                 proj_imp.show()
-                                log(u"Displaying Z-projection ({})".format(zprojection_method))
-                            elif save_zprojection:
+                                log(u"Displaying Z-projection ({})".format(self.config['zprojection_method']))
+                            elif self.config['save_zprojection']:
                                 # Close and flush if only saving (not viewing)
                                 proj_imp.flush()
                                 proj_imp.close()
@@ -2037,7 +2041,7 @@ class UltimateStitcher:
                 proc.close()
             except:
                 pass
-        if do_clean:
+        if self.config['do_clean']:
             System.gc()
             Thread.sleep(1000)
             try:
@@ -2077,7 +2081,29 @@ def main():
         log("Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(s_dir, t_dir, t_lim, temp_root))
     flush_log()
     
-    stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root)
+    # Create configuration dict to pass to UltimateStitcher (avoids implicit global dependencies)
+    config = {
+        'do_clean': do_clean,
+        'do_save': do_save,
+        'save_3d': save_3d,
+        'save_zprojection': save_zprojection,
+        'view_zprojection': view_zprojection,
+        'zprojection_method': zprojection_method,
+        'enable_sharp_detection': enable_sharp_detection,
+        'sharp_threshold': sharp_threshold,
+        'sharp_method': sharp_method,
+        'sharp_detection_mode': sharp_detection_mode,
+        'roi_grid_size': roi_grid_size,
+        'fusion_method': fusion_method,
+        'rb_radius': rb_radius,
+        'reg_thresh': reg_thresh,
+        'disp_thresh': disp_thresh,
+        'auto_adjust': auto_adjust,
+        'corr_factor': corr_factor,
+        'use_standard_luts': use_standard_luts
+    }
+    
+    stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, config)
     
     batch_start_time = time.time()
     for idx, f in enumerate(files, 1):
