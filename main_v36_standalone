@@ -292,11 +292,13 @@ def extract_tiles_and_positions(czi_path, temp_dir, config):
                 
                 # In CZI files, each series/tile has its own stage position
                 # The positions are in StageLabel metadata
+                # CRITICAL: Must setSeries(i) first, then get position for series 0
                 try:
+                    reader.setSeries(i)  # Switch to this series
                     if metadata and hasattr(metadata, 'getStageLabelX'):
-                        x_stage = metadata.getStageLabelX(i)
-                        y_stage = metadata.getStageLabelY(i)
-                        z_stage = metadata.getStageLabelZ(i)
+                        x_stage = metadata.getStageLabelX(0)  # Get position of current series
+                        y_stage = metadata.getStageLabelY(0)
+                        z_stage = metadata.getStageLabelZ(0)
                         
                         if x_stage is not None:
                             x_um = float(x_stage.value())
@@ -314,9 +316,23 @@ def extract_tiles_and_positions(czi_path, temp_dir, config):
                 log(u"  WARNING: Could not get stage position for tile {}: {}".format(i, e))
                 x_um, y_um, z_um = float(i * tile_imp.getWidth() * px_size), 0.0, 0.0
             
+            # Handle z-stacks: Apply max intensity projection for stitching
+            # Stitching plugin works best with 2D images
+            if tile_imp.getNSlices() > 1:
+                if verbose:
+                    log(u"    Tile {}: Applying z-projection ({} slices)".format(i, tile_imp.getNSlices()))
+                IJ.run(tile_imp, "Z Project...", "projection=[Max Intensity]")
+                proj_imp = WindowManager.getCurrentImage()
+                if proj_imp is not None:
+                    tile_imp.close()
+                    tile_imp = proj_imp
+            
             # Save tile
             fs = FileSaver(tile_imp)
-            fs.saveAsTiff(tile_path)
+            if tile_imp.getNSlices() > 1:
+                fs.saveAsTiffStack(tile_path)
+            else:
+                fs.saveAsTiff(tile_path)
             
             tiles.append((tile_filename, i, x_um, y_um, z_um))
             
