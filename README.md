@@ -1,13 +1,39 @@
 # Specialised CZI Stitcher
 
-> **⚠️ DEVELOPMENT DISCLAIMER**  
+> **🚧 ACTIVE DEVELOPMENT - CORE FEATURES REBUILD**  
+> **Status:** v35.0 - Fresh rebuild after v34.8 complexity reached unsustainable levels  
+> **Focus:** 3 core features working perfectly before adding complexity  
 > **Problem Identification & Testing:** [Ixytocin](https://github.com/Ixytocin)  
 > **Implementation:** ~20 iterations with Gemini (Google AI), followed by GitHub Copilot  
+> **Current Phase:** Fixing critical bugs found through exhaustive diagnostic testing  
 > **Methodology:** AI-assisted development - The author cannot personally understand or debug the implementation. All credit belongs to the open-source tools being orchestrated and the training data of the LLMs used.
 
 ---
 
 A specialized Fiji/ImageJ batch processing pipeline for Zeiss .czi files. Engineered for the specific challenges of ApoTome imaging and large-scale brain section reconstruction.
+
+## Current Development Status
+
+**v35.0 - Clean Rebuild (NEW):**
+- ✅ **ome_metadata_accessor.py** - Proven metadata extraction module (ALL metadata handling isolated here)
+- 🔧 **main_v35** - Minimal stitching script (320 lines) focusing on 3 core features:
+  1. 🎨 **LUT/Color application** from OME-XML
+  2. 📏 **Pixel size scaling** (correct 0.345 not 3.45)
+  3. 🔔 **Completion jingle**
+- 🧪 **Testing phase** - Verifying core features work before adding back complexity
+
+**v34.8 - Previous Version (COMPLEX):**
+- ⚠️ 2259 lines with many features fighting each other
+- ⚠️ Known issue: OME-XML parsing still hitting ASCII codec errors in some cases
+- ⚠️ Known issue: LUT application not consistently working
+- ⚠️ Kept for reference but not recommended for use
+
+**Diagnostic Tools (STABLE):**
+- ✅ **xml_debug.py v1.4** - Exhaustive testing tool (15 unicode methods × 12 Bio-Formats APIs)
+- ✅ **xml_parser.py v1.0** - Focused metadata extraction tool
+- ✅ **BUGFIXES.md** - Complete technical documentation of 6 bugs fixed in v34.1-v34.8
+
+**Recommended for Use:** `main_v35` + `ome_metadata_accessor.py` (once testing complete)
 
 ## Problem Solved
 Standard stitching routines often fail with Zeiss .czi files by:
@@ -37,18 +63,34 @@ Traditional 3D-stitching in Fiji often struggles with:
 **The Specialized Approach:** By decoupling the *Registration* (using 2D Maximum Intensity Projections) from the *Fusion* (applying calculated coordinates to 3D volumes), we ensure 100% metadata integrity and significantly higher processing stability for large-scale brain sections.
 
 
-## Known Issues & Bug Fixes
+## Known Issues & Bug Fixes - v34.8 Era
 
-**See [BUGFIXES.md](BUGFIXES.md) for complete technical details** on 6 critical bugs fixed in v34.1-v34.8:
+**See [BUGFIXES.md](BUGFIXES.md) for complete technical details** on 6 critical bugs discovered and fixed through iterative testing (v34.1-v34.8):
 
-1. ⚠️ **Jython Boolean Conversion** - All checkboxes read as True (v34.6-v34.7 fix)
-2. 💥 **UTF-8 µ Character Crash** - ASCII codec errors parsing OME-XML (v34.3-v34.5 fix)
-3. 📏 **10× Pixel Size Error** - Correction factor misapplied to OME-XML (v34.8 fix)
-4. 📋 **Log Visibility Loss** - Diagnostic info cleared (v34.5 fix)
-5. 🔤 **Variable Name Error** - c_file undefined in DEBUG SUMMARY (v34.8 fix)
-6. 🇩🇪 **German Characters in Paths** - Encoding errors with ä, ü, ö (diagnostic tools fix)
+1. ⚠️ **Jython Boolean Conversion** - All checkboxes read as True regardless of user selection (v34.6-v34.7 fix)
+2. 💥 **UTF-8 µ Character Crash** - ASCII codec errors parsing OME-XML with micro symbols (v34.3-v34.5 fix)
+3. 📏 **10× Pixel Size Error** - Correction factor misapplied to OME-XML values (v34.8 fix)
+4. 📋 **Log Visibility Loss** - Diagnostic info cleared before user could read it (v34.5 fix)
+5. 🔤 **Variable Name Error** - c_file undefined in DEBUG SUMMARY causing crashes (v34.8 fix)
+6. 🇩🇪 **German Characters in Paths** - Encoding errors with ä, ü, ö in file names (diagnostic tools fix)
 
-**Current Status (v34.8):** All known critical bugs fixed. Tested with real Zeiss CZI files containing unicode characters and German file paths.
+**Result of v34.8 complexity:** While individual bugs were fixed, the codebase became too complex (2259 lines) to reliably deliver core functionality.
+
+**v35.0 Approach:** Start over with ONLY proven working code from diagnostic tools. Get 3 features working, then build up carefully.
+
+## Current Known Issues - v35.0 Development
+
+🔧 **In Active Development** - Testing core features:
+- Verifying pixel size reads correctly from OME-XML (0.345 not 3.45)
+- Verifying channel colors apply correctly from OME-XML metadata
+- Verifying completion jingle works when checkbox enabled
+
+**Why the rebuild?** After 51 commits fixing various issues, the main script still had:
+- OME-XML parsing hitting ASCII codec errors (despite multiple unicode fixes)
+- LUT/color application inconsistent (not showing debug output)
+- Code too complex to debug iteratively (too many features interacting)
+
+**Solution:** Isolate ALL metadata handling in `ome_metadata_accessor.py`, keep main script minimal and debuggable.
 
 ## Requirements
 - **Fiji (ImageJ)**
@@ -56,10 +98,34 @@ Traditional 3D-stitching in Fiji often struggles with:
 - **Stitching Plugin** (Preibisch et al.)
 
 ## Installation & Usage
-1. Download `Specialised_CZI_Stitcher` script.
-2. Place it in your `Fiji.app/scripts/` folder.
-3. Restart Fiji and run the script from the menu.
-4. Select Source and Target folders. Use 'Rolling Ball' (Radius ~50-100) if tiling artifacts are visible.
+
+### For Testing v35.0 (Core Features)
+1. Download both `main_v35` and `ome_metadata_accessor.py`
+2. Place both files in your `Fiji.app/scripts/` or `Fiji.app/plugins/` folder
+3. Restart Fiji and run `main_v35` from the menu
+4. Select input directory containing CZI files
+5. Enable/disable: Apply LUTs, Show result, Save result, Play jingle
+
+**Expected behavior:**
+- Pixel size should show correct value (e.g., `0.345 µm` not `3.45 µm`)
+- Channel colors should match OME-XML metadata
+- Jingle should play only when checkbox is enabled
+
+### For Reference (v34.8 - Not Recommended)
+The original `main` script (v34.8) is kept for reference but not recommended due to complexity and remaining issues.
+
+## File Structure
+
+```
+Repository/
+├── main                          # v34.8 (complex, 2259 lines) - NOT RECOMMENDED
+├── main_v35                      # v35.0 (simple, 320 lines) - USE FOR TESTING
+├── ome_metadata_accessor.py      # Metadata module (REQUIRED for main_v35)
+├── xml_parser.py                 # Diagnostic tool (standalone)
+├── xml_debug.py                  # Exhaustive testing tool (standalone)
+├── BUGFIXES.md                   # Complete bug documentation
+└── README.md                     # This file
+```
 
 ## Processing Flow
 
