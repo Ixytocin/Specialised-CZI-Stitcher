@@ -1051,12 +1051,10 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             hex8 = "%08X" % u
             # Zeiss uses RGBA format: RR GG BB AA
             # Extract RGB components (alpha channel not used for LUT creation)
-            # Zeiss CZI uses RGBA format, ImageJ interprets colors as BGR
-            # So we swap R and B when passing to ImageJ
             r = int(hex8[0:2],16)
             g = int(hex8[2:4],16)
             b = int(hex8[4:6],16)
-            rgb = (b, g, r)  # Swap to BGR for ImageJ's color interpretation
+            rgb = (r, g, b)  # Use RGB directly - LUT constructor expects RGB order
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
     else:
@@ -1818,13 +1816,29 @@ class UltimateStitcher:
             return False
 
         imp.setTitle(base_name + "_stitched")
+        
+        # Store reference to original imp before conversion
+        original_imp = imp
+        
         try:
             c_cnt, z_cnt = res[0][4][2], res[0][4][3]
             if imp.getStackSize() == (c_cnt * z_cnt):
+                # HyperStackConverter creates a NEW image, so we need to close the original
                 imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1, "grayscale", "Composite")
-                # Apply LUTs AFTER conversion to avoid creating duplicate images
+                
+                # Close the original grayscale stack (HyperStackConverter left it open)
+                if original_imp != imp:
+                    try:
+                        original_imp.changes = False  # Prevent save dialog
+                        original_imp.close()
+                        logv(u"Closed original grayscale stack after HyperStack conversion")
+                    except:
+                        pass
+                
+                # Apply LUTs to the NEW CompositeImage
                 try:
                     imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+                    logv(u"LUTs applied to converted HyperStack")
                 except Exception as e:
                     logv(u"LUT application failed: {}".format(e))
         except Exception as e:
