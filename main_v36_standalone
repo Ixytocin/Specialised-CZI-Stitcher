@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER v36.3 - FINAL STABLE VERSION
+# SPECIALISED CZI STITCHER v36.4 - FIXED LUT AND POSITIONS
 # Single-file standalone with complete stitching integration
 #
 # Core features:
@@ -11,7 +11,7 @@
 #
 # All metadata extracted in ONE pass - no repeated queries!
 
-import os, time, shutil, re
+import os, time, shutil, re, array
 from java.lang import System
 from ij import IJ, ImagePlus, CompositeImage, WindowManager
 from ij.plugin import HyperStackConverter
@@ -101,17 +101,17 @@ class OMEMetadataAccessor(object):
         self.verbose = verbose
         
         if verbose:
-            IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] Initializing OMEMetadataAccessor...")
+            IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Initializing OMEMetadataAccessor...")
         
         # Get metadata store
         try:
             self.metadata = reader.getMetadataStore()
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] Got metadata store: {}".format(
+                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Got metadata store: {}".format(
                     type(self.metadata).__name__))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] Failed to get metadata store: {}".format(e))
+                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Failed to get metadata store: {}".format(e))
             self.metadata = None
         
         # Cache OME-XML string
@@ -119,15 +119,15 @@ class OMEMetadataAccessor(object):
         try:
             if self.metadata:
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] Dumping OME-XML...")
+                    IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Dumping OME-XML...")
                 xml_str = self.metadata.dumpXML()
                 self._ome_xml = ensure_unicode(xml_str)
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] OME-XML dumped: {} characters".format(
+                    IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] OME-XML dumped: {} characters".format(
                         len(self._ome_xml)))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.3]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
+                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
     
     def get_physical_size_x(self, series=0):
         """Get physical size X in micrometers"""
@@ -227,10 +227,10 @@ def apply_channel_luts(imp, accessor, series=0):
                 r, g, b = color_rgb
                 log(u"    Ch{}: {} - RGB({}, {}, {})".format(c+1, ch_name or "Unknown", r, g, b))
                 
-                # Create LUT
-                reds = [int(r * i / 255.0) for i in range(256)]
-                greens = [int(g * i / 255.0) for i in range(256)]
-                blues = [int(b * i / 255.0) for i in range(256)]
+                # Create LUT - MUST use Java byte arrays, not Python lists
+                reds = array.array('b', [int(r * i / 255.0) for i in range(256)])
+                greens = array.array('b', [int(g * i / 255.0) for i in range(256)])
+                blues = array.array('b', [int(b * i / 255.0) for i in range(256)])
                 
                 lut = LUT(reds, greens, blues)
                 imp.setC(c + 1)
@@ -295,6 +295,11 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
         tiles = []
         tiles_3d = []  # Store 3D stacks for later reconstruction
         
+        # Debug position count
+        if verbose:
+            log(u"  [VERBOSE] Parsed {} positions from XML, {} tiles in file".format(
+                len(all_positions), len(imps)))
+        
         # Process each tile
         for i, tile_imp in enumerate(imps):
             tile_filename = "tile_{:04d}.tif".format(i)
@@ -303,13 +308,19 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
             # Get position from pre-parsed list (NO API CALLS HERE)
             if i < len(all_positions):
                 name, x_um, y_um, z_um = all_positions[i]
-                source = "from XML"
+                # Check if XML position is valid (not 0,0)
+                if x_um != 0.0 or y_um != 0.0:
+                    source = "from XML"
+                else:
+                    # XML had 0,0 - use calculated
+                    x_um = float(i * tile_imp.getWidth() * px_size)
+                    source = "calculated (XML was zero)"
             else:
-                # Fallback if positions missing
+                # No XML position for this tile index
                 x_um = float(i * tile_imp.getWidth() * px_size)
                 y_um = 0.0
                 z_um = 0.0
-                source = "calculated"
+                source = "calculated (no XML entry)"
             
             if verbose:
                 log(u"    Tile {}: pos=({:.2f}, {:.2f}, {:.2f}) µm [{}]".format(
@@ -318,7 +329,7 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
             # Handle z-stacks: Project for stitching, but preserve original
             if tile_imp.getNSlices() > 1:
                 if verbose:
-                    log(u"      Z-stack detected: {} slices".format(tile_imp.getNSlices()))
+                    log(u"      Z-stack detected: {} slices → projecting".format(tile_imp.getNSlices()))
                 
                 # Save original 3D stack for later
                 tile_3d_path = os.path.join(temp_dir, "tile_{:04d}_3d.tif".format(i))
@@ -329,9 +340,23 @@ def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px
                 # Create projection for stitching
                 IJ.run(tile_imp, "Z Project...", "projection=[Max Intensity]")
                 proj_imp = WindowManager.getCurrentImage()
-                if proj_imp is not None:
+                
+                if proj_imp is not None and proj_imp.getNSlices() == 1:
+                    # Projection successful and is 2D
                     tile_imp.close()
                     tile_imp = proj_imp
+                    if verbose:
+                        log(u"      Projection OK: {}x{}x1".format(tile_imp.getWidth(), tile_imp.getHeight()))
+                else:
+                    # Projection failed or still 3D - use first slice
+                    if verbose:
+                        log(u"      WARNING: Projection failed, using first slice")
+                    if proj_imp is not None:
+                        proj_imp.close()
+                    tile_imp.setSlice(1)
+                    IJ.run(tile_imp, "Duplicate...", "duplicate")
+                    tile_imp.close()
+                    tile_imp = WindowManager.getCurrentImage()
             
             # Save tile (2D or projection)
             fs = FileSaver(tile_imp)
