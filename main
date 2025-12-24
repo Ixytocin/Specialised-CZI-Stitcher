@@ -27,7 +27,7 @@ import jarray
 VERBOSE = False
 LOG_TILE_POS = False
 DUMP_DEBUG = False
-LUT_DEBUG = True
+LUT_DEBUG = False  # Controlled by DEBUG_MODE from dialog
 PLAY_JINGLE_ON_DONE = True
 DEBUG_MODE = False  # Set via dialog checkbox
 
@@ -1588,6 +1588,7 @@ if "input_dir_raw" not in globals():
     except:
         corr_factor = 10.0
     DEBUG_MODE = bool(gd.getNextBoolean())
+    LUT_DEBUG = DEBUG_MODE  # Tie LUT debug logging to debug mode checkbox
     notify_on_complete = bool(gd.getNextBoolean())
     
     # BigTIFF is now automatic based on file size
