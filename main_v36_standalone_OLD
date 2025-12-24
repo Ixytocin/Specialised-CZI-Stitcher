@@ -1,0 +1,702 @@
+# SPECIALISED CZI STITCHER v36.2 - STANDALONE WITH STITCHING
+# Core features:
+# 1. LUT/Color detection & application from OME-XML (RGBA format fixed)
+# 2. Pixel size scaling (correct 0.345 not 3.45)
+# 3. Completion jingle when enabled
+# 4. ImageJ Grid/Collection stitching with 2D matching + 3D fusion
+# 5. Sub-pixel accuracy alignment with linear blending
+# 6. Single metadata query - cached and reused (no duplicate queries)
+#
+# This version has OMEMetadataAccessor embedded - NO external imports needed!
+
+import os, time, shutil, re
+from java.lang import System
+from java.awt import Color
+from ij import IJ, ImagePlus, CompositeImage, WindowManager
+from ij.plugin import HyperStackConverter
+from ij.process import LUT
+from loci.plugins import BF
+from loci.plugins.in import ImporterOptions
+from loci.formats import ImageReader, MetadataTools
+from ij.gui import GenericDialog
+from ij.io import FileSaver
+
+MICRO = u"\u00b5"
+
+# ==============================================================================
+# PART 1: OMEMetadataAccessor Class (Embedded)
+# ==============================================================================
+
+def ensure_unicode(s):
+    """Convert any string to unicode safely (Jython 2.7 compatible)"""
+    if s is None:
+        return None
+    if isinstance(s, unicode):
+        return s
+    # Java Strings are already unicode
+    if hasattr(s, 'toString') and not isinstance(s, (str, bytes)):
+        return unicode(s.toString())
+    # Jython str with UTF-8 bytes - use decode method to avoid ASCII pre-check
+    if isinstance(s, str):
+        try:
+            return s.decode('utf-8', 'replace')
+        except:
+            try:
+                return s.decode('latin-1', 'replace')
+            except:
+                pass
+    try:
+        return unicode(s)
+    except:
+        return u""
+
+class OMEMetadataAccessor(object):
+    """Accessor for OME-XML metadata from Bio-Formats reader"""
+    
+    def __init__(self, reader, verbose=False):
+        """Initialize accessor with Bio-Formats reader and optional verbose mode"""
+        self.reader = reader
+        self.verbose = verbose
+        
+        if verbose:
+            IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Initializing OMEMetadataAccessor...")
+        
+        # Try to get existing metadata store
+        try:
+            self.metadata = reader.getMetadataStore()
+            if verbose:
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Got metadata store: {}".format(
+                    type(self.metadata).__name__))
+        except Exception as e:
+            if verbose:
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Failed to get metadata store: {}".format(e))
+            self.metadata = None
+        
+        # Cache OME-XML string
+        self._ome_xml = None
+        try:
+            if self.metadata:
+                if verbose:
+                    IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Attempting to dump OME-XML...")
+                xml_str = self.metadata.dumpXML()
+                self._ome_xml = ensure_unicode(xml_str)
+                if verbose:
+                    IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] OME-XML dumped: {} characters".format(
+                        len(self._ome_xml)))
+        except Exception as e:
+            if verbose:
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
+    
+    def get_physical_size_x(self, series=0):
+        """Get physical size X in micrometers"""
+        try:
+            if self.metadata:
+                size = self.metadata.getPixelsPhysicalSizeX(series)
+                if size is not None:
+                    return float(size.value())
+        except:
+            pass
+        
+        # Fallback to XML regex
+        if self._ome_xml:
+            match = re.search(r'PhysicalSizeX\s*=\s*"([^"]+)"', self._ome_xml)
+            if match:
+                try:
+                    return float(match.group(1))
+                except:
+                    pass
+        return None
+    
+    def get_channel_count(self, series=0):
+        """Get number of channels"""
+        try:
+            if self.metadata:
+                return self.metadata.getChannelCount(series)
+        except:
+            pass
+        return 0
+    
+    def get_channel_color(self, series, channel):
+        """Get channel color as RGB tuple (r, g, b) with values 0-255"""
+        try:
+            if self.metadata:
+                color = self.metadata.getChannelColor(series, channel)
+                if color is not None:
+                    # Zeiss uses RGBA format in signed 32-bit integer
+                    # Convert to unsigned 32-bit: mask with 0xFFFFFFFF
+                    u = int(color.getValue()) & 0xFFFFFFFF
+                    hex8 = "%08X" % u
+                    
+                    # Extract RGB from RGBA format: RR GG BB AA
+                    # First 2 hex digits = Red, next 2 = Green, next 2 = Blue, last 2 = Alpha
+                    r = int(hex8[0:2], 16)
+                    g = int(hex8[2:4], 16)
+                    b = int(hex8[4:6], 16)
+                    # Alpha channel (hex8[6:8]) not used for LUT
+                    
+                    return (r, g, b)
+        except:
+            pass
+        return None
+    
+    def get_channel_name(self, series, channel):
+        """Get channel name"""
+        try:
+            if self.metadata:
+                name = self.metadata.getChannelName(series, channel)
+                if name:
+                    return ensure_unicode(name)
+        except:
+            pass
+        return None
+
+def get_pixel_size(accessor, series=0):
+    """Helper to get pixel size with fallback"""
+    px = accessor.get_physical_size_x(series)
+    if px and 0.01 <= px <= 50:  # Sanity check: 0.01-50 µm
+        return px
+    return None
+
+# ==============================================================================
+# PART 2: Utility Functions
+# ==============================================================================
+
+def log(msg):
+    """Thread-safe logging"""
+    try:
+        msg_str = u"[CZI Stitcher v36.2] " + ensure_unicode(msg)
+        IJ.log(msg_str)
+    except Exception as e:
+        print("Log error: " + str(e))
+
+def play_clear_jingle():
+    """Play completion jingle using Java MIDI"""
+    try:
+        from javax.sound.midi import MidiSystem
+        syn = MidiSystem.getSynthesizer()
+        syn.open()
+        ch = syn.getChannels()[0]
+        ch.programChange(11)  # Music box sound
+        
+        notes = [64, 68, 72]  # E, G#, C (major chord)
+        velocities = [100, 80, 60]
+        
+        for n, v in zip(notes, velocities):
+            ch.noteOn(n, v)
+            ch.noteOn(n-20, max(0, v-10))  # Bass note
+            ch.noteOn(n+10, max(0, v-10))  # High note
+            time.sleep(0.2)
+        
+        time.sleep(0.4)
+        for n in notes:
+            ch.noteOff(n)
+            ch.noteOff(n-20)
+            ch.noteOff(n+10)
+        
+        syn.close()
+    except Exception as e:
+        log(u"MIDI jingle failed: {}".format(ensure_unicode(str(e))))
+
+def apply_channel_luts(imp, accessor, series=0):
+    """Apply channel colors from OME-XML to composite image"""
+    if imp.getNChannels() <= 1:
+        return
+    
+    # Convert to CompositeImage if needed
+    if not isinstance(imp, CompositeImage):
+        log(u"  Converting to CompositeImage...")
+        imp = CompositeImage(imp, CompositeImage.COMPOSITE)
+    
+    log(u"  Applying channel colors...")
+    ch_count = accessor.get_channel_count(series)
+    
+    for ch in range(min(ch_count, imp.getNChannels())):
+        color_rgb = accessor.get_channel_color(series, ch)
+        name = accessor.get_channel_name(series, ch)
+        
+        if color_rgb:
+            r, g, b = color_rgb
+            lut = LUT.createLutFromColor(Color(r, g, b))
+            imp.setC(ch + 1)
+            imp.setChannelLut(lut)
+            
+            if name:
+                log(u"    Ch{}: {} - RGB({}, {}, {})".format(ch+1, name, r, g, b))
+            else:
+                log(u"    Ch{}: RGB({}, {}, {})".format(ch+1, r, g, b))
+    
+    imp.setC(1)  # Reset to first channel
+    log(u"  LUTs applied successfully")
+    return imp
+
+# ==============================================================================
+# PART 3: Stitching Functions
+# ==============================================================================
+
+def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size):
+    """
+    Extract individual tiles from CZI file and get their stage positions.
+    
+    Args:
+        czi_path: Path to CZI file
+        temp_dir: Directory for temporary tile images
+        config: Configuration dictionary
+        reader: Bio-Formats reader (already opened, will be reused)
+        accessor: OMEMetadataAccessor (already initialized, will be reused)
+        px_size: Pixel size in micrometers (already extracted)
+        
+    Returns:
+        List of tuples: [(tile_filename, tile_index, x_um, y_um, z_um), ...]
+    """
+    verbose = config.get('verbose', False)
+    
+    if verbose:
+        log(u"  [VERBOSE] Extracting tiles from CZI...")
+    
+    tiles = []
+    
+    try:
+        # Open with Bio-Formats WITHOUT stitching to access individual tiles
+        options = ImporterOptions()
+        options.setId(czi_path)
+        options.setStitchTiles(False)  # Keep tiles separate!
+        options.setOpenAllSeries(True)  # Open all series (each tile is a series)
+        options.setVirtual(False)  # Load into memory for speed
+        
+        imps = BF.openImagePlus(options)
+        
+        if not imps or len(imps) == 0:
+            log(u"  ERROR: No tiles found in file")
+            return []
+        
+        log(u"  Found {} tile(s)".format(len(imps)))
+        
+        # Use cached reader and accessor (passed as parameters)
+        metadata = reader.getMetadataStore()
+        
+        # Process each tile
+        for i, tile_imp in enumerate(imps):
+            # Generate tile filename
+            tile_filename = "tile_{:04d}.tif".format(i)
+            tile_path = os.path.join(temp_dir, tile_filename)
+            
+            # Get stage position from metadata
+            try:
+                # Try to get stage position from OME-XML
+                x_um = 0.0
+                y_um = 0.0
+                z_um = 0.0
+                
+                # In CZI files, each series/tile has its own stage position
+                # The positions are in StageLabel metadata
+                # CRITICAL: Must setSeries(i) first, then get position for series 0
+                try:
+                    reader.setSeries(i)  # Switch to this series
+                    if metadata and hasattr(metadata, 'getStageLabelX'):
+                        x_stage = metadata.getStageLabelX(0)  # Get position of current series
+                        y_stage = metadata.getStageLabelY(0)
+                        z_stage = metadata.getStageLabelZ(0)
+                        
+                        if x_stage is not None:
+                            x_um = float(x_stage.value())
+                        if y_stage is not None:
+                            y_um = float(y_stage.value())
+                        if z_stage is not None:
+                            z_um = float(z_stage.value())
+                except:
+                    pass
+                
+                if verbose:
+                    log(u"    Tile {}: pos=({:.2f}, {:.2f}, {:.2f}) µm".format(i, x_um, y_um, z_um))
+                
+            except Exception as e:
+                log(u"  WARNING: Could not get stage position for tile {}: {}".format(i, e))
+                x_um, y_um, z_um = float(i * tile_imp.getWidth() * px_size), 0.0, 0.0
+            
+            # Handle z-stacks: Apply max intensity projection for stitching
+            # Stitching plugin works best with 2D images
+            if tile_imp.getNSlices() > 1:
+                if verbose:
+                    log(u"    Tile {}: Applying z-projection ({} slices)".format(i, tile_imp.getNSlices()))
+                IJ.run(tile_imp, "Z Project...", "projection=[Max Intensity]")
+                proj_imp = WindowManager.getCurrentImage()
+                if proj_imp is not None:
+                    tile_imp.close()
+                    tile_imp = proj_imp
+            
+            # Save tile
+            fs = FileSaver(tile_imp)
+            if tile_imp.getNSlices() > 1:
+                fs.saveAsTiffStack(tile_path)
+            else:
+                fs.saveAsTiff(tile_path)
+            
+            tiles.append((tile_filename, i, x_um, y_um, z_um))
+            
+            # Close tile to free memory
+            tile_imp.close()
+        
+        # Don't close reader here - it's managed by calling function
+        
+    except Exception as e:
+        log(u"  ERROR extracting tiles: {}".format(ensure_unicode(str(e))))
+        return []
+    
+    return tiles
+
+def create_tile_configuration(tiles, output_path, px_size_um):
+    """
+    Create TileConfiguration.txt file for ImageJ stitching plugin.
+    
+    Args:
+        tiles: List of (filename, idx, x_um, y_um, z_um) tuples
+        output_path: Path to TileConfiguration.txt
+        px_size_um: Pixel size in micrometers
+    """
+    with open(output_path, 'w') as f:
+        f.write("# Define the number of dimensions we are working on\n")
+        f.write("dim = 2\n\n")
+        f.write("# Define the image coordinates\n")
+        
+        for filename, idx, x_um, y_um, z_um in tiles:
+            # Convert micrometers to pixels
+            x_px = x_um / px_size_um if px_size_um > 0 else 0
+            y_px = y_um / px_size_um if px_size_um > 0 else 0
+            
+            f.write("{:s}; ; ({:.2f}, {:.2f})\n".format(filename, x_px, y_px))
+
+def run_stitching_plugin(temp_dir, config):
+    """
+    Run ImageJ Grid/Collection stitching plugin with fusion.
+    
+    Args:
+        temp_dir: Directory containing tiles and TileConfiguration.txt
+        config: Configuration dictionary with stitching parameters
+        
+    Returns:
+        Stitched ImagePlus or None
+    """
+    verbose = config.get('verbose', False)
+    reg_threshold = config.get('regression_threshold', 0.3)
+    disp_threshold = config.get('displacement_threshold', 5.0)
+    
+    if verbose:
+        log(u"  [VERBOSE] Running stitching plugin...")
+        log(u"  [VERBOSE] Regression threshold: {}".format(reg_threshold))
+        log(u"  [VERBOSE] Displacement threshold: {}".format(disp_threshold))
+    
+    # Clean directory path for ImageJ (forward slashes)
+    clean_dir = temp_dir.replace(u"\\", u"/")
+    
+    try:
+        # Build stitching command
+        # Using Linear Blending for smooth fusion (fast and good quality)
+        stitching_cmd = (
+            "type=[Positions from file] "
+            "order=[Defined by TileConfiguration] "
+            "directory=[" + clean_dir + "] "
+            "layout_file=TileConfiguration.txt "
+            "fusion_method=[Linear Blending] "
+            "regression_threshold=" + str(reg_threshold) + " "
+            "max/avg_displacement_threshold=" + str(disp_threshold) + " "
+            "absolute_displacement_threshold=" + str(disp_threshold + 1.0) + " "
+            "compute_overlap "
+            "subpixel_accuracy "
+            "computation_parameters=[Save computation time (but use more RAM)] "
+            "image_output=[Fuse and display]"
+        )
+        
+        if verbose:
+            log(u"  [VERBOSE] Stitching command: {}".format(stitching_cmd))
+        
+        IJ.run("Grid/Collection stitching", stitching_cmd)
+        
+        # Get the stitched result
+        imp = WindowManager.getCurrentImage()
+        
+        if imp is None:
+            log(u"  ERROR: Stitching plugin did not produce an image")
+            return None
+        
+        log(u"  Stitching complete: {} x {} x {}".format(
+            imp.getWidth(), imp.getHeight(), imp.getNSlices()))
+        
+        return imp
+        
+    except Exception as e:
+        log(u"  ERROR in stitching plugin: {}".format(ensure_unicode(str(e))))
+        return None
+
+# ==============================================================================
+# PART 4: Main Processing Function
+# ==============================================================================
+
+def process_czi_file(czi_path, output_dir, config):
+    """
+    Process a single CZI file: extract tiles, stitch, apply colors, save.
+    
+    Args:
+        czi_path: Path to CZI file
+        output_dir: Output directory for results
+        config: Configuration dictionary
+    """
+    base_name = os.path.splitext(os.path.basename(czi_path))[0]
+    verbose = config.get('verbose', False)
+    
+    log(u"Processing: {}".format(base_name))
+    
+    # Create temporary directory for tiles
+    temp_dir = os.path.join(output_dir, "temp_" + base_name)
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    
+    # CRITICAL FIX: Create metadata accessor ONCE and reuse throughout
+    # This prevents duplicate metadata queries and inconsistent color application
+    metadata = MetadataTools.createOMEXMLMetadata()
+    reader = ImageReader()
+    reader.setMetadataStore(metadata)
+    reader.setId(czi_path)
+    accessor = OMEMetadataAccessor(reader, verbose=verbose)
+    
+    # Cache pixel size once
+    px_size = get_pixel_size(accessor, series=0)
+    if not px_size:
+        px_size = 0.345  # Fallback
+    
+    if verbose:
+        log(u"  [VERBOSE] Pixel size: {} {}m (cached for reuse)".format(px_size, MICRO))
+    
+    try:
+        # Step 1: Extract tiles and get positions (using cached reader/accessor)
+        log(u"  Extracting tiles...")
+        tiles = extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size)
+        
+        if not tiles or len(tiles) == 0:
+            log(u"  ERROR: No tiles extracted")
+            reader.close()
+            return
+        
+        if len(tiles) == 1:
+            log(u"  Only 1 tile - skipping stitching, just applying metadata...")
+            # For single tile, just load and apply metadata
+            tile_path = os.path.join(temp_dir, tiles[0][0])
+            imp = IJ.openImage(tile_path)
+            
+            # Apply calibration (using cached px_size)
+            cal = imp.getCalibration()
+            cal.pixelWidth = px_size
+            cal.pixelHeight = px_size
+            cal.setUnit("um")
+            imp.setCalibration(cal)
+            log(u"  Calibration: {} {}m/pixel".format(px_size, MICRO))
+            
+            # Apply colors (using cached accessor)
+            if imp.getNChannels() > 1:
+                imp = apply_channel_luts(imp, accessor, series=0)
+        else:
+            # Step 2: Create TileConfiguration.txt (using cached px_size)
+            log(u"  Creating tile configuration...")
+            tile_config_path = os.path.join(temp_dir, "TileConfiguration.txt")
+            create_tile_configuration(tiles, tile_config_path, px_size)
+            
+            # Step 3: Run stitching
+            log(u"  Stitching {} tiles...".format(len(tiles)))
+            imp = run_stitching_plugin(temp_dir, config)
+            
+            if imp is None:
+                log(u"  ERROR: Stitching failed")
+                reader.close()
+                return
+            
+            # Step 4: Apply calibration (using cached px_size)
+            cal = imp.getCalibration()
+            cal.pixelWidth = px_size
+            cal.pixelHeight = px_size
+            cal.setUnit("um")
+            imp.setCalibration(cal)
+            log(u"  Calibration applied: {} {}m/pixel".format(px_size, MICRO))
+            
+            # Step 5: Apply channel colors (using cached accessor)
+            if imp.getNChannels() > 1:
+                imp = apply_channel_luts(imp, accessor, series=0)
+        
+        # Close reader once at end
+        reader.close()
+        
+        # Set title
+        imp.setTitle(base_name + "_stitched")
+        
+        # Step 7: Show and/or save
+        if config.get('show_result', True):
+            imp.show()
+            log(u"  Displaying result")
+        
+        if config.get('save_result', False):
+            output_path = os.path.join(output_dir, base_name + "_stitched.tif")
+            fs = FileSaver(imp)
+            
+            if imp.getNSlices() > 1:
+                fs.saveAsTiffStack(output_path)
+            else:
+                fs.saveAsTiff(output_path)
+            
+            log(u"  Saved: {}".format(output_path))
+        
+        if not config.get('show_result', True):
+            imp.close()
+        
+        log(u"  Complete!")
+        
+    except Exception as e:
+        log(u"  ERROR processing file: {}".format(ensure_unicode(str(e))))
+        import traceback
+        traceback.print_exc()
+    
+    finally:
+        # Cleanup temp directory
+        if config.get('cleanup_temp', True):
+            try:
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir)
+                    if verbose:
+                        log(u"  [VERBOSE] Cleaned up temp directory")
+            except Exception as e:
+                log(u"  WARNING: Could not clean temp directory: {}".format(e))
+
+# ==============================================================================
+# PART 5: Main Execution
+# ==============================================================================
+
+def main():
+    """Main execution function"""
+    
+    log(u"")
+    log(u"SPECIALISED CZI STITCHER v36.2")
+    log(u"Standalone with ImageJ Grid/Collection Stitching")
+    log(u"Features: LUTs + Scaling + Jingle + 2D Matching + 3D Fusion")
+    log(u"Fixes: RGBA color format + metadata caching + position extraction")
+    log(u"")
+    log(u"=" * 60)
+    log(u"STITCHING SESSION START")
+    log(u"=" * 60)
+    
+    # Create dialog
+    gd = GenericDialog("CZI Stitcher v36.2 - Parameters")
+    
+    gd.addMessage("=== DIRECTORIES ===")
+    gd.addDirectoryField("Input folder (CZI files):", os.path.expanduser("~"), 50)
+    gd.addDirectoryField("Output folder (results):", os.path.expanduser("~"), 50)
+    
+    gd.addMessage("")
+    gd.addMessage("=== OUTPUT OPTIONS ===")
+    gd.addCheckbox("Show stitched result", True)
+    gd.addCheckbox("Save stitched result", False)
+    
+    gd.addMessage("")
+    gd.addMessage("=== OTHER OPTIONS ===")
+    gd.addCheckbox("Cleanup temporary files", True)
+    gd.addCheckbox("Verbose mode (detailed logging)", False)
+    gd.addCheckbox("Play completion jingle", True)
+    
+    gd.showDialog()
+    
+    if gd.wasCanceled():
+        log("User cancelled. Exiting.")
+        return
+    
+    # Get parameters
+    input_dir = gd.getNextString()
+    output_dir = gd.getNextString()
+    
+    # Use perfect defaults - stage positions are accurate
+    reg_threshold = 0.3
+    disp_threshold = 5.0
+    
+    show_result = int(gd.getNextBoolean()) == 1
+    save_result = int(gd.getNextBoolean()) == 1
+    cleanup_temp = int(gd.getNextBoolean()) == 1
+    verbose = int(gd.getNextBoolean()) == 1
+    play_jingle = int(gd.getNextBoolean()) == 1
+    
+    # Validate directories
+    if not os.path.exists(input_dir):
+        log(u"ERROR: Input directory does not exist")
+        return
+    
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+        except:
+            log(u"ERROR: Could not create output directory")
+            return
+    
+    # Find CZI files
+    czi_files = []
+    for f in os.listdir(input_dir):
+        if f.lower().endswith('.czi'):
+            czi_files.append(os.path.join(input_dir, f))
+    
+    czi_files.sort()
+    
+    if len(czi_files) == 0:
+        log(u"ERROR: No CZI files found in input directory")
+        return
+    
+    # Log configuration
+    log(u"Input:  {}".format(input_dir))
+    log(u"Output: {}".format(output_dir))
+    log(u"")
+    log(u"Found {} CZI file(s)".format(len(czi_files)))
+    log(u"")
+    log(u"Configuration:")
+    log(u"  Show result:             {}".format(show_result))
+    log(u"  Save result:             {}".format(save_result))
+    log(u"  Cleanup temp:            {}".format(cleanup_temp))
+    log(u"  Verbose mode:            {}".format(verbose))
+    log(u"  Play jingle:             {}".format(play_jingle))
+    log(u"")
+    
+    # Build config dict
+    config = {
+        'verbose': verbose,
+        'regression_threshold': reg_threshold,
+        'displacement_threshold': disp_threshold,
+        'show_result': show_result,
+        'save_result': save_result,
+        'cleanup_temp': cleanup_temp
+    }
+    
+    # Process files
+    start_time = time.time()
+    
+    for idx, czi_path in enumerate(czi_files):
+        log(u"")
+        log(u"[{}/{}] {}".format(idx + 1, len(czi_files), os.path.basename(czi_path)))
+        
+        file_start = time.time()
+        process_czi_file(czi_path, output_dir, config)
+        file_elapsed = time.time() - file_start
+        
+        log(u"  File time: {:.1f} seconds".format(file_elapsed))
+    
+    # Summary
+    total_elapsed = time.time() - start_time
+    log(u"")
+    log(u"=" * 60)
+    log(u"ALL FILES PROCESSED")
+    log(u"=" * 60)
+    log(u"Total time: {:.1f} seconds".format(total_elapsed))
+    
+    # Play jingle if enabled
+    if play_jingle:
+        try:
+            play_clear_jingle()
+            log(u"Processing complete!")
+        except Exception as e:
+            log(u"Processing complete! (jingle failed: {})".format(ensure_unicode(str(e))))
+    else:
+        log(u"Processing complete!")
+
+# Run main
+if __name__ == "__main__" or __name__ == "__builtin__":
+    main()
