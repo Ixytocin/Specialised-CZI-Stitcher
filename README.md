@@ -48,6 +48,85 @@ Traditional 3D-stitching in Fiji often struggles with:
 3. Restart Fiji and run the script from the menu.
 4. Select Source and Target folders. Use 'Rolling Ball' (Radius ~50-100) if tiling artifacts are visible.
 
+## Processing Flow
+
+The pipeline executes the following steps for each CZI file:
+
+### 1. Metadata Extraction & Analysis
+- **Read CZI metadata** using Bio-Formats to discover tile positions, dimensions, and channel information
+- **Extract tile coordinates** from Zeiss acquisition metadata (grid positions, pixel sizes)
+- **Detect channel colors** from RGBA metadata (common immunofluorescence wavelengths: DAPI/blue, AF488/green, AF647/red)
+- **Log tile configuration** including number of tiles, pixel ranges, and effective pixel size after correction factor
+
+### 2. Tile Preparation (Parallel Processing)
+For each tile position, executed in parallel threads:
+- **Load tile data** from CZI using Bio-Formats with specific series index
+- **Optional: Rolling Ball background subtraction** (if enabled) to remove shading artifacts and ensure seamless stitching
+  - Larger radius (50-100) = more aggressive background removal
+  - Should be larger than features of interest
+- **Create 2D Maximum Intensity Projection** (MIP) for fast registration
+- **Save temporary MIPs** to processing directory for stitching plugin
+- **Save 3D multichannel volumes** if 3D output requested
+
+### 3. 2D Registration (Stitching Plugin)
+- **Calculate tile overlaps** using 2D MIP images for computational efficiency
+- **Phase correlation** to determine precise X,Y offsets between adjacent tiles
+- **Quality metrics** computed (correlation coefficient R) for each tile pair
+- **Generate fusion layout** with optimized tile positions
+
+### 4. 3D Fusion
+- **Apply 2D registration coordinates** to full 3D multichannel volumes
+- **Fuse overlapping regions** using linear blending (default) or max intensity
+- **Preserve all channels** and z-slices from original acquisition
+- **Result:** Single stitched hyperstack (X, Y, C, Z dimensions)
+
+### 5. Post-Processing
+- **Convert to HyperStack** with correct dimension order (Channels, Z-slices, Timepoints)
+- **Apply channel LUTs** from metadata or use standard microscopy colors (optional override)
+  - Hoechst/DAPI → Blue
+  - AF488 → Green  
+  - AF647 → Magenta (far-red displayed as magenta for visibility)
+- **Set composite display mode** for proper multi-channel visualization
+
+### 6. Z-Stack Processing (Optional)
+If sharp-slice detection enabled:
+- **Phase 1: Monte Carlo Gatekeeper** - Quick triage using 50 random probes per slice
+  - REJECT: Below noise floor (skip)
+  - COMMIT: High quality (mark for spreading-fire)
+  - INSPECT: Mixed quality (defer to detailed analysis)
+- **Phase 2: Spreading-Fire** - Propagate from COMMIT slices to neighbors
+- **Phase 3: Targeted Analysis** - Only analyze unvisited INSPECT slices
+- **Hole-filling** - Merge nearby sharp ranges (gaps ≤2 slices)
+- **Select z-range** containing in-focus content
+
+If z-projection requested:
+- **Create projection** using selected method (Max, Average, Min, Sum, SD, Median)
+- **Apply from detected z-range** if sharp-slice detection enabled, otherwise entire stack
+- **Inherit channel LUTs** from parent hyperstack
+- **Display and/or save** based on user options
+
+### 7. Output & Cleanup
+- **Display stitched volume** (if Show Stitched enabled)
+- **Save stitched volume** (if Save Stitched enabled) with automatic BigTIFF for files >2GB
+- **Display z-projection** (if Show Z-Projection enabled)
+- **Save z-projection** (if Save Z-Projection enabled)
+- **Enhanced filenames** include processing parameters: `filename_stitched_rb50_z6-16_max_projection.tif`
+- **Memory management** - Flush ImageJ memory and close temporary images
+- **Log memory usage** - Report used/max memory after each file
+- **Cleanup temp files** - Remove processing directory (optional, default: enabled)
+
+### 8. Batch Completion
+- **Progress tracking** - Shows [current/total] files with human-readable timing
+- **Memory monitoring** - Logs memory usage after each file
+- **Audio notification** - Plays musical jingle if enabled (repeats until acknowledged)
+- **Summary logging** - Total batch time in human-readable format (s/m/h)
+
+### Error Handling
+- **Fail-fast strategy** - Process largest file first to catch errors early
+- **Exception logging** - All errors logged with context (file, tile, operation)
+- **Graceful degradation** - Continue batch processing after individual file failures
+- **Debug mode** - Exhaustive logging of LUT application, tile processing, and performance metrics
+
 ## Roadmap & Future Features
 
 ### Stage 1: Advanced Z-Slice Detection ✅ **IMPLEMENTED**
