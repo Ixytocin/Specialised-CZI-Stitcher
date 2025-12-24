@@ -658,7 +658,7 @@ def build_lut_from_rgb(rgb):
         return None
 
 def apply_channel_luts_to_image(imp, ome_xml, gMeta):
-    """Apply channel LUTs to image (v31.16h + v36.5 RGBA fix)"""
+    """Apply channel LUTs to image (v37.1 FIX: Prevents double-wrapping CompositeImage)"""
     logd(u"=== APPLYING CHANNEL LUTS ===")
     
     if imp is None:
@@ -737,30 +737,39 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
     logd(u"  Attempting to apply {} LUTs to image...".format(len(luts)))
     
     try:
-        if imp.getStackSize() > 1 and imp.getNChannels() > 1:
-            logd(u"  Image is multi-channel stack, creating CompositeImage")
-            try:
+        if imp.getNChannels() > 1:
+            # --- FIX: Check if it is ALREADY a CompositeImage (created by HyperStackConverter) ---
+            if imp.isComposite():
+                logd(u"  Image is ALREADY a CompositeImage. Using existing instance.")
+                cimp = imp
+            else:
+                logd(u"  Image is a stack. Creating new CompositeImage wrapper.")
                 cimp = CompositeImage(imp, CompositeImage.COMPOSITE)
-                nchan = cimp.getNChannels()
-                logd(u"  CompositeImage created with {} channels in COMPOSITE mode".format(nchan))
-                
-                for i in range(min(nchan, len(luts))):
-                    logd(u"  Applying LUT to channel {}".format(i+1))
-                    try: 
-                        cimp.setChannelLut(luts[i], i+1)
-                        logd(u"    setChannelLut succeeded")
-                    except Exception as e1:
-                        logd(u"    setChannelLut failed: {}".format(e1))
-                
-                logd(u"  Calling updateAllChannelsAndDraw on CompositeImage")
-                cimp.updateAllChannelsAndDraw()
-                logd(u"  Returning CompositeImage (SUCCESS)")
-                logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
-                return cimp
-            except Exception as e:
-                logd(u"  CompositeImage creation/setup failed: {}".format(e))
+            
+            # Force mode to COMPOSITE just in case
+            cimp.setMode(CompositeImage.COMPOSITE)
+            logd(u"  CompositeImage mode set to COMPOSITE")
+            
+            nchan = cimp.getNChannels()
+            logd(u"  CompositeImage has {} channels".format(nchan))
+            
+            for i in range(min(nchan, len(luts))):
+                logd(u"  Applying LUT to channel {}".format(i+1))
+                try: 
+                    # Set position to ensure we are targeting the right channel processor
+                    cimp.setPosition(i+1, 1, 1)
+                    cimp.setChannelLut(luts[i], i+1)
+                    logd(u"    setChannelLut succeeded")
+                except Exception as e1:
+                    logd(u"    setChannelLut failed: {}".format(e1))
+            
+            logd(u"  Calling updateAllChannelsAndDraw on CompositeImage")
+            cimp.updateAllChannelsAndDraw()
+            logd(u"  Returning CompositeImage (SUCCESS)")
+            logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
+            return cimp
         else:
-            logd(u"  Image is single channel or not a stack")
+            logd(u"  Image is single channel")
             try:
                 imp.getProcessor().setColorModel(luts[0].getColorModel())
                 logd(u"  Set color model from first LUT")
@@ -1463,18 +1472,26 @@ def compute_threads():
 # PART 11: MAIN ENTRY POINT (from v31.16h + v34.8 bug fixes)
 # ==============================================================================
 
+def show_splash():
+    """Display ASCII art splash screen"""
+    splash = u"""
+      +---+---+---+
+      | C | Z | I |   CZI-STITCHER v37.0
+      +---+---+---+   ======================
+      | S | t | i |   > Workflow: v31.16h
+      +---+---+---+   > UTF-8:    v34.8
+      | t | c | h |   > LUTs:     v36.5
+      +---+---+---+
+
+      [Target] Zeiss Zen/CZI Analysis
+      [Status] Initializing environment...
+    """
+    log(splash)
+
 def main():
     """Main entry point"""
     IJ.log("\\Clear")
-    log(u"")
-    log(u"=" * 70)
-    log(u"SPECIALISED CZI STITCHER {}".format(VERSION))
-    log(u"=" * 70)
-    log(u"Unified version combining proven working components from:")
-    log(u"  - v31.16h: Dual 2D/3D stitching workflow")
-    log(u"  - v34.8:   UTF-8, boolean, pixel size fixes")
-    log(u"  - v36.5:   LUT detection (RGBA), metadata")
-    log(u"")
+    show_splash()
     
     # Load config
     _config = _load_config()
