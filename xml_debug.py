@@ -28,44 +28,155 @@ def safe_type(obj):
         return "<type check failed>"
 
 def test_unicode_conversion(data, method_name):
-    """Test different unicode conversion approaches"""
+    """Test EXHAUSTIVE series of unicode conversion approaches"""
     IJ.log("  Testing: " + method_name)
+    successful_methods = []
     
     # Method 1: Direct unicode()
     try:
         result = unicode(data)
-        IJ.log("    unicode() - SUCCESS - type: " + str(type(result)))
-        return result, "unicode()"
+        IJ.log("    [1] unicode(data) - SUCCESS - type: " + str(type(result)))
+        successful_methods.append((result, "unicode(data)"))
     except Exception as e:
-        IJ.log("    unicode() - FAILED: " + str(e))
+        IJ.log("    [1] unicode(data) - FAILED: " + str(e))
     
-    # Method 2: str() then decode
+    # Method 2: unicode with UTF-8 encoding
+    try:
+        result = unicode(data, 'utf-8')
+        IJ.log("    [2] unicode(data, 'utf-8') - SUCCESS")
+        successful_methods.append((result, "unicode(data, 'utf-8')"))
+    except Exception as e:
+        IJ.log("    [2] unicode(data, 'utf-8') - FAILED: " + str(e))
+    
+    # Method 3: unicode with UTF-8 and replace
+    try:
+        result = unicode(data, 'utf-8', 'replace')
+        IJ.log("    [3] unicode(data, 'utf-8', 'replace') - SUCCESS")
+        successful_methods.append((result, "unicode(data, 'utf-8', 'replace')"))
+    except Exception as e:
+        IJ.log("    [3] unicode(data, 'utf-8', 'replace') - FAILED: " + str(e))
+    
+    # Method 4: unicode with latin-1
+    try:
+        result = unicode(data, 'latin-1')
+        IJ.log("    [4] unicode(data, 'latin-1') - SUCCESS")
+        successful_methods.append((result, "unicode(data, 'latin-1')"))
+    except Exception as e:
+        IJ.log("    [4] unicode(data, 'latin-1') - FAILED: " + str(e))
+    
+    # Method 5: str.decode('utf-8') for str type
+    try:
+        if isinstance(data, str):
+            result = data.decode('utf-8')
+            IJ.log("    [5] str.decode('utf-8') - SUCCESS")
+            successful_methods.append((result, "str.decode('utf-8')"))
+    except Exception as e:
+        IJ.log("    [5] str.decode('utf-8') - FAILED: " + str(e))
+    
+    # Method 6: str.decode('utf-8', 'replace')
     try:
         if isinstance(data, str):
             result = data.decode('utf-8', 'replace')
-            IJ.log("    str.decode('utf-8') - SUCCESS - type: " + str(type(result)))
-            return result, "str.decode('utf-8')"
+            IJ.log("    [6] str.decode('utf-8', 'replace') - SUCCESS")
+            successful_methods.append((result, "str.decode('utf-8', 'replace')"))
     except Exception as e:
-        IJ.log("    str.decode() - FAILED: " + str(e))
+        IJ.log("    [6] str.decode('utf-8', 'replace') - FAILED: " + str(e))
     
-    # Method 3: Java toString()
+    # Method 7: str.decode('latin-1')
+    try:
+        if isinstance(data, str):
+            result = data.decode('latin-1')
+            IJ.log("    [7] str.decode('latin-1') - SUCCESS")
+            successful_methods.append((result, "str.decode('latin-1')"))
+    except Exception as e:
+        IJ.log("    [7] str.decode('latin-1') - FAILED: " + str(e))
+    
+    # Method 8: Java toString() then unicode
     try:
         if hasattr(data, 'toString'):
             result = unicode(data.toString())
-            IJ.log("    Java toString() - SUCCESS - type: " + str(type(result)))
-            return result, "toString()"
+            IJ.log("    [8] unicode(data.toString()) - SUCCESS")
+            successful_methods.append((result, "unicode(data.toString())"))
     except Exception as e:
-        IJ.log("    toString() - FAILED: " + str(e))
+        IJ.log("    [8] unicode(data.toString()) - FAILED: " + str(e))
     
-    # Method 4: String constructor
+    # Method 9: Java toString() then decode
+    try:
+        if hasattr(data, 'toString'):
+            java_str = data.toString()
+            if isinstance(java_str, str):
+                result = java_str.decode('utf-8', 'replace')
+                IJ.log("    [9] data.toString().decode('utf-8', 'replace') - SUCCESS")
+                successful_methods.append((result, "data.toString().decode('utf-8', 'replace')"))
+    except Exception as e:
+        IJ.log("    [9] data.toString().decode() - FAILED: " + str(e))
+    
+    # Method 10: str() then unicode with encoding
     try:
         result = unicode(str(data), 'utf-8', 'replace')
-        IJ.log("    unicode(str(), 'utf-8') - SUCCESS - type: " + str(type(result)))
-        return result, "unicode(str(), 'utf-8')"
+        IJ.log("    [10] unicode(str(data), 'utf-8', 'replace') - SUCCESS")
+        successful_methods.append((result, "unicode(str(data), 'utf-8', 'replace')"))
     except Exception as e:
-        IJ.log("    unicode(str()) - FAILED: " + str(e))
+        IJ.log("    [10] unicode(str(data), 'utf-8', 'replace') - FAILED: " + str(e))
     
-    return None, "ALL FAILED"
+    # Method 11: bytes type handling
+    try:
+        if isinstance(data, bytes):
+            result = unicode(data, 'utf-8', 'replace')
+            IJ.log("    [11] unicode(bytes, 'utf-8', 'replace') - SUCCESS")
+            successful_methods.append((result, "unicode(bytes, 'utf-8', 'replace')"))
+    except Exception as e:
+        IJ.log("    [11] bytes handling - FAILED: " + str(e))
+    
+    # Method 12: Java String getBytes() approach
+    try:
+        if hasattr(data, 'getBytes'):
+            java_bytes = data.getBytes('UTF-8')
+            result = unicode(str(java_bytes), 'utf-8', 'replace')
+            IJ.log("    [12] data.getBytes('UTF-8') approach - SUCCESS")
+            successful_methods.append((result, "data.getBytes('UTF-8')"))
+    except Exception as e:
+        IJ.log("    [12] getBytes() - FAILED: " + str(e))
+    
+    # Method 13: codecs module approach
+    try:
+        import codecs
+        result = codecs.decode(str(data), 'utf-8', 'replace')
+        IJ.log("    [13] codecs.decode(str(data), 'utf-8', 'replace') - SUCCESS")
+        successful_methods.append((result, "codecs.decode()"))
+    except Exception as e:
+        IJ.log("    [13] codecs.decode() - FAILED: " + str(e))
+    
+    # Method 14: Force encode then decode
+    try:
+        temp = str(data).encode('latin-1')
+        result = temp.decode('utf-8', 'replace')
+        IJ.log("    [14] str.encode('latin-1').decode('utf-8') - SUCCESS")
+        successful_methods.append((result, "encode('latin-1').decode('utf-8')"))
+    except Exception as e:
+        IJ.log("    [14] encode/decode chain - FAILED: " + str(e))
+    
+    # Method 15: repr() then ast.literal_eval approach
+    try:
+        import ast
+        repr_str = repr(data)
+        if 'xc2' in repr_str.lower():
+            IJ.log("    [15] repr() shows UTF-8 bytes: " + repr_str[:100])
+            # Try to extract and decode
+            if isinstance(data, str):
+                result = data.decode('utf-8', 'replace')
+                successful_methods.append((result, "repr detection + decode"))
+    except Exception as e:
+        IJ.log("    [15] repr() analysis - FAILED: " + str(e))
+    
+    # Summary
+    if successful_methods:
+        IJ.log("    TOTAL SUCCESS: " + str(len(successful_methods)) + " methods worked")
+        # Return the first successful one
+        return successful_methods[0][0], successful_methods[0][1]
+    else:
+        IJ.log("    ALL " + str(15) + " METHODS FAILED!")
+        return None, "ALL FAILED"
 
 def main():
     IJ.log("=" * 70)
@@ -185,6 +296,150 @@ def main():
                             IJ.log("    value(): " + str(val) + " (type: " + str(type(val)) + ")")
                         except Exception as e2:
                             IJ.log("    value() failed: " + str(e2))
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 5: Series metadata
+        IJ.log("Step 7: Testing reader.getSeriesMetadata()...")
+        try:
+            for i in range(min(2, reader.getSeriesCount())):
+                reader.setSeries(i)
+                seriesMeta = reader.getSeriesMetadata()
+                IJ.log("  Series " + str(i) + " metadata keys: " + str(len(seriesMeta.keys())))
+                
+                # Look for pixel size keys
+                pixel_keys = [k for k in seriesMeta.keys() if 'pixel' in str(k).lower() or 'physical' in str(k).lower()]
+                for key in pixel_keys[:3]:
+                    IJ.log("    Key: " + str(key))
+                    val = seriesMeta.get(key)
+                    IJ.log("      Type: " + safe_type(val))
+                    test_unicode_conversion(val, "SeriesMeta[" + str(key) + "]")
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 6: Core metadata
+        IJ.log("Step 8: Testing reader.getCoreMetadataList()...")
+        try:
+            coreList = reader.getCoreMetadataList()
+            IJ.log("  Core metadata entries: " + str(len(coreList)))
+            for i in range(min(2, len(coreList))):
+                core = coreList[i]
+                IJ.log("  Entry " + str(i) + ":")
+                # Try different attribute access
+                attrs = ['pixelType', 'sizeX', 'sizeY', 'sizeZ', 'sizeC', 'sizeT']
+                for attr in attrs:
+                    try:
+                        if hasattr(core, attr):
+                            val = getattr(core, attr)
+                            IJ.log("    " + attr + ": " + str(val))
+                    except:
+                        pass
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 7: Metadata store root
+        IJ.log("Step 9: Testing metadata.getRoot()...")
+        try:
+            root = metadata.getRoot()
+            IJ.log("  Root type: " + safe_type(root))
+            IJ.log("  Root string length: " + str(len(str(root)) if root else 0))
+            # Try converting root to XML
+            if hasattr(root, 'asXMLString'):
+                try:
+                    xml_from_root = root.asXMLString()
+                    IJ.log("  root.asXMLString() available")
+                    converted, method = test_unicode_conversion(xml_from_root, "root.asXMLString()")
+                    if converted and u'\xb5' in converted:
+                        IJ.log("    *** CONTAINS MICRO SIGN! ***")
+                except Exception as e2:
+                    IJ.log("  root.asXMLString() failed: " + str(e2))
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 8: Direct metadata field access
+        IJ.log("Step 10: Testing all metadata.getPixels*() methods...")
+        try:
+            test_methods = [
+                ('getPixelsPhysicalSizeX', 0),
+                ('getPixelsPhysicalSizeY', 0),
+                ('getPixelsPhysicalSizeZ', 0),
+                ('getPixelsSizeX', 0),
+                ('getPixelsSizeY', 0),
+                ('getPixelsSizeC', 0),
+                ('getPixelsSizeZ', 0),
+                ('getPixelsType', 0),
+            ]
+            for method_name, image_idx in test_methods:
+                try:
+                    if hasattr(metadata, method_name):
+                        method = getattr(metadata, method_name)
+                        result = method(image_idx)
+                        IJ.log("  " + method_name + "(0): " + str(result) + " (type: " + safe_type(result) + ")")
+                        if result and hasattr(result, 'value'):
+                            IJ.log("    .value(): " + str(result.value()))
+                except Exception as e2:
+                    IJ.log("  " + method_name + " - FAILED: " + str(e2))
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 9: Exhaustive global metadata scan
+        IJ.log("Step 11: EXHAUSTIVE scan of ALL global metadata...")
+        try:
+            gMeta = reader.getGlobalMetadata()
+            all_keys = list(gMeta.keys())
+            IJ.log("  Total keys to scan: " + str(len(all_keys)))
+            
+            # Scan ALL keys for micro sign
+            keys_with_micro = []
+            for key in all_keys:
+                try:
+                    val = gMeta.get(key)
+                    val_str = str(val)
+                    # Check for micro sign in multiple forms
+                    if u'\xb5' in unicode(val_str, 'utf-8', 'replace') or '\xc2\xb5' in val_str or 'micro' in val_str.lower():
+                        keys_with_micro.append((key, val))
+                except:
+                    pass
+            
+            IJ.log("  Found " + str(len(keys_with_micro)) + " keys containing micro sign or 'micro' text")
+            for key, val in keys_with_micro[:10]:  # Show first 10
+                IJ.log("")
+                IJ.log("  Key: " + str(key))
+                IJ.log("    Raw value: " + safe_repr(val)[:100])
+                converted, method = test_unicode_conversion(val, str(key))
+                if converted:
+                    IJ.log("    Best method: " + method)
+                    IJ.log("    Converted: " + converted[:100])
+        except Exception as e:
+            IJ.log("  FAILED: " + str(e))
+        IJ.log("")
+        
+        # Test Method 10: Raw metadata table
+        IJ.log("Step 12: Testing raw Hashtable access...")
+        try:
+            import java.util.Hashtable
+            gMeta = reader.getGlobalMetadata()
+            IJ.log("  Metadata class: " + str(gMeta.__class__))
+            IJ.log("  Is Hashtable: " + str(isinstance(gMeta, java.util.Hashtable)))
+            
+            # Try different iteration methods
+            IJ.log("  Trying entrySet() iteration...")
+            entries = gMeta.entrySet()
+            count = 0
+            for entry in entries:
+                if count >= 5:
+                    break
+                key = entry.getKey()
+                value = entry.getValue()
+                IJ.log("    Entry " + str(count) + ":")
+                IJ.log("      Key type: " + safe_type(key))
+                IJ.log("      Value type: " + safe_type(value))
+                count += 1
         except Exception as e:
             IJ.log("  FAILED: " + str(e))
         IJ.log("")
