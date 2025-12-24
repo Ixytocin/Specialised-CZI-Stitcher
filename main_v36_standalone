@@ -598,8 +598,11 @@ def main():
     # Get parameters
     input_dir = gd.getNextString()
     output_dir = gd.getNextString()
-    reg_threshold = gd.getNextNumber()
-    disp_threshold = gd.getNextNumber()
+    
+    # Use perfect defaults - stage positions are accurate
+    reg_threshold = 0.3
+    disp_threshold = 5.0
+    
     show_result = int(gd.getNextBoolean()) == 1
     save_result = int(gd.getNextBoolean()) == 1
     cleanup_temp = int(gd.getNextBoolean()) == 1
@@ -637,8 +640,6 @@ def main():
     log(u"Found {} CZI file(s)".format(len(czi_files)))
     log(u"")
     log(u"Configuration:")
-    log(u"  Regression threshold:    {}".format(reg_threshold))
-    log(u"  Displacement threshold:  {}".format(disp_threshold))
     log(u"  Show result:             {}".format(show_result))
     log(u"  Save result:             {}".format(save_result))
     log(u"  Cleanup temp:            {}".format(cleanup_temp))
