@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.7
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.8
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -1550,7 +1550,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.7")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.8")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -1779,11 +1779,24 @@ class UltimateStitcher:
             cf = float(self.config['corr_factor'])
         except:
             cf = 10.0
-        px_um_eff = px_um / cf if cf != 1.0 else px_um
-        if cf != 1.0:
-            log(u"px = {} {}, self.config['corr_factor'] {}, effective = {} {}".format(px_um, MICRO, cf, px_um_eff, MICRO))
+        
+        # v34.8: Only apply correction factor if pixel size is NOT from OME-XML
+        # Check if value was successfully parsed from OME-XML by looking for the log message
+        # If px_um is in reasonable range (0.01 to 50 µm), don't apply correction factor
+        if px_um and 0.01 <= px_um <= 50.0:
+            # Pixel size from OME-XML is already correct, don't apply correction factor
+            px_um_eff = px_um
+            if cf != 1.0:
+                log(u"px = {} {} (from XML, correction factor NOT applied)".format(px_um_eff, MICRO))
+            else:
+                log(u"px = {} {}".format(px_um_eff, MICRO))
         else:
-            log(u"px = {} {}".format(px_um_eff, MICRO))
+            # Pixel size from fallback methods, apply correction factor
+            px_um_eff = px_um / cf if cf != 1.0 else px_um
+            if cf != 1.0:
+                log(u"px = {} {}, correction factor {}, effective = {} {} (fallback method)".format(px_um, MICRO, cf, px_um_eff, MICRO))
+            else:
+                log(u"px = {} {}".format(px_um_eff, MICRO))
 
         try:
             full_res_indices = get_full_res_series_indices(reader)
@@ -2109,7 +2122,7 @@ class UltimateStitcher:
         if DEBUG_MODE:
             log(u"")
             log(u"=" * 60)
-            log(u"DEBUG SUMMARY - File: {}".format(c_file))
+            log(u"DEBUG SUMMARY - File: {}".format(base_name))
             log(u"=" * 60)
             log(u"Image Properties:")
             log(u"  Channels:     {}".format(imp.getNChannels() if imp else 0))
@@ -2224,7 +2237,7 @@ def main():
     batch_elapsed_ms = (time.time() - batch_start_time) * 1000
     log(u"")
     log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
-    log(u"[Specialised CZI Stitcher] Script Version: 34.7")
+    log(u"[Specialised CZI Stitcher] Script Version: 34.8")
     flush_log()
     
     # Show completion notification if requested
