@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v33.0
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.0
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -1500,11 +1500,16 @@ No manual selection needed!
 
 # Main script execution
 if "input_dir_raw" not in globals():
+    # Declare global variables FIRST, before any other code in this scope
+    # This must come before ANY assignments to avoid SyntaxWarning
+    global DEBUG_MODE, LUT_DEBUG, VERBOSE
+    
     # Show initialization message
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("\\Clear")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.0")
     
     # Load config for last used paths
     _config = _load_config()
@@ -1598,9 +1603,6 @@ if "input_dir_raw" not in globals():
     sharp_threshold = float(gd.getNextNumber())
     sharp_method_name = gd.getNextChoice()
     sharp_method = SHARPNESS_METHODS.get(sharp_method_name, "laplacian")
-    # Declare global variables to update module-level constants
-    # MUST come before any other code in this scope
-    global DEBUG_MODE, LUT_DEBUG, VERBOSE
     
     roi_grid_size = int(gd.getNextNumber())
     use_standard_luts = bool(gd.getNextBoolean())
