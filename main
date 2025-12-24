@@ -1587,8 +1587,13 @@ if "input_dir_raw" not in globals():
         corr_factor = float(gd.getNextNumber())
     except:
         corr_factor = 10.0
+    
+    # Declare global variables to update module-level constants
+    global DEBUG_MODE, LUT_DEBUG, VERBOSE
+    
     DEBUG_MODE = bool(gd.getNextBoolean())
     LUT_DEBUG = DEBUG_MODE  # Tie LUT debug logging to debug mode checkbox
+    VERBOSE = DEBUG_MODE    # Ensure generic verbose logs (logv) also appear
     notify_on_complete = bool(gd.getNextBoolean())
     
     # BigTIFF is now automatic based on file size
