@@ -125,7 +125,9 @@ def dump_raw_xml(file_path):
         log(u"")
         
         global_meta = reader.getGlobalMetadata()
-        log(u"  Global metadata keys: {}".format(len(global_meta.keys()) if global_meta else 0))
+        # Convert keys to list to get count (Java Hashtable$Enumerator doesn't have len())
+        key_count = len(list(global_meta.keys())) if global_meta else 0
+        log(u"  Global metadata keys: {}".format(key_count))
         log(u"")
         
         if global_meta and series_count > 1:
