@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.4
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.5
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -669,16 +669,22 @@ def _parse_pixels_physicalsize_from_xml(ome_xml):
             xml_sample = unicode(ome_xml)[:200] if ome_xml else u""
         except:
             xml_sample = u"<conversion error>"
-        # Check for UTF-8 encoded µ character (0xC2 0xB5)
+        # Check for UTF-8 encoded µ character (0xC2 0xB5) or unicode µ (U+00B5)
         has_mu = False
-        if isinstance(ome_xml, (str, bytes)):
-            try:
-                # Check for UTF-8 mu sign
-                if '\xc2\xb5' in str(ome_xml) or 'xc2' in repr(ome_xml):
+        try:
+            # Check for µ character in various encodings
+            xml_str = unicode(ome_xml) if ome_xml else u""
+            # Check for unicode µ (U+00B5) or utf-8 encoded µ bytes
+            if u'\xb5' in xml_str or u'\u00b5' in xml_str or 'xb5' in repr(xml_str).lower():
+                has_mu = True
+                log(u"XML Debug: Detected µ character (micro sign)")
+            # Also check raw bytes if available
+            elif isinstance(ome_xml, (str, bytes)):
+                if '\xc2\xb5' in str(ome_xml) or 'xc2' in repr(ome_xml).lower():
                     has_mu = True
                     log(u"XML Debug: Detected UTF-8 encoded µ character (0xC2 0xB5)")
-            except:
-                pass
+        except:
+            pass
         try:
             log(u"XML Debug: Input type={}, has_mu={}, sample={}".format(xml_type, has_mu, xml_sample[:100]))
         except:
@@ -1544,7 +1550,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.4")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.5")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -2121,7 +2127,7 @@ class UltimateStitcher:
         return True
 
 def main():
-    IJ.log("\\Clear")
+    # DON'T clear log here - keep initialization, debug verification, and user settings visible
     s_dir, t_dir = get_safe_path(input_dir_raw), get_safe_path(output_dir_raw)
     files = sorted([os.path.join(s_dir, f) for f in os.listdir(s_dir) if f.lower().endswith(".czi")])
     
