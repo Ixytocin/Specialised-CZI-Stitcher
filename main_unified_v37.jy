@@ -35,10 +35,15 @@ import jarray
 VERSION = "v37.0"
 MICRO = u"\u00b5"
 
-# Debug flags
-VERBOSE = False
-LOG_TILE_POS = False
+# Debug flags - ALL ENABLED for maximum debugging
+VERBOSE = True
+LOG_TILE_POS = True
 LUT_DEBUG = True
+DUMP_DEBUG = True
+DEBUG_METADATA = True
+DEBUG_STITCHING = True
+DEBUG_FILE_OPS = True
+DEBUG_MEMORY = True
 PLAY_JINGLE_ON_DONE = True
 
 # Regular expressions (compiled once for performance)
@@ -59,21 +64,28 @@ _CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ixytocin_stitcher.json")
 
 def _load_config():
     """Load last used directories from config file (UTF-8 safe)"""
+    logd(u"Loading config from: {}".format(_CONFIG_PATH))
     try:
         if os.path.exists(_CONFIG_PATH):
             with codecs.open(_CONFIG_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except:
-        pass
+                cfg = json.load(f)
+                logd(u"Config loaded: {}".format(cfg))
+                return cfg
+        else:
+            logd(u"Config file does not exist, using defaults")
+    except Exception as e:
+        logd(u"Config load failed: {}".format(e))
     return {}
 
 def _save_config(cfg):
     """Save directories to config file (UTF-8 safe)"""
+    logd(u"Saving config: {}".format(cfg))
     try:
         with codecs.open(_CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+            logd(u"Config saved successfully")
+    except Exception as e:
+        logd(u"Config save failed: {}".format(e))
 
 def ensure_unicode(o):
     """Convert any object to unicode safely (v34.8 fix for German characters)"""
@@ -81,21 +93,36 @@ def ensure_unicode(o):
         return None
     if isinstance(o, unicode):
         return o
+    
+    # Try multiple conversion strategies with debug logging
     try:
-        return unicode(bytearray(o.getBytes("UTF-8")), 'utf-8', 'replace')
-    except:
-        pass
+        result = unicode(bytearray(o.getBytes("UTF-8")), 'utf-8', 'replace')
+        if DUMP_DEBUG and len(str(result)) > 50:
+            logd(u"Unicode conversion (method 1) succeeded for: {}...".format(str(result)[:50]))
+        return result
+    except Exception as e1:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 1 failed: {}".format(e1))
+    
     try:
-        return unicode(o, 'utf-8', 'replace')
-    except:
-        pass
+        result = unicode(o, 'utf-8', 'replace')
+        return result
+    except Exception as e2:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 2 failed: {}".format(e2))
+    
     try:
-        return unicode(str(o), 'utf-8', 'replace')
-    except:
-        pass
+        result = unicode(str(o), 'utf-8', 'replace')
+        return result
+    except Exception as e3:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 3 failed: {}".format(e3))
+    
     try:
         return u"%s" % o
     except:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion: all methods failed, returning empty string")
         return u""
 
 def safe_unicode(o):
@@ -131,7 +158,25 @@ def log(msg):
 def logv(msg):
     """Verbose logging"""
     if VERBOSE:
-        log(msg)
+        log(u"[VERBOSE] {}".format(msg))
+
+def logd(msg):
+    """Debug logging"""
+    if DUMP_DEBUG:
+        log(u"[DEBUG] {}".format(msg))
+
+def log_memory():
+    """Log current memory usage"""
+    if DEBUG_MEMORY:
+        try:
+            runtime = Runtime.getRuntime()
+            total_mb = runtime.totalMemory() / (1024.0 * 1024.0)
+            free_mb = runtime.freeMemory() / (1024.0 * 1024.0)
+            used_mb = total_mb - free_mb
+            max_mb = runtime.maxMemory() / (1024.0 * 1024.0)
+            log(u"[MEMORY] Used: {:.1f}MB / Total: {:.1f}MB / Max: {:.1f}MB".format(used_mb, total_mb, max_mb))
+        except Exception as e:
+            logd(u"Memory logging failed: {}".format(e))
 
 def get_safe_path(f):
     """Get safe file path as unicode (handles µ, ä, ö, ü, ß)"""
@@ -283,37 +328,58 @@ def _pixel_from_global_metadata(gMeta):
 
 def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
     """Get pixel size in micrometers with fallback chain (v31.16h + v34.8 fix)"""
+    logd(u"=== PIXEL SIZE EXTRACTION START ===")
     try:
         ome_xml = ensure_unicode(ome_xml)
-    except:
+        if ome_xml:
+            logd(u"OME-XML length: {} characters".format(len(ome_xml)))
+    except Exception as e:
+        logd(u"OME-XML unicode conversion failed: {}".format(e))
         ome_xml = ome_xml
     
     # Priority 1: OME-XML <Pixels> tag (most reliable for Zeiss)
+    logd(u"Attempting method 1: OME-XML <Pixels> tag")
     try:
         if ome_xml:
             px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
+            logd(u"  Parsed raw value: {}, unit: {}".format(px_raw, unit))
             if px_raw is not None:
                 px_um = _unit_to_um(px_raw, unit)
-                log(u"Pixel size from OME-XML <Pixels>: {} {}".format(px_um, MICRO))
+                log(u"Pixel size from OME-XML <Pixels>: {} {} (TRUSTED VALUE)".format(px_um, MICRO))
+                logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
                 return float(px_um)
+            else:
+                logd(u"  No PhysicalSizeX found in OME-XML")
+        else:
+            logd(u"  OME-XML is None or empty")
     except Exception as e:
-        logv(u"OME-XML pixel parse error (fallback): {}".format(e))
+        logd(u"  Method 1 exception: {}".format(e))
     
     # Priority 2: OME metadata object
+    logd(u"Attempting method 2: OME metadata object")
     try:
         if omeMeta is not None:
+            logd(u"  OMEMeta object is available")
             q = omeMeta.getPixelsPhysicalSizeX(0)
+            logd(u"  getPixelsPhysicalSizeX returned: {}".format(q))
             if q is not None and q.value() is not None:
                 v = float(q.value().doubleValue())
+                logd(u"  Raw value: {}".format(v))
                 if abs(v) < 1e-3:
                     v_um = v * 1e6
                     log(u"Pixel size from OME metadata (meters->µm): {} {}".format(v_um, MICRO))
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
                     return float(v_um)
                 else:
                     log(u"Pixel size from OME metadata (assumed µm): {} {}".format(v, MICRO))
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
                     return float(v)
-    except:
-        pass
+            else:
+                logd(u"  Query returned None")
+        else:
+            logd(u"  OMEMeta object is None")
+    except Exception as e:
+        logd(u"  Method 2 exception: {}".format(e))
     
     # Priority 3: Reader metadata store
     try:
@@ -341,15 +407,19 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
         pass
     
     # Priority 4: Global metadata (with v34.8 fix - don't auto-apply correction factor)
+    logd(u"Attempting method 4: Global metadata")
     cam_min, cam_med = _pixel_from_global_metadata(gMeta)
+    logd(u"  Global metadata candidates - min: {}, median: {}".format(cam_min, cam_med))
     if cam_med is not None:
-        log(u"Pixel size candidate (median) from global metadata: {} {}".format(cam_med, MICRO))
+        log(u"Pixel size candidate (median) from global metadata: {} {} (MAY NEED CORRECTION)".format(cam_med, MICRO))
         if cam_min is not None and abs(cam_min - cam_med) > 1e-6:
-            logv(u"Pixel size candidate (min) from global metadata: {} {}".format(cam_min, MICRO))
+            logd(u"  Pixel size candidate (min) from global metadata: {} {}".format(cam_min, MICRO))
+        logd(u"=== PIXEL SIZE EXTRACTION END (success, method 4) ===")
         return float(cam_med)
     
     # Default fallback
-    log(u"Pixel size not found; defaulting to 0.345 {}".format(MICRO))
+    log(u"Pixel size not found in any source; defaulting to 0.345 {} (FALLBACK)".format(MICRO))
+    logd(u"=== PIXEL SIZE EXTRACTION END (fallback default) ===")
     return 0.345
 
 def _parse_stage_labels_list_from_xml(ome_xml):
@@ -395,40 +465,62 @@ def parse_channel_colors_from_ome_xml(ome_xml):
     Only extracts colors from the first <Image> element to avoid
     duplicates when multiple images/series are present.
     """
+    logd(u"=== PARSING CHANNEL COLORS FROM OME-XML ===")
     colors = []
     if not ome_xml:
+        logd(u"  OME-XML is None, returning empty colors list")
         return colors
     xml = ensure_unicode(ome_xml)
+    logd(u"  OME-XML length: {} characters".format(len(xml)))
     
     # Find the first <Image> element
     image_match = re.search(r'<(?:[A-Za-z0-9_]+:)?Image\b[^>]*>(.*?)</(?:[A-Za-z0-9_]+:)?Image>', xml, re.IGNORECASE | re.DOTALL)
     if image_match:
+        logd(u"  Found <Image> tag, searching within first image only")
         # Only search for channels within the first image
         image_content = image_match.group(1)
+        channel_count = 0
         for m in _CHANNEL_COLOR_RE.finditer(image_content):
             attrs = dict(ATTR_RE.findall(m.group(1)))
             c = attrs.get('Color') or attrs.get('color')
+            logd(u"  Channel {} raw color value: {}".format(channel_count, c))
             if c:
                 try: 
-                    colors.append(int(c))
+                    color_int = int(c)
+                    colors.append(color_int)
+                    logd(u"    Parsed as signed int: {}".format(color_int))
                 except (ValueError, TypeError):
                     try: 
-                        colors.append(int(c,0))
-                    except (ValueError, TypeError): 
-                        pass
+                        color_int = int(c,0)
+                        colors.append(color_int)
+                        logd(u"    Parsed with base detection: {}".format(color_int))
+                    except (ValueError, TypeError) as e:
+                        logd(u"    Failed to parse: {}".format(e))
+            channel_count += 1
     else:
+        logd(u"  No <Image> tag found, searching all Channel tags (fallback)")
         # Fallback: search all Channel tags if no Image tag found
+        channel_count = 0
         for m in _CHANNEL_COLOR_RE.finditer(xml):
             attrs = dict(ATTR_RE.findall(m.group(1)))
             c = attrs.get('Color') or attrs.get('color')
+            logd(u"  Channel {} raw color value: {}".format(channel_count, c))
             if c:
                 try: 
-                    colors.append(int(c))
+                    color_int = int(c)
+                    colors.append(color_int)
+                    logd(u"    Parsed as signed int: {}".format(color_int))
                 except (ValueError, TypeError):
                     try: 
-                        colors.append(int(c,0))
-                    except (ValueError, TypeError): 
-                        pass
+                        color_int = int(c,0)
+                        colors.append(color_int)
+                        logd(u"    Parsed with base detection: {}".format(color_int))
+                    except (ValueError, TypeError) as e:
+                        logd(u"    Failed to parse: {}".format(e))
+            channel_count += 1
+    
+    logd(u"  Total colors found: {}".format(len(colors)))
+    logd(u"=== CHANNEL COLOR PARSING COMPLETE ===")
     return colors
 
 def extract_channel_colors_from_gmeta(gMeta):
@@ -509,9 +601,13 @@ def _hex_to_rgb(hexstr):
 
 def build_lut_from_rgb(rgb):
     """Build ImageJ LUT from RGB tuple (v31.16h + v36.5 array.array fix)"""
-    if rgb is None: 
+    if rgb is None:
+        logd(u"  build_lut_from_rgb: rgb is None, returning None")
         return None
+    
     R, G, B = rgb
+    logd(u"  Building LUT from RGB({}, {}, {})".format(R, G, B))
+    
     r_arr = [int(round((i/255.0)*R)) for i in range(256)]
     g_arr = [int(round((i/255.0)*G)) for i in range(256)]
     b_arr = [int(round((i/255.0)*B)) for i in range(256)]
@@ -525,15 +621,27 @@ def build_lut_from_rgb(rgb):
     rb = jarray.array(to_signed_byte_list(r_arr), 'b')
     gb = jarray.array(to_signed_byte_list(g_arr), 'b')
     bb = jarray.array(to_signed_byte_list(b_arr), 'b')
+    
+    logd(u"  Created Java byte arrays (length={})".format(len(rb)))
+    
     try:
-        return LUT(rb, gb, bb)
-    except:
+        lut = LUT(rb, gb, bb)
+        logd(u"  LUT created successfully")
+        return lut
+    except Exception as e:
+        logd(u"  LUT creation failed: {}".format(e))
         return None
 
 def apply_channel_luts_to_image(imp, ome_xml, gMeta):
     """Apply channel LUTs to image (v31.16h + v36.5 RGBA fix)"""
+    logd(u"=== APPLYING CHANNEL LUTS ===")
+    
     if imp is None:
+        logd(u"  Image is None, returning")
         return imp
+    
+    logd(u"  Image: {} channels, {} slices, stack size={}".format(
+        imp.getNChannels(), imp.getNSlices(), imp.getStackSize()))
     
     colors_ome = parse_channel_colors_from_ome_xml(ome_xml)
     colors_gm = extract_channel_colors_from_gmeta(gMeta)
@@ -542,62 +650,111 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
     # Prefer OME if present, else gMeta
     if colors_ome:
         colors = colors_ome
+        logd(u"  Using OME-XML colors (preferred)")
     elif colors_gm:
         colors = colors_gm
+        logd(u"  Using global metadata colors (fallback)")
+    else:
+        logd(u"  No colors found in either source")
     
     if LUT_DEBUG:
         log(u"LUT Debug: OME colors={}, GM colors={}, chosen={}".format(colors_ome, colors_gm, colors))
     
-    # Build luts (v36.5: RGBA format, not ARGB)
+    # Build luts from colors (RGBA format: RR GG BB AA)
+    logd(u"  Building LUTs from colors...")
     luts = []
     if colors and isinstance(colors[0], int):
-        for ci in colors:
+        logd(u"  Colors are integers (RGBA format expected)")
+        for i, ci in enumerate(colors):
+            logd(u"  Channel {}: raw int = {}".format(i, ci))
+            # Convert signed to unsigned 32-bit
             u = int(ci) & 0xFFFFFFFF
             hex8 = "%08X" % u
-            # RGBA format: skip alpha (first 2 hex digits)
-            rgb = (int(hex8[2:4],16), int(hex8[4:6],16), int(hex8[6:8],16))
+            logd(u"    As unsigned hex: 0x{}".format(hex8))
+            
+            # RGBA format: RR GG BB AA
+            # Bytes: [0:2]=Red, [2:4]=Green, [4:6]=Blue, [6:8]=Alpha
+            R = int(hex8[0:2], 16)
+            G = int(hex8[2:4], 16)
+            B = int(hex8[4:6], 16)
+            A = int(hex8[6:8], 16)
+            logd(u"    Parsed RGBA: R={}, G={}, B={}, A={}".format(R, G, B, A))
+            
+            rgb = (R, G, B)
+            logd(u"    Using RGB tuple: {}".format(rgb))
             lut = build_lut_from_rgb(rgb)
             if lut: 
                 luts.append(lut)
+                logd(u"    LUT added successfully")
+            else:
+                logd(u"    LUT creation failed")
     else:
-        for c in colors:
-            lut = build_lut_from_rgb(_hex_to_rgb(c))
+        logd(u"  Colors are not integers (hex string format?)")
+        for i, c in enumerate(colors):
+            logd(u"  Channel {}: {}".format(i, c))
+            rgb = _hex_to_rgb(c)
+            logd(u"    Converted to RGB: {}".format(rgb))
+            lut = build_lut_from_rgb(rgb)
             if lut: 
                 luts.append(lut)
+                logd(u"    LUT added successfully")
+            else:
+                logd(u"    LUT creation failed")
     
     if LUT_DEBUG:
-        log(u"LUT Debug: built {} LUTs".format(len(luts)))
+        log(u"LUT Debug: built {} LUTs from {} colors".format(len(luts), len(colors)))
     
     if not luts:
+        logd(u"  No LUTs to apply, returning original image")
+        logd(u"=== LUT APPLICATION COMPLETE (no LUTs) ===")
         return imp
+    
+    logd(u"  Attempting to apply {} LUTs to image...".format(len(luts)))
     
     try:
         if imp.getStackSize() > 1 and imp.getNChannels() > 1:
+            logd(u"  Image is multi-channel stack, creating CompositeImage")
             try:
                 cimp = CompositeImage(imp)
                 nchan = cimp.getNChannels()
+                logd(u"  CompositeImage created with {} channels".format(nchan))
+                
                 for i in range(min(nchan, len(luts))):
+                    logd(u"  Applying LUT to channel {}".format(i+1))
                     try: 
                         cimp.setChannelLut(luts[i], i+1)
-                    except:
+                        logd(u"    setChannelLut succeeded")
+                    except Exception as e1:
+                        logd(u"    setChannelLut failed: {}, trying setLut".format(e1))
                         try: 
                             cimp.setLut(luts[i], i+1)
-                        except: 
-                            pass
+                            logd(u"    setLut succeeded")
+                        except Exception as e2:
+                            logd(u"    setLut also failed: {}".format(e2))
+                
+                logd(u"  Calling updateAndDraw on CompositeImage")
                 cimp.updateAndDraw()
+                logd(u"  Returning CompositeImage (SUCCESS)")
+                logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
                 return cimp
-            except:
-                pass
+            except Exception as e:
+                logd(u"  CompositeImage creation/setup failed: {}".format(e))
         else:
+            logd(u"  Image is single channel or not a stack")
             try:
                 imp.getProcessor().setColorModel(luts[0].getColorModel())
+                logd(u"  Set color model from first LUT")
                 imp.updateAndDraw()
-            except:
-                pass
+                logd(u"  updateAndDraw called")
+            except Exception as e:
+                logd(u"  setColorModel failed: {}".format(e))
     except Exception as e:
         if LUT_DEBUG: 
             log(u"LUT Debug: apply failed: {}".format(e))
+        logd(u"  LUT application exception: {}".format(e))
     
+    logd(u"  Returning original image (fallback)")
+    logd(u"=== LUT APPLICATION COMPLETE (fallback) ===")
     return imp
 
 # ==============================================================================
