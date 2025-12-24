@@ -50,11 +50,21 @@ Traditional 3D-stitching in Fiji often struggles with:
 
 ## Roadmap & Future Features
 
-### Planned Enhancements (Not Yet Implemented)
-**Stage 1: Advanced Z-Slice Detection**
-- **Monte Carlo Gatekeeper:** Fast pre-screening using random sample probes to classify slices as REJECT/COMMIT/INSPECT
-- **Spreading-Fire Optimization:** Propagate from known-sharp slices to neighbors instead of binary search (~30-50% faster)
+### Stage 1: Advanced Z-Slice Detection ✅ **IMPLEMENTED**
+**Status:** Complete in v33.0
+- **Monte Carlo Gatekeeper:** Fast pre-screening using 50 random sample probes to classify slices as REJECT/COMMIT/INSPECT
+- **Spreading-Fire Optimization:** Propagate from known-sharp slices to neighbors instead of exhaustive search (~30-50% performance gain)
 - **REJECT/COMMIT/INSPECT Triage:** Efficient three-state classification before detailed analysis
+- **Exhaustive Debug Logging:** Comprehensive performance metrics and slice-by-slice classification tracking
+
+**Technical Details:**
+- Phase 1: Monte Carlo sampling (50 probes per slice) for quick triage
+- Phase 2: Spreading-fire propagation from COMMIT slices
+- Phase 3: Targeted analysis of unvisited INSPECT slices
+- Performance reporting shows % reduction in full slice analysis
+- Debug mode provides detailed classification and score logging
+
+### Planned Enhancements (Not Yet Implemented)
 
 **Stage 2: True Focus Stacking (Extended Depth of Field)**
 - **Fractal Tessellation Engine:** Recursive spatial subdivision with adaptive sharpness-based region selection
