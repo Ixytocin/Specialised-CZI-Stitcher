@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.6
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.7
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -1550,7 +1550,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.6")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.7")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -1669,7 +1669,7 @@ if "input_dir_raw" not in globals():
     log(u"DEBUG MODE VERIFICATION: VERBOSE = {}".format(VERBOSE))
     log(u"=" * 60)
     
-    notify_on_complete = int(gd.getNextBoolean()) == 1
+    notify_on_complete = int(gd.getNextBoolean()) == 1  # v34.7: Fixed boolean conversion
     
     # BigTIFF is now automatic based on file size
     save_bigtiff = False
@@ -1714,8 +1714,8 @@ if "input_dir_raw" not in globals():
     log(u"")
     log(u"Other:")
     log(u"  Debug Mode:          {}".format(DEBUG_MODE))
-    log(u"  Notify on Complete:  {}".format(notify_on_complete))
-    log(u"  Clean Temp Files:    {}".format(do_clean))
+    log(u"  Notify on Complete:  {}".format(int(notify_on_complete)))
+    log(u"  Clean Temp Files:    {}".format(int(do_clean)))
     log(u"=" * 60)
     log(u"")
     flush_log()
@@ -2054,7 +2054,12 @@ class UltimateStitcher:
                         log(u"Saving 3D stitched failed: {}".format(e))
                 
                 # Create Z-projection if save OR view is requested AND stack has multiple slices
-                if (self.config['save_zprojection'] or self.config['view_zprojection']) and imp.getNSlices() > 1:
+                nslices = imp.getNSlices()
+                if DEBUG_MODE:
+                    log(u"Z-Projection Check: nslices={}, save={}, view={}".format(
+                        nslices, self.config['save_zprojection'], self.config['view_zprojection']))
+                
+                if (self.config['save_zprojection'] or self.config['view_zprojection']) and nslices > 1:
                     try:
                         log(u"Creating Z-projection using {} method...".format(self.config['zprojection_method']))
                         proj_imp = create_zprojection(imp, self.config['zprojection_method'])
@@ -2099,6 +2104,29 @@ class UltimateStitcher:
         else:
             imp.flush()
             imp.close()
+        
+        # v34.7: Debug summary at end of processing
+        if DEBUG_MODE:
+            log(u"")
+            log(u"=" * 60)
+            log(u"DEBUG SUMMARY - File: {}".format(c_file))
+            log(u"=" * 60)
+            log(u"Image Properties:")
+            log(u"  Channels:     {}".format(imp.getNChannels() if imp else 0))
+            log(u"  Z-Slices:     {}".format(imp.getNSlices() if imp else 0))
+            log(u"  Timepoints:   {}".format(imp.getNFrames() if imp else 0))
+            if imp:
+                log(u"  Width x Height: {}x{}".format(imp.getWidth(), imp.getHeight()))
+                log(u"  Is Composite: {}".format(isinstance(imp, CompositeImage)))
+            log(u"")
+            log(u"Configuration Applied:")
+            log(u"  Use Standard LUTs:   {}".format(self.config['use_standard_luts']))
+            log(u"  Z-Projection View:   {}".format(self.config['view_zprojection']))
+            log(u"  Z-Projection Save:   {}".format(self.config['save_zprojection']))
+            log(u"  Sharp Detection:     {}".format(self.config.get('enable_sharp_detection', False)))
+            log(u"=" * 60)
+            log(u"")
+            flush_log()
         
         # Force garbage collection after processing large files
         IJ.freeMemory()
@@ -2196,7 +2224,7 @@ def main():
     batch_elapsed_ms = (time.time() - batch_start_time) * 1000
     log(u"")
     log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
-    log(u"[Specialised CZI Stitcher] Script Version: 34.6")
+    log(u"[Specialised CZI Stitcher] Script Version: 34.7")
     flush_log()
     
     # Show completion notification if requested
