@@ -54,34 +54,43 @@ class OMEMetadataAccessor(object):
     All methods are unicode-safe and handle missing values gracefully.
     """
     
-    def __init__(self, reader):
+    def __init__(self, reader, verbose=False):
         """Initialize accessor with Bio-Formats reader (must be opened with setId)"""
         self.reader = reader
+        self.verbose = verbose
         
-        # Create metadata store if not already attached
+        if verbose:
+            from ij import IJ
+            IJ.log(u"[CZI Stitcher v35]   [VERBOSE] Initializing OMEMetadataAccessor...")
+        
+        # Try to get existing metadata store
         try:
             self.metadata = reader.getMetadataStore()
-            if not self.metadata:
-                self.metadata = MetadataTools.createOMEXMLMetadata()
-                # Need to create new reader with metadata store
-                old_id = reader.getCurrentFile()
-                reader.close()
-                reader = ImageReader()
-                reader.setMetadataStore(self.metadata)
-                reader.setId(old_id)
-                self.reader = reader
-                self.metadata = reader.getMetadataStore()
-        except:
+            if verbose:
+                from ij import IJ
+                IJ.log(u"[CZI Stitcher v35]   [VERBOSE] Got metadata store: {}".format(type(self.metadata).__name__))
+        except Exception as e:
+            if verbose:
+                from ij import IJ
+                IJ.log(u"[CZI Stitcher v35]   [VERBOSE] Failed to get metadata store: {}".format(e))
             self.metadata = None
         
         # Cache OME-XML string for regex parsing
         self._ome_xml = None
         try:
             if self.metadata:
+                if verbose:
+                    from ij import IJ
+                    IJ.log(u"[CZI Stitcher v35]   [VERBOSE] Attempting to dump OME-XML...")
                 xml_str = self.metadata.dumpXML()
                 self._ome_xml = ensure_unicode(xml_str)
-        except:
-            pass
+                if verbose:
+                    from ij import IJ
+                    IJ.log(u"[CZI Stitcher v35]   [VERBOSE] OME-XML dumped: {} characters".format(len(self._ome_xml)))
+        except Exception as e:
+            if verbose:
+                from ij import IJ
+                IJ.log(u"[CZI Stitcher v35]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
     
     def get_physical_size_x(self, series=0):
         """Get physical pixel size X in micrometers"""
@@ -271,6 +280,28 @@ def log(msg):
     """Simple logging helper"""
     IJ.log(u"[CZI Stitcher v35] {}".format(msg))
 
+def play_clear_jingle():
+    """Play completion jingle using Java MIDI"""
+    try:
+        from javax.sound.midi import MidiSystem
+        syn = MidiSystem.getSynthesizer()
+        syn.open()
+        ch = syn.getChannels()[0]
+        ch.programChange(11)  # Music box sound
+        notes = [64, 68, 72]  # E, G#, C (major chord)
+        velocities = [100, 80, 60]
+        for n, v in zip(notes, velocities):
+            ch.noteOn(n, v)
+            ch.noteOn(n-20, max(0, v-10))  # Bass note
+            ch.noteOn(n+10, max(0, v-10))  # High note
+            time.sleep(0.2)
+        time.sleep(0.4)
+        for n in notes:
+            ch.noteOff(n)
+        syn.close()
+    except Exception as e:
+        log(u"MIDI jingle failed: {}".format(ensure_unicode(str(e))))
+
 def apply_channel_luts(imp, accessor, series=0):
     """
     Apply channel colors from OME-XML metadata to CompositeImage
@@ -393,10 +424,13 @@ def stitch_tiles(input_dir, output_dir, config):
                 reader = ImageReader()
                 reader.setId(czi_path)
                 
-                # Create metadata accessor - THIS IS THE ONLY METADATA CODE
-                accessor = OMEMetadataAccessor(reader)
+                # Create metadata accessor with verbose flag
+                accessor = OMEMetadataAccessor(reader, verbose=config.get('verbose', False))
                 
                 # Feature 1: Get correct pixel size (0.345 not 3.45)
+                if config.get('verbose', False):
+                    log(u"  [VERBOSE] Attempting to read pixel size...")
+                
                 px_size = get_pixel_size(accessor, series=0)
                 if px_size:
                     cal = imp.getCalibration()
@@ -405,8 +439,12 @@ def stitch_tiles(input_dir, output_dir, config):
                     cal.setUnit("um")
                     imp.setCalibration(cal)
                     log(u"  Calibration: {} {}m/pixel".format(px_size, MICRO))
+                    if config.get('verbose', False):
+                        log(u"  [VERBOSE] Pixel size set successfully: {} um".format(px_size))
                 else:
                     log(u"  WARNING: Could not read pixel size from OME-XML")
+                    if config.get('verbose', False):
+                        log(u"  [VERBOSE] Pixel size extraction failed - check OME-XML structure")
                 
                 # Feature 2: Apply channel colors (LUTs) if multi-channel
                 if imp.getNChannels() > 1 and config.get('apply_luts', True):
@@ -456,10 +494,12 @@ def stitch_tiles(input_dir, output_dir, config):
     # Feature 3: Play jingle if enabled
     if config.get('play_jingle', False):
         try:
-            IJ.run("Play Startup Sound", "")
+            play_clear_jingle()
             log(u"Processing complete!")
-        except:
-            log(u"Processing complete! (jingle not available)")
+        except Exception as e:
+            log(u"Processing complete! (jingle failed: {})".format(ensure_unicode(str(e))))
+    else:
+        log(u"Processing complete!")
 
 def show_dialog():
     """Show configuration dialog and return settings"""
@@ -476,6 +516,7 @@ def show_dialog():
     gd.addCheckbox("Show stitched result", True)
     gd.addCheckbox("Save stitched result", False)
     gd.addCheckbox("Play completion jingle", True)
+    gd.addCheckbox("Verbose mode (show detailed progress)", False)
     
     gd.showDialog()
     
@@ -488,7 +529,8 @@ def show_dialog():
         'apply_luts': int(gd.getNextBoolean()) == 1,
         'show_result': int(gd.getNextBoolean()) == 1,
         'save_result': int(gd.getNextBoolean()) == 1,
-        'play_jingle': int(gd.getNextBoolean()) == 1
+        'play_jingle': int(gd.getNextBoolean()) == 1,
+        'verbose': int(gd.getNextBoolean()) == 1
     }
     
     return config
