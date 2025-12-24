@@ -264,12 +264,25 @@ def _unit_to_um(value, unit):
         return None
     if not unit:
         return float(value)
-    u = unit.strip().lower()
-    u = u.replace('micro', 'um').replace('µ', 'um').replace('μ', 'um').replace('Âµ','um')
-    if u in ('um', 'µm', 'μm', 'Âµm'): 
+    
+    # Ensure unit is unicode string to handle µ safely
+    try:
+        u = ensure_unicode(unit).strip().lower()
+    except:
+        # If unicode conversion fails, try as-is
+        try:
+            u = unit.strip().lower()
+        except:
+            return float(value)
+    
+    # Replace all variants of micro symbol
+    u = u.replace('micro', 'um').replace(u'µ', 'um').replace(u'μ', 'um').replace('Âµ','um')
+    
+    if u in ('um', u'µm', u'μm', 'Âµm', 'm'): 
+        # Check for meters vs micrometers
+        if u == 'm':
+            return float(value) * 1e6
         return float(value)
-    if u == 'm': 
-        return float(value) * 1e6
     if u == 'cm': 
         return float(value) * 1e4
     if u == 'mm': 
@@ -341,9 +354,17 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
     try:
         if ome_xml:
             px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
-            logd(u"  Parsed raw value: {}, unit: {}".format(px_raw, unit))
             if px_raw is not None:
-                px_um = _unit_to_um(px_raw, unit)
+                logd(u"  Parsed raw value: {}".format(px_raw))
+                try:
+                    # Unit string may contain µ which causes encoding issues
+                    unit_safe = ensure_unicode(unit) if unit else u""
+                    logd(u"  Unit (converted): {}".format(unit_safe))
+                except:
+                    logd(u"  Unit conversion issue, using unit as-is")
+                    unit_safe = unit
+                
+                px_um = _unit_to_um(px_raw, unit_safe)
                 log(u"Pixel size from OME-XML <Pixels>: {} um (TRUSTED VALUE)".format(px_um))
                 logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
                 return float(px_um)
