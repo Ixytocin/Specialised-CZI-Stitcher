@@ -1,10 +1,11 @@
-# SPECIALISED CZI STITCHER v36.0 - STANDALONE WITH STITCHING
+# SPECIALISED CZI STITCHER v36.2 - STANDALONE WITH STITCHING
 # Core features:
-# 1. LUT/Color detection & application from OME-XML
+# 1. LUT/Color detection & application from OME-XML (RGBA format fixed)
 # 2. Pixel size scaling (correct 0.345 not 3.45)
 # 3. Completion jingle when enabled
 # 4. ImageJ Grid/Collection stitching with 2D matching + 3D fusion
 # 5. Sub-pixel accuracy alignment with linear blending
+# 6. Single metadata query - cached and reused (no duplicate queries)
 #
 # This version has OMEMetadataAccessor embedded - NO external imports needed!
 
@@ -58,17 +59,17 @@ class OMEMetadataAccessor(object):
         self.verbose = verbose
         
         if verbose:
-            IJ.log(u"[CZI Stitcher v36]   [VERBOSE] Initializing OMEMetadataAccessor...")
+            IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Initializing OMEMetadataAccessor...")
         
         # Try to get existing metadata store
         try:
             self.metadata = reader.getMetadataStore()
             if verbose:
-                IJ.log(u"[CZI Stitcher v36]   [VERBOSE] Got metadata store: {}".format(
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Got metadata store: {}".format(
                     type(self.metadata).__name__))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36]   [VERBOSE] Failed to get metadata store: {}".format(e))
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Failed to get metadata store: {}".format(e))
             self.metadata = None
         
         # Cache OME-XML string
@@ -76,15 +77,15 @@ class OMEMetadataAccessor(object):
         try:
             if self.metadata:
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36]   [VERBOSE] Attempting to dump OME-XML...")
+                    IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Attempting to dump OME-XML...")
                 xml_str = self.metadata.dumpXML()
                 self._ome_xml = ensure_unicode(xml_str)
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36]   [VERBOSE] OME-XML dumped: {} characters".format(
+                    IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] OME-XML dumped: {} characters".format(
                         len(self._ome_xml)))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
+                IJ.log(u"[CZI Stitcher v36.2]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
     
     def get_physical_size_x(self, series=0):
         """Get physical size X in micrometers"""
@@ -121,15 +122,18 @@ class OMEMetadataAccessor(object):
             if self.metadata:
                 color = self.metadata.getChannelColor(series, channel)
                 if color is not None:
-                    # Convert signed int to unsigned
-                    val = color.getValue()
-                    if val < 0:
-                        val = val + (1 << 32)
+                    # Zeiss uses RGBA format in signed 32-bit integer
+                    # Convert to unsigned 32-bit: mask with 0xFFFFFFFF
+                    u = int(color.getValue()) & 0xFFFFFFFF
+                    hex8 = "%08X" % u
                     
-                    # Extract RGB
-                    r = (val >> 16) & 0xFF
-                    g = (val >> 8) & 0xFF
-                    b = val & 0xFF
+                    # Extract RGB from RGBA format: RR GG BB AA
+                    # First 2 hex digits = Red, next 2 = Green, next 2 = Blue, last 2 = Alpha
+                    r = int(hex8[0:2], 16)
+                    g = int(hex8[2:4], 16)
+                    b = int(hex8[4:6], 16)
+                    # Alpha channel (hex8[6:8]) not used for LUT
+                    
                     return (r, g, b)
         except:
             pass
@@ -160,7 +164,7 @@ def get_pixel_size(accessor, series=0):
 def log(msg):
     """Thread-safe logging"""
     try:
-        msg_str = u"[CZI Stitcher v36] " + ensure_unicode(msg)
+        msg_str = u"[CZI Stitcher v36.2] " + ensure_unicode(msg)
         IJ.log(msg_str)
     except Exception as e:
         print("Log error: " + str(e))
@@ -229,7 +233,7 @@ def apply_channel_luts(imp, accessor, series=0):
 # PART 3: Stitching Functions
 # ==============================================================================
 
-def extract_tiles_and_positions(czi_path, temp_dir, config):
+def extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size):
     """
     Extract individual tiles from CZI file and get their stage positions.
     
@@ -237,6 +241,9 @@ def extract_tiles_and_positions(czi_path, temp_dir, config):
         czi_path: Path to CZI file
         temp_dir: Directory for temporary tile images
         config: Configuration dictionary
+        reader: Bio-Formats reader (already opened, will be reused)
+        accessor: OMEMetadataAccessor (already initialized, will be reused)
+        px_size: Pixel size in micrometers (already extracted)
         
     Returns:
         List of tuples: [(tile_filename, tile_index, x_um, y_um, z_um), ...]
@@ -264,18 +271,8 @@ def extract_tiles_and_positions(czi_path, temp_dir, config):
         
         log(u"  Found {} tile(s)".format(len(imps)))
         
-        # Create reader for metadata
-        metadata = MetadataTools.createOMEXMLMetadata()
-        reader = ImageReader()
-        reader.setMetadataStore(metadata)
-        reader.setId(czi_path)
-        
-        accessor = OMEMetadataAccessor(reader, verbose=False)
-        
-        # Get pixel size for position calculations
-        px_size = get_pixel_size(accessor, series=0)
-        if not px_size:
-            px_size = 0.345  # Default fallback
+        # Use cached reader and accessor (passed as parameters)
+        metadata = reader.getMetadataStore()
         
         # Process each tile
         for i, tile_imp in enumerate(imps):
@@ -339,7 +336,7 @@ def extract_tiles_and_positions(czi_path, temp_dir, config):
             # Close tile to free memory
             tile_imp.close()
         
-        reader.close()
+        # Don't close reader here - it's managed by calling function
         
     except Exception as e:
         log(u"  ERROR extracting tiles: {}".format(ensure_unicode(str(e))))
@@ -453,13 +450,30 @@ def process_czi_file(czi_path, output_dir, config):
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
     
+    # CRITICAL FIX: Create metadata accessor ONCE and reuse throughout
+    # This prevents duplicate metadata queries and inconsistent color application
+    metadata = MetadataTools.createOMEXMLMetadata()
+    reader = ImageReader()
+    reader.setMetadataStore(metadata)
+    reader.setId(czi_path)
+    accessor = OMEMetadataAccessor(reader, verbose=verbose)
+    
+    # Cache pixel size once
+    px_size = get_pixel_size(accessor, series=0)
+    if not px_size:
+        px_size = 0.345  # Fallback
+    
+    if verbose:
+        log(u"  [VERBOSE] Pixel size: {} {}m (cached for reuse)".format(px_size, MICRO))
+    
     try:
-        # Step 1: Extract tiles and get positions
+        # Step 1: Extract tiles and get positions (using cached reader/accessor)
         log(u"  Extracting tiles...")
-        tiles = extract_tiles_and_positions(czi_path, temp_dir, config)
+        tiles = extract_tiles_and_positions(czi_path, temp_dir, config, reader, accessor, px_size)
         
         if not tiles or len(tiles) == 0:
             log(u"  ERROR: No tiles extracted")
+            reader.close()
             return
         
         if len(tiles) == 1:
@@ -468,47 +482,24 @@ def process_czi_file(czi_path, output_dir, config):
             tile_path = os.path.join(temp_dir, tiles[0][0])
             imp = IJ.openImage(tile_path)
             
-            # Get pixel size and apply
-            metadata = MetadataTools.createOMEXMLMetadata()
-            reader = ImageReader()
-            reader.setMetadataStore(metadata)
-            reader.setId(czi_path)
-            accessor = OMEMetadataAccessor(reader, verbose=verbose)
+            # Apply calibration (using cached px_size)
+            cal = imp.getCalibration()
+            cal.pixelWidth = px_size
+            cal.pixelHeight = px_size
+            cal.setUnit("um")
+            imp.setCalibration(cal)
+            log(u"  Calibration: {} {}m/pixel".format(px_size, MICRO))
             
-            px_size = get_pixel_size(accessor, series=0)
-            if px_size:
-                cal = imp.getCalibration()
-                cal.pixelWidth = px_size
-                cal.pixelHeight = px_size
-                cal.setUnit("um")
-                imp.setCalibration(cal)
-                log(u"  Calibration: {} {}m/pixel".format(px_size, MICRO))
-            
-            # Apply colors
+            # Apply colors (using cached accessor)
             if imp.getNChannels() > 1:
                 imp = apply_channel_luts(imp, accessor, series=0)
-            
-            reader.close()
         else:
-            # Step 2: Get pixel size for tile configuration
-            metadata = MetadataTools.createOMEXMLMetadata()
-            reader = ImageReader()
-            reader.setMetadataStore(metadata)
-            reader.setId(czi_path)
-            accessor = OMEMetadataAccessor(reader, verbose=verbose)
-            
-            px_size = get_pixel_size(accessor, series=0)
-            if not px_size:
-                px_size = 0.345  # Fallback
-            
-            log(u"  Pixel size: {} {}m".format(px_size, MICRO))
-            
-            # Step 3: Create TileConfiguration.txt
+            # Step 2: Create TileConfiguration.txt (using cached px_size)
             log(u"  Creating tile configuration...")
             tile_config_path = os.path.join(temp_dir, "TileConfiguration.txt")
             create_tile_configuration(tiles, tile_config_path, px_size)
             
-            # Step 4: Run stitching
+            # Step 3: Run stitching
             log(u"  Stitching {} tiles...".format(len(tiles)))
             imp = run_stitching_plugin(temp_dir, config)
             
@@ -517,7 +508,7 @@ def process_czi_file(czi_path, output_dir, config):
                 reader.close()
                 return
             
-            # Step 5: Apply calibration
+            # Step 4: Apply calibration (using cached px_size)
             cal = imp.getCalibration()
             cal.pixelWidth = px_size
             cal.pixelHeight = px_size
@@ -525,11 +516,12 @@ def process_czi_file(czi_path, output_dir, config):
             imp.setCalibration(cal)
             log(u"  Calibration applied: {} {}m/pixel".format(px_size, MICRO))
             
-            # Step 6: Apply channel colors
+            # Step 5: Apply channel colors (using cached accessor)
             if imp.getNChannels() > 1:
                 imp = apply_channel_luts(imp, accessor, series=0)
-            
-            reader.close()
+        
+        # Close reader once at end
+        reader.close()
         
         # Set title
         imp.setTitle(base_name + "_stitched")
@@ -579,16 +571,17 @@ def main():
     """Main execution function"""
     
     log(u"")
-    log(u"SPECIALISED CZI STITCHER v36.0")
+    log(u"SPECIALISED CZI STITCHER v36.2")
     log(u"Standalone with ImageJ Grid/Collection Stitching")
     log(u"Features: LUTs + Scaling + Jingle + 2D Matching + 3D Fusion")
+    log(u"Fixes: RGBA color format + metadata caching + position extraction")
     log(u"")
     log(u"=" * 60)
     log(u"STITCHING SESSION START")
     log(u"=" * 60)
     
     # Create dialog
-    gd = GenericDialog("CZI Stitcher v36 - Parameters")
+    gd = GenericDialog("CZI Stitcher v36.2 - Parameters")
     
     gd.addMessage("=== DIRECTORIES ===")
     gd.addDirectoryField("Input folder (CZI files):", os.path.expanduser("~"), 50)
