@@ -10,7 +10,7 @@ from loci.formats import ImageReader, MetadataTools
 from ij import IJ
 import os
 
-VERSION = "v1.1"
+VERSION = "v1.2"
 
 def log(msg):
     """Safe logging with unicode support"""
@@ -55,8 +55,9 @@ def dump_raw_xml(file_path):
         reader = ImageReader()
         reader.setMetadataStore(metadata)
         
-        # Step 2: Open file
-        log(u"Step 2: Opening file...")
+        # Step 2: Open file in separate series mode
+        log(u"Step 2: Opening file (separate series mode)...")
+        reader.setGroupFiles(False)  # KEY: Get individual tiles, not stitched canvas
         reader.setId(file_path_str)
         
         series_count = reader.getSeriesCount()
