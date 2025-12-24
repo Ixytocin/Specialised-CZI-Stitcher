@@ -180,7 +180,7 @@ def test_unicode_conversion(data, method_name):
 
 def main():
     IJ.log("=" * 70)
-    IJ.log("OME-XML DIAGNOSTIC TOOL v1.2")
+    IJ.log("OME-XML DIAGNOSTIC TOOL v1.4")
     IJ.log("=" * 70)
     IJ.log("")
     
@@ -234,10 +234,12 @@ def main():
         
         # Get metadata store
         IJ.log("Step 2: Getting metadata store...")
-        metadata = MetadataTools.createOMEXMLMetadata()
-        reader.setMetadataStore(metadata)
-        # Re-initialize with metadata store (Bio-Formats requirement)
+        # Close current reader first
         reader.close()
+        # Create new reader with metadata store
+        metadata = MetadataTools.createOMEXMLMetadata()
+        reader = ImageReader()
+        reader.setMetadataStore(metadata)
         reader.setId(file_path)
         IJ.log("  SUCCESS - Metadata store created")
         IJ.log("")
