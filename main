@@ -97,11 +97,28 @@ def ensure_unicode(o):
         return None
     if isinstance(o, unicode):
         return o
+    # In Jython, Java Strings are already unicode - don't try to decode them
+    # Check if it's a Java String object
     try:
-        return unicode(bytearray(o.getBytes("UTF-8")), 'utf-8', 'replace')
+        # If it has toString() it's probably a Java object
+        if hasattr(o, 'toString') and not isinstance(o, (str, bytes)):
+            return unicode(o.toString())
     except:
         pass
+    # Only decode if it's actually bytes
+    if isinstance(o, bytes):
+        try:
+            # Try UTF-8 decode first for proper non-ASCII character handling
+            return unicode(o, 'utf-8', 'replace')
+        except:
+            pass
+        try:
+            # Try Latin-1 as fallback (works for most Western European chars)
+            return unicode(o, 'latin-1', 'replace')
+        except:
+            pass
     try:
+        # For regular strings, convert to unicode
         return unicode(o, 'utf-8', 'replace')
     except:
         pass
@@ -705,12 +722,11 @@ def _pixel_from_global_metadata(gMeta):
     return None, None
 
 def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
+    # In Jython, Java Strings (like ome_xml) are already unicode
+    # Don't try to decode them - just check if they're already unicode
     try:
-        ome_xml = ensure_unicode(ome_xml)
-    except:
-        ome_xml = ome_xml
-    try:
-        if ome_xml:
+        if ome_xml and isinstance(ome_xml, (str, unicode)):
+            # ome_xml is already a string, use it directly
             px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
             if px_raw is not None:
                 px_um = _unit_to_um(px_raw, unit)
@@ -1595,9 +1611,18 @@ if "input_dir_raw" not in globals():
     except:
         corr_factor = 10.0
     
-    DEBUG_MODE = bool(gd.getNextBoolean())
+    # DEV MODE: Hardcode DEBUG_MODE to True for comprehensive testing
+    DEBUG_MODE = True  # bool(gd.getNextBoolean())
     LUT_DEBUG = DEBUG_MODE  # Tie LUT debug logging to debug mode checkbox
     VERBOSE = DEBUG_MODE    # Ensure generic verbose logs (logv) also appear
+    
+    # VERIFICATION: Check if debug mode actually enabled
+    log(u"=" * 60)
+    log(u"DEBUG MODE VERIFICATION: DEBUG_MODE = {}".format(DEBUG_MODE))
+    log(u"DEBUG MODE VERIFICATION: LUT_DEBUG = {}".format(LUT_DEBUG))
+    log(u"DEBUG MODE VERIFICATION: VERBOSE = {}".format(VERBOSE))
+    log(u"=" * 60)
+    
     notify_on_complete = bool(gd.getNextBoolean())
     
     # BigTIFF is now automatic based on file size
@@ -2134,12 +2159,15 @@ def main():
         complete_gd.addMessage("All files have been processed successfully!")
         complete_gd.addMessage("")
         complete_gd.addMessage("Click OK to dismiss this notification.")
+        complete_gd.hideCancelButton()  # Remove Cancel button - only OK needed
         
         # Play jingle repeatedly until user dismisses
         from java.lang import Thread, Runnable
+        stop_jingle = [False]  # Use list for mutable reference in nested class
+        
         class JingleRunnable(Runnable):
             def run(self):
-                while not complete_gd.wasOKed() and not complete_gd.wasCanceled():
+                while not stop_jingle[0]:
                     play_clear_jingle()
                     try:
                         Thread.sleep(1000)  # Short wait between jingles
@@ -2151,9 +2179,13 @@ def main():
         
         # Show dialog (blocks until user clicks OK)
         complete_gd.showDialog()
-    
-    if PLAY_JINGLE_ON_DONE:
-        play_clear_jingle()
+        
+        # Stop the jingle when dialog closes
+        stop_jingle[0] = True
+        try:
+            jingle_thread.join(1000)  # Wait up to 1 second for thread to finish
+        except:
+            pass
 
 if __name__ in [None, "__main__"]:
     main()
