@@ -154,6 +154,21 @@ def flush_log():
     except:
         pass
 
+def format_time_human(ms):
+    """Convert milliseconds to human-readable format."""
+    if ms < 1000:
+        return u"{}ms".format(int(ms))
+    seconds = ms / 1000.0
+    if seconds < 60:
+        return u"{:.1f}s".format(seconds)
+    minutes = int(seconds / 60)
+    secs = int(seconds % 60)
+    if minutes < 60:
+        return u"{}m {}s".format(minutes, secs)
+    hours = int(minutes / 60)
+    mins = int(minutes % 60)
+    return u"{}h {}m".format(hours, mins)
+
 def logv(msg):
     if VERBOSE:
         log(msg)
@@ -1046,7 +1061,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
     # build luts
     luts = []
     if colors and isinstance(colors[0], int):
-        for ci in colors:
+        for idx, ci in enumerate(colors):
             u = int(ci) & 0xFFFFFFFF
             hex8 = "%08X" % u
             # Zeiss uses RGBA format: RR GG BB AA
@@ -1055,6 +1070,8 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             g = int(hex8[2:4],16)
             b = int(hex8[4:6],16)
             rgb = (r, g, b)  # Use RGB directly - LUT constructor expects RGB order
+            if LUT_DEBUG:
+                log(u"LUT Debug: Color[{}] = 0x{} -> RGB({}, {}, {})".format(idx, hex8, r, g, b))
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
     else:
@@ -1076,7 +1093,7 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
                     try:
                         cimp.setChannelLut(luts[i], i+1)
                         if LUT_DEBUG:
-                            log(u"LUT Debug: Applied LUT {} to channel {}".format(i, i+1))
+                            log(u"LUT Debug: Applied LUT[{}] to ImageJ Channel {}".format(i, i+1))
                     except Exception as e:
                         if LUT_DEBUG:
                             log(u"LUT Debug: setChannelLut failed for ch{}: {}".format(i+1, e))
@@ -1512,12 +1529,12 @@ if "input_dir_raw" not in globals():
     gd.addMessage("")
     gd.addMessage("=== ADVANCED OPTIONS ===")
     gd.addCheckbox("Cleanup Temp Files", True)
-    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
+    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
     gd.addCheckbox("Debug Mode (verbose logging)", False)
     gd.addCheckbox("Call me when finished (audio alert)", False)
     gd.addMessage("")
-    gd.addHelp("https://github.com/Ixytocin/Specialised-CZI-Stitcher/blob/main/README.md")
+    gd.addHelp("https://github.com/Ixytocin/Specialised-CZI-Stitcher/blob/main/HELP.md")
     gd.showDialog()
     if gd.wasCanceled():
         log("User cancelled parameter dialog. Exiting."); raise SystemExit("Cancelled by user")
@@ -1616,7 +1633,11 @@ class UltimateStitcher:
         base_name = os.path.splitext(os.path.basename(czi_path))[0]
         file_dst = os.path.join(self.temp_root, u"temp_{}".format(int(time.time())))
         if not os.path.exists(file_dst): os.makedirs(file_dst)
+        
+        # Log meta scan header before processing begins
+        log(u"")
         log(u"--- Meta Scan: {} ---".format(base_name))
+        log(u"Analyzing metadata and extracting tile positions...")
 
         ome_xml, proc, omeMeta, reader, gMeta = get_original_omexml_str_and_reader(czi_path)
 
