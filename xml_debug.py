@@ -180,17 +180,27 @@ def test_unicode_conversion(data, method_name):
 
 def main():
     IJ.log("=" * 70)
-    IJ.log("OME-XML DIAGNOSTIC TOOL v1.1")
+    IJ.log("OME-XML DIAGNOSTIC TOOL v1.2")
     IJ.log("=" * 70)
     IJ.log("")
     
     # Validate and normalize file path
     import os
-    file_path = str(czi_file).strip()
+    # Convert to unicode to handle non-ASCII characters (ä, ü, etc.)
+    try:
+        if isinstance(czi_file, unicode):
+            file_path = czi_file
+        else:
+            file_path = unicode(str(czi_file).strip(), 'utf-8', 'replace')
+    except:
+        file_path = str(czi_file).strip()
     
     # Check if file exists
     if not os.path.exists(file_path):
-        IJ.log("ERROR: File does not exist: " + file_path)
+        try:
+            IJ.log(u"ERROR: File does not exist: {}".format(file_path))
+        except:
+            IJ.log("ERROR: File does not exist (path contains special characters)")
         IJ.log("")
         IJ.log("Troubleshooting:")
         IJ.log("  1. Make sure to select the FULL path including .czi extension")
@@ -199,9 +209,14 @@ def main():
         IJ.log("")
         return
     
-    IJ.log("File: " + file_path)
-    IJ.log("File exists: Yes")
-    IJ.log("File size: " + str(os.path.getsize(file_path) / 1024 / 1024) + " MB")
+    try:
+        IJ.log(u"File: {}".format(file_path))
+        IJ.log(u"File exists: Yes")
+        IJ.log(u"File size: {:.1f} MB".format(os.path.getsize(file_path) / 1024.0 / 1024.0))
+    except UnicodeEncodeError:
+        IJ.log("File: <path contains non-ASCII characters>")
+        IJ.log("File exists: Yes")
+        IJ.log("File size: {:.1f} MB".format(os.path.getsize(file_path) / 1024.0 / 1024.0))
     IJ.log("")
     
     # Enable Bio-Formats debug
@@ -476,9 +491,15 @@ def main():
         
     except Exception as e:
         IJ.log("")
-        IJ.log("FATAL ERROR: " + str(e))
-        import traceback
-        IJ.log(traceback.format_exc())
+        try:
+            IJ.log(u"FATAL ERROR: {}".format(unicode(str(e), 'utf-8', 'replace')))
+        except:
+            IJ.log("FATAL ERROR: <error message contains special characters>")
+        try:
+            import traceback
+            IJ.log(traceback.format_exc())
+        except:
+            pass
     finally:
         if reader:
             reader.close()
