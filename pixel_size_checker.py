@@ -8,8 +8,7 @@
 
 from ij import IJ
 from ij.io import OpenDialog
-from loci.formats import ImageReader
-from loci.formats.meta import MetadataTools
+from loci.formats import ImageReader, MetadataTools
 import os, re
 
 MICRO = u"\u00b5"
