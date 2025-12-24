@@ -2073,15 +2073,26 @@ def main():
     flush_log()
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root)
-    for f in files:
+    
+    batch_start_time = time.time()
+    for idx, f in enumerate(files, 1):
         try:
+            file_start_time = time.time()
+            log(u"")
+            log(u"[{}/{}] Processing: {}".format(idx, len(files), os.path.basename(f)))
+            
             stitcher.process_file(f)
+            
+            file_elapsed_ms = (time.time() - file_start_time) * 1000
+            log(u"File completed in {}".format(format_time_human(file_elapsed_ms)))
             flush_log()  # Flush after each file
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
             flush_log()
     
-    log("Batch Done.")
+    batch_elapsed_ms = (time.time() - batch_start_time) * 1000
+    log(u"")
+    log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
     flush_log()
     
     # Show completion notification if requested
