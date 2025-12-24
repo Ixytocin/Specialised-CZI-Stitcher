@@ -1,0 +1,535 @@
+# SPECIALISED CZI STITCHER v35.0 - STANDALONE SINGLE-FILE VERSION
+# Clean rebuild focusing on 3 core features:
+# 1. LUT/Color detection & application from OME-XML
+# 2. Pixel size scaling (correct 0.345 not 3.45)
+# 3. Completion jingle when enabled
+#
+# This version has OMEMetadataAccessor embedded - NO external imports needed!
+
+import os, time, shutil, re
+from java.lang import System
+from java.awt import Color
+from ij import IJ, ImagePlus, CompositeImage
+from ij.plugin import HyperStackConverter
+from ij.process import LUT
+from loci.plugins import BF
+from loci.plugins.in import ImporterOptions
+from loci.formats import ImageReader
+from loci.formats.meta import MetadataTools
+from ij.gui import GenericDialog
+from ij.io import FileSaver
+
+MICRO = u"\u00b5"
+
+# ==============================================================================
+# PART 1: OMEMetadataAccessor Class (Embedded)
+# ==============================================================================
+
+def ensure_unicode(s):
+    """Convert any string to unicode safely (Jython 2.7 compatible)"""
+    if s is None:
+        return None
+    if isinstance(s, unicode):
+        return s
+    # Java Strings are already unicode
+    if hasattr(s, 'toString') and not isinstance(s, (str, bytes)):
+        return unicode(s.toString())
+    # Jython str with UTF-8 bytes - use decode method to avoid ASCII pre-check
+    if isinstance(s, str):
+        try:
+            return s.decode('utf-8', 'replace')
+        except:
+            try:
+                return s.decode('latin-1', 'replace')
+            except:
+                pass
+    try:
+        return unicode(s)
+    except:
+        return u""
+
+class OMEMetadataAccessor(object):
+    """
+    Clean API for accessing OME-XML metadata from Bio-Formats ImageReader.
+    All methods are unicode-safe and handle missing values gracefully.
+    """
+    
+    def __init__(self, reader):
+        """Initialize accessor with Bio-Formats reader (must be opened with setId)"""
+        self.reader = reader
+        
+        # Create metadata store if not already attached
+        try:
+            self.metadata = reader.getMetadataStore()
+            if not self.metadata:
+                self.metadata = MetadataTools.createOMEXMLMetadata()
+                # Need to create new reader with metadata store
+                old_id = reader.getCurrentFile()
+                reader.close()
+                reader = ImageReader()
+                reader.setMetadataStore(self.metadata)
+                reader.setId(old_id)
+                self.reader = reader
+                self.metadata = reader.getMetadataStore()
+        except:
+            self.metadata = None
+        
+        # Cache OME-XML string for regex parsing
+        self._ome_xml = None
+        try:
+            if self.metadata:
+                xml_str = self.metadata.dumpXML()
+                self._ome_xml = ensure_unicode(xml_str)
+        except:
+            pass
+    
+    def get_physical_size_x(self, series=0):
+        """Get physical pixel size X in micrometers"""
+        try:
+            # Try metadata store API first
+            if self.metadata:
+                px = self.metadata.getPixelsPhysicalSizeX(series)
+                if px and hasattr(px, 'value'):
+                    val = float(px.value())
+                    # Convert to micrometers if needed
+                    unit = None
+                    try:
+                        unit = str(px.unit())
+                    except:
+                        pass
+                    
+                    if unit:
+                        unit_lower = unit.lower()
+                        if 'nm' in unit_lower or 'nanometer' in unit_lower:
+                            val = val / 1000.0
+                        elif 'mm' in unit_lower or 'millimeter' in unit_lower:
+                            val = val * 1000.0
+                        elif 'm' in unit_lower and 'µ' not in unit_lower and 'micro' not in unit_lower:
+                            val = val * 1000000.0
+                    
+                    if 0.01 <= val <= 50.0:  # Sanity check
+                        return val
+        except:
+            pass
+        
+        # Fallback: regex parse OME-XML
+        if self._ome_xml:
+            try:
+                m = re.search(r'PhysicalSizeX\s*=\s*"([^"]+)"', self._ome_xml, re.IGNORECASE)
+                if m:
+                    val = float(m.group(1))
+                    if 0.01 <= val <= 50.0:
+                        return val
+            except:
+                pass
+        
+        return None
+    
+    def get_physical_size_y(self, series=0):
+        """Get physical pixel size Y in micrometers"""
+        try:
+            if self.metadata:
+                px = self.metadata.getPixelsPhysicalSizeY(series)
+                if px and hasattr(px, 'value'):
+                    val = float(px.value())
+                    unit = None
+                    try:
+                        unit = str(px.unit())
+                    except:
+                        pass
+                    
+                    if unit:
+                        unit_lower = unit.lower()
+                        if 'nm' in unit_lower or 'nanometer' in unit_lower:
+                            val = val / 1000.0
+                        elif 'mm' in unit_lower or 'millimeter' in unit_lower:
+                            val = val * 1000.0
+                        elif 'm' in unit_lower and 'µ' not in unit_lower and 'micro' not in unit_lower:
+                            val = val * 1000000.0
+                    
+                    if 0.01 <= val <= 50.0:
+                        return val
+        except:
+            pass
+        
+        if self._ome_xml:
+            try:
+                m = re.search(r'PhysicalSizeY\s*=\s*"([^"]+)"', self._ome_xml, re.IGNORECASE)
+                if m:
+                    val = float(m.group(1))
+                    if 0.01 <= val <= 50.0:
+                        return val
+            except:
+                pass
+        
+        return None
+    
+    def get_channel_count(self, series=0):
+        """Get number of channels"""
+        try:
+            if self.metadata:
+                return self.metadata.getChannelCount(series)
+        except:
+            pass
+        
+        try:
+            return self.reader.getSizeC()
+        except:
+            pass
+        
+        return 0
+    
+    def get_channel_name(self, series=0, channel=0):
+        """Get channel name"""
+        try:
+            if self.metadata:
+                name = self.metadata.getChannelName(series, channel)
+                if name:
+                    return ensure_unicode(name)
+        except:
+            pass
+        
+        if self._ome_xml:
+            try:
+                # Find channel by index
+                channels = re.findall(r'<Channel\b([^>]*)>', self._ome_xml, re.IGNORECASE)
+                if channel < len(channels):
+                    m = re.search(r'Name\s*=\s*"([^"]+)"', channels[channel], re.IGNORECASE)
+                    if m:
+                        return ensure_unicode(m.group(1))
+            except:
+                pass
+        
+        return u"Channel {}".format(channel + 1)
+    
+    def get_channel_color(self, series=0, channel=0):
+        """
+        Get channel color as RGB tuple (r, g, b).
+        Handles signed integer colors from OME-XML.
+        """
+        try:
+            if self.metadata:
+                color_obj = self.metadata.getChannelColor(series, channel)
+                if color_obj:
+                    color_int = color_obj.getValue()
+                    # Convert signed to unsigned
+                    color_unsigned = int(color_int) & 0xFFFFFFFF
+                    # Extract RGB (RGBA format: 0xRRGGBBAA, but A is usually FF)
+                    r = (color_unsigned >> 24) & 0xFF
+                    g = (color_unsigned >> 16) & 0xFF
+                    b = (color_unsigned >> 8) & 0xFF
+                    return (r, g, b)
+        except:
+            pass
+        
+        # Fallback: regex parse OME-XML
+        if self._ome_xml:
+            try:
+                channels = re.findall(r'<Channel\b([^>]*)>', self._ome_xml, re.IGNORECASE)
+                if channel < len(channels):
+                    m = re.search(r'Color\s*=\s*"([^"]+)"', channels[channel], re.IGNORECASE)
+                    if m:
+                        color_int = int(m.group(1))
+                        color_unsigned = color_int & 0xFFFFFFFF
+                        # RGBA format
+                        r = (color_unsigned >> 24) & 0xFF
+                        g = (color_unsigned >> 16) & 0xFF
+                        b = (color_unsigned >> 8) & 0xFF
+                        return (r, g, b)
+            except:
+                pass
+        
+        return None
+    
+    def get_channel_fluor(self, series=0, channel=0):
+        """Get fluorophore name"""
+        try:
+            if self.metadata:
+                fluor = self.metadata.getChannelFluor(series, channel)
+                if fluor:
+                    return ensure_unicode(fluor)
+        except:
+            pass
+        
+        if self._ome_xml:
+            try:
+                channels = re.findall(r'<Channel\b([^>]*)>', self._ome_xml, re.IGNORECASE)
+                if channel < len(channels):
+                    m = re.search(r'Fluor\s*=\s*"([^"]+)"', channels[channel], re.IGNORECASE)
+                    if m:
+                        return ensure_unicode(m.group(1))
+            except:
+                pass
+        
+        return None
+
+# ==============================================================================
+# PART 2: Main Script Logic
+# ==============================================================================
+
+def log(msg):
+    """Simple logging helper"""
+    IJ.log(u"[CZI Stitcher v35] {}".format(msg))
+
+def apply_channel_luts(imp, accessor, series=0):
+    """
+    Apply channel colors from OME-XML metadata to CompositeImage
+    
+    Args:
+        imp: ImagePlus (must be CompositeImage)
+        accessor: OMEMetadataAccessor instance
+        series: Series index (default 0)
+    
+    Returns:
+        Modified ImagePlus with LUTs applied
+    """
+    if not isinstance(imp, CompositeImage):
+        log(u"Image is not CompositeImage - cannot apply LUTs")
+        return imp
+    
+    try:
+        channel_count = accessor.get_channel_count(series)
+        if not channel_count:
+            log(u"Could not determine channel count")
+            return imp
+        
+        log(u"  Applying channel colors...")
+        
+        for ch_idx in range(channel_count):
+            # Get channel info
+            ch_name = accessor.get_channel_name(series, ch_idx) or u"Channel {}".format(ch_idx + 1)
+            ch_color_rgb = accessor.get_channel_color(series, ch_idx)
+            
+            if ch_color_rgb:
+                r, g, b = ch_color_rgb
+                log(u"    Ch{}: {} - RGB({}, {}, {})".format(ch_idx + 1, ch_name, r, g, b))
+                
+                # Apply LUT to channel (ImageJ uses 1-based indexing)
+                imp.setC(ch_idx + 1)
+                imp.setLut(LUT.createLutFromColor(Color(r, g, b)))
+            else:
+                log(u"    Ch{}: {} - No color metadata".format(ch_idx + 1, ch_name))
+        
+        imp.setC(1)  # Reset to first channel
+        imp.updateAndDraw()
+        log(u"  LUTs applied successfully")
+        
+    except Exception as e:
+        log(u"  Error applying LUTs: {}".format(ensure_unicode(str(e))))
+    
+    return imp
+
+def get_pixel_size(accessor, series=0):
+    """
+    Get pixel size in micrometers from OME-XML metadata
+    
+    Args:
+        accessor: OMEMetadataAccessor instance
+        series: Series index (default 0)
+    
+    Returns:
+        Pixel size in µm, or None if not found
+    """
+    try:
+        px_um = accessor.get_physical_size_x(series)
+        if px_um and 0.01 <= px_um <= 50.0:  # Sanity check: 10nm to 50µm
+            return px_um
+        return None
+    except:
+        return None
+
+def stitch_tiles(input_dir, output_dir, config):
+    """
+    Core stitching function - uses embedded OMEMetadataAccessor for ALL metadata
+    """
+    log(u"=" * 60)
+    log(u"STITCHING SESSION START")
+    log(u"=" * 60)
+    log(u"Input:  {}".format(ensure_unicode(input_dir)))
+    log(u"Output: {}".format(ensure_unicode(output_dir)))
+    log(u"")
+    
+    # Get list of CZI files
+    czi_files = []
+    try:
+        for f in os.listdir(input_dir):
+            if f.lower().endswith('.czi'):
+                full_path = os.path.join(input_dir, f)
+                czi_files.append(full_path)
+    except Exception as e:
+        log(u"Error listing files: {}".format(ensure_unicode(str(e))))
+        return
+    
+    if not czi_files:
+        log(u"No CZI files found in input directory")
+        return
+    
+    log(u"Found {} CZI file(s)".format(len(czi_files)))
+    log(u"")
+    
+    # Process each file
+    for idx, czi_path in enumerate(czi_files):
+        log(u"[{}/{}] Processing: {}".format(idx + 1, len(czi_files), os.path.basename(czi_path)))
+        
+        try:
+            # Import using Bio-Formats with stitching
+            options = ImporterOptions()
+            options.setId(czi_path)
+            options.setStitchTiles(True)
+            options.setOpenAllSeries(False)  # Only first series
+            
+            imps = BF.openImagePlus(options)
+            if not imps or len(imps) == 0:
+                log(u"  ERROR: Failed to open file")
+                continue
+            
+            imp = imps[0]
+            log(u"  Opened: {} x {} x {} (C x Z x T)".format(
+                imp.getNChannels(), imp.getNSlices(), imp.getNFrames()))
+            
+            # ===== USE EMBEDDED OMEMetadataAccessor FOR ALL METADATA =====
+            try:
+                # Create Bio-Formats reader
+                reader = ImageReader()
+                reader.setId(czi_path)
+                
+                # Create metadata accessor - THIS IS THE ONLY METADATA CODE
+                accessor = OMEMetadataAccessor(reader)
+                
+                # Feature 1: Get correct pixel size (0.345 not 3.45)
+                px_size = get_pixel_size(accessor, series=0)
+                if px_size:
+                    cal = imp.getCalibration()
+                    cal.pixelWidth = px_size
+                    cal.pixelHeight = px_size
+                    cal.setUnit("um")
+                    imp.setCalibration(cal)
+                    log(u"  Calibration: {} {}m/pixel".format(px_size, MICRO))
+                else:
+                    log(u"  WARNING: Could not read pixel size from OME-XML")
+                
+                # Feature 2: Apply channel colors (LUTs) if multi-channel
+                if imp.getNChannels() > 1 and config.get('apply_luts', True):
+                    log(u"  Converting to CompositeImage...")
+                    imp = HyperStackConverter.toHyperStack(
+                        imp, imp.getNChannels(), imp.getNSlices(), imp.getNFrames(), 
+                        "grayscale", "Composite")
+                    
+                    imp = apply_channel_luts(imp, accessor, series=0)
+                
+                reader.close()
+                
+            except Exception as e:
+                log(u"  WARNING: Metadata processing failed: {}".format(ensure_unicode(str(e))))
+            # ===== END METADATA CODE =====
+            
+            # Show result if requested
+            if config.get('show_result', True):
+                imp.show()
+                log(u"  Displaying result")
+            
+            # Save result if requested
+            if config.get('save_result', False):
+                output_name = os.path.splitext(os.path.basename(czi_path))[0] + "_stitched.tif"
+                output_path = os.path.join(output_dir, output_name)
+                saver = FileSaver(imp)
+                if saver.saveAsTiff(output_path):
+                    log(u"  Saved: {}".format(output_name))
+                else:
+                    log(u"  ERROR: Failed to save")
+            
+            # Close if not showing
+            if not config.get('show_result', True):
+                imp.close()
+            
+            log(u"  Complete!")
+            log(u"")
+            
+        except Exception as e:
+            log(u"  ERROR: {}".format(ensure_unicode(str(e))))
+            log(u"")
+    
+    log(u"=" * 60)
+    log(u"ALL FILES PROCESSED")
+    log(u"=" * 60)
+    
+    # Feature 3: Play jingle if enabled
+    if config.get('play_jingle', False):
+        try:
+            IJ.run("Play Startup Sound", "")
+            log(u"Processing complete!")
+        except:
+            log(u"Processing complete! (jingle not available)")
+
+def show_dialog():
+    """Show configuration dialog and return settings"""
+    
+    gd = GenericDialog("CZI Stitcher v35.0 - Core Features (Standalone)")
+    
+    gd.addMessage("=== DIRECTORIES ===")
+    gd.addDirectoryField("Input directory:", "")
+    gd.addDirectoryField("Output directory:", "")
+    
+    gd.addMessage("")
+    gd.addMessage("=== CORE FEATURES ===")
+    gd.addCheckbox("Apply channel colors from OME-XML", True)
+    gd.addCheckbox("Show stitched result", True)
+    gd.addCheckbox("Save stitched result", False)
+    gd.addCheckbox("Play completion jingle", True)
+    
+    gd.showDialog()
+    
+    if gd.wasCanceled():
+        return None
+    
+    config = {
+        'input_dir': gd.getNextString().strip(),
+        'output_dir': gd.getNextString().strip(),
+        'apply_luts': int(gd.getNextBoolean()) == 1,
+        'show_result': int(gd.getNextBoolean()) == 1,
+        'save_result': int(gd.getNextBoolean()) == 1,
+        'play_jingle': int(gd.getNextBoolean()) == 1
+    }
+    
+    return config
+
+def main():
+    """Main entry point"""
+    log(u"")
+    log(u"SPECIALISED CZI STITCHER v35.0")
+    log(u"Standalone version (no external imports)")
+    log(u"Core Features: LUTs + Scaling + Jingle")
+    log(u"")
+    
+    # Show dialog
+    config = show_dialog()
+    if not config:
+        log(u"Cancelled by user")
+        return
+    
+    # Validate directories
+    if not config['input_dir'] or not os.path.isdir(config['input_dir']):
+        IJ.error("Invalid input directory")
+        return
+    
+    if not config['output_dir']:
+        config['output_dir'] = config['input_dir']
+    
+    if not os.path.isdir(config['output_dir']):
+        try:
+            os.makedirs(config['output_dir'])
+        except:
+            IJ.error("Could not create output directory")
+            return
+    
+    # Run stitching
+    start_time = time.time()
+    stitch_tiles(config['input_dir'], config['output_dir'], config)
+    elapsed = time.time() - start_time
+    
+    log(u"")
+    log(u"Total time: {:.1f} seconds".format(elapsed))
+    log(u"")
+
+if __name__ == "__main__" or __name__ == "__builtin__":
+    main()
