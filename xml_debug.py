@@ -180,10 +180,28 @@ def test_unicode_conversion(data, method_name):
 
 def main():
     IJ.log("=" * 70)
-    IJ.log("OME-XML DIAGNOSTIC TOOL v1.0")
+    IJ.log("OME-XML DIAGNOSTIC TOOL v1.1")
     IJ.log("=" * 70)
     IJ.log("")
-    IJ.log("File: " + czi_file)
+    
+    # Validate and normalize file path
+    import os
+    file_path = str(czi_file).strip()
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        IJ.log("ERROR: File does not exist: " + file_path)
+        IJ.log("")
+        IJ.log("Troubleshooting:")
+        IJ.log("  1. Make sure to select the FULL path including .czi extension")
+        IJ.log("  2. Check that the file isn't open in another program")
+        IJ.log("  3. Verify the path doesn't contain special characters")
+        IJ.log("")
+        return
+    
+    IJ.log("File: " + file_path)
+    IJ.log("File exists: Yes")
+    IJ.log("File size: " + str(os.path.getsize(file_path) / 1024 / 1024) + " MB")
     IJ.log("")
     
     # Enable Bio-Formats debug
@@ -194,7 +212,8 @@ def main():
         # Initialize reader
         IJ.log("Step 1: Initializing Bio-Formats reader...")
         reader = ImageReader()
-        reader.setId(czi_file)
+        IJ.log("  Setting file ID...")
+        reader.setId(file_path)
         IJ.log("  SUCCESS - Series count: " + str(reader.getSeriesCount()))
         IJ.log("")
         
@@ -202,7 +221,7 @@ def main():
         IJ.log("Step 2: Getting metadata store...")
         metadata = MetadataTools.createOMEXMLMetadata()
         reader.setMetadataStore(metadata)
-        reader.setId(czi_file)
+        reader.setId(file_path)
         IJ.log("  SUCCESS - Metadata store created")
         IJ.log("")
         
