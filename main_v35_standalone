@@ -419,8 +419,19 @@ def stitch_tiles(input_dir, output_dir, config):
             
             # ===== USE EMBEDDED OMEMetadataAccessor FOR ALL METADATA =====
             try:
-                # Create Bio-Formats reader
+                # Create Bio-Formats reader with OME-XML metadata store
+                # CRITICAL: Must create metadata store BEFORE opening file
+                # Otherwise gets DummyMetadata which can't extract OME-XML
+                if config.get('verbose', False):
+                    log(u"  [VERBOSE] Creating OMEXMLMetadata store...")
+                
+                metadata = MetadataTools.createOMEXMLMetadata()
                 reader = ImageReader()
+                reader.setMetadataStore(metadata)  # Attach BEFORE setId()
+                
+                if config.get('verbose', False):
+                    log(u"  [VERBOSE] Opening file with metadata store attached...")
+                
                 reader.setId(czi_path)
                 
                 # Create metadata accessor with verbose flag
