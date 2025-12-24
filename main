@@ -244,14 +244,15 @@ def detect_sharp_slices_global(imp, threshold, method="laplacian"):
         return (1, nSlices)
     
     # Find largest continuous range with hole-filling
-    # Allow small gaps (1-2 slices) to be included in continuous ranges
+    # Hole-filling: Allow small gaps (1-2 slices) to be included in continuous ranges
+    # This handles noise or temporary focus issues within otherwise sharp regions
     ranges = []
     start = sharp_indices[0]
     end = sharp_indices[0]
     
     for i in range(1, len(sharp_indices)):
         gap = sharp_indices[i] - sharp_indices[i-1]
-        if gap <= 3:  # Allow gaps of 1-2 slices to be filled
+        if gap <= 3:  # Allow gaps of 1-2 slices to be filled (gap=3 means 2 missing slices)
             end = sharp_indices[i]
         else:
             # Gap too large, finalize current range
@@ -348,6 +349,8 @@ def detect_sharp_slices_roi(imp, threshold, method="laplacian", roi_grid_size=3)
     imp.killRoi()
     
     # Merge all ROI ranges with hole-filling
+    # Note: Currently collecting exceptions but not displaying batch summary
+    # TODO: Add batch summary of failed files at end of processing
     if not all_sharp_ranges:
         log("Warning: No sharp regions found in any ROI, using all slices")
         return (1, nSlices)
@@ -789,23 +792,26 @@ def build_lut_from_rgb(rgb):
 def get_standard_microscopy_colors(num_channels):
     """Get standard microscopy LUT colors.
     
-    Standard microscopy convention:
-    - Channel 1 (DAPI/Hoechst): Cyan/Blue
-    - Channel 2: Green
-    - Channel 3: Red/Orange
-    - Channel 4: Magenta/Far-red
+    Common immunofluorescence color assignment based on typical emission wavelengths:
+    - Channel 1: Cyan/Blue (typical DAPI/Hoechst ~460nm emission)
+    - Channel 2: Green (typical Alexa488/FITC ~520nm emission)
+    - Channel 3: Red/Orange (typical Cy3/TRITC ~570nm emission)
+    - Channel 4: Far-red (typical Alexa647/Cy5 ~670nm emission)
+    
+    Note: These are suggested defaults. Actual channel assignment depends on
+    your microscope setup and fluorophore choices.
     
     Args:
         num_channels: Number of channels needed
         
     Returns:
-        List of standard color integers
+        List of standard color integers in RGBA format
     """
     standard_colors = [
-        0x0000FFFF,  # Cyan for Ch1 (DAPI/Hoechst)
-        0x0000FF00,  # Green for Ch2
-        0x00FF6600,  # Orange for Ch3
-        0x00FF00FF,  # Magenta for Ch4
+        0x0000FFFF,  # Cyan for Ch1 (typical DAPI/Hoechst)
+        0x0000FF00,  # Green for Ch2 (typical Alexa488/FITC)
+        0x00FF6600,  # Orange for Ch3 (typical Cy3/TRITC)
+        0x00FF00FF,  # Far-red/Magenta for Ch4 (typical Alexa647/Cy5 - displayed as magenta for visibility)
     ]
     return standard_colors[:num_channels]
 
@@ -858,11 +864,12 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_colors=False):
             hex8 = "%08X" % u
             # Zeiss uses RGBA format: RR GG BB AA
             # Extract RGB components (alpha channel not used for LUT creation)
-            # ImageJ interprets as BGR, so we swap R and B positions
+            # Zeiss CZI uses RGBA format, ImageJ interprets colors as BGR
+            # So we swap R and B when passing to ImageJ
             r = int(hex8[0:2],16)
             g = int(hex8[2:4],16)
             b = int(hex8[4:6],16)
-            rgb = (b, g, r)  # Swap to BGR for ImageJ
+            rgb = (b, g, r)  # Swap to BGR for ImageJ's color interpretation
             lut = build_lut_from_rgb(rgb)
             if lut: luts.append(lut)
     else:
@@ -1105,7 +1112,7 @@ Input: Source folder containing .czi files
 Processing: Temporary folder for intermediate files (auto-created)
 Output: Destination folder for stitched results
 
-Tip: All three paths auto-fill to input folder by default. Change if needed.
+Tip: Leave paths blank to use input folder for all. First path filled auto-populates others.
 
 === STITCHED VOLUME OPTIONS ===
 Show: Display stitched result in Fiji after processing
@@ -1141,12 +1148,14 @@ Detection Modes:
     - Finds which z-slices have ANY part of image in focus
     - All regions' z-ranges merged to capture all in-focus areas
     - Slower but handles tilted samples, bubbles, uneven mounting
+    - NOTE: This is NOT spreading-fire optimization (planned future feature)
     
     Example: If top-left corner sharp at z5-8 and bottom-right sharp 
     at z12-15, merged range is z5-15 (includes both focused regions)
     
     IMPORTANT: Final output includes ENTIRE x-y plane (whole slices)
     for all z-slices in merged range. We don't crop to ROI boundaries.
+    This is z-slice selection, NOT spatial focus stacking/EDF.
 
 Threshold: Sensitivity (0.0-1.0)
   RECOMMENDED VALUES:
@@ -1171,24 +1180,35 @@ ROI Grid Size: For ROI mode only (n×n grid)
   - 10×10 = 100 regions (WARNING: Very slow! Only for extreme tilt)
   - Larger grid = finer spatial resolution but slower processing
 
-How Detection Works (Technical):
+How Detection Works (Current Implementation):
   1. Each region analyzes ALL z-slices for sharpness
   2. Computes sharpness score per slice per region
   3. Threshold applied: keep slices above threshold
   4. Within-slice gap filling: bridges gaps of 1-2 slices
      (handles temporary focus flicker or noise)
-  5. [ROI mode only] Cross-ROI merging: combines ranges from all regions
-     Merges overlapping/nearby ranges (gap ≤2 slices)
-  6. Selects largest continuous z-range from merged result
-  7. Output: Whole slices (entire x-y planes) for selected z-range
+  5. [ROI mode only] Cross-ROI merging: combines ranges from all regions,
+     merging overlapping/nearby ranges (gap ≤2 slices)
+  6. Largest continuous merged range selected as output z-range
+  7. ENTIRE x-y planes for that z-range included in final volume
+  
+  Future optimization (not yet implemented): 
+  "Spreading-fire" search to reduce number of sharpness calculations
+  by propagating from known-sharp slices to neighbors.
+
+NOTE: Sharp-slice detection outputs complete z-slices (whole x-y planes).
+This is NOT Extended Depth of Field (EDF) or spatial focus stacking,
+which creates a single 2D composite from the sharpest pixels at each x,y.
   8. Filename includes range: file_stitched_z6-16_max_projection.tif
 
-=== COLOR OPTIONS ===
-Standard LUTs: Override CZI metadata with typical microscopy colors:
-  - Channel 1: Cyan/Blue (DAPI/Hoechst)
-  - Channel 2: Green
-  - Channel 3: Red/Orange
-  - Channel 4: Magenta
+===  COLOR OPTIONS ===
+Standard LUTs: Override CZI metadata with common immunofluorescence colors:
+  - Channel 1: Cyan/Blue (typical DAPI/Hoechst ~460nm)
+  - Channel 2: Green (typical Alexa488/FITC ~520nm)
+  - Channel 3: Red/Orange (typical Cy3/TRITC ~570nm)
+  - Channel 4: Far-red displayed as Magenta (typical Alexa647/Cy5 ~670nm)
+  
+  Note: Far-red emissions are displayed as magenta for visibility since
+  true far-red is outside visible spectrum. This is display convention only.
 
 Default (unchecked): Respects colors from CZI metadata
 
@@ -1198,9 +1218,11 @@ Fusion Method: How tiles are blended
   - Max Intensity: Brightest wins (harsh edges)
   - Average/Median: Mathematical blending
 
-Rolling Ball Radius: Background subtraction (0 = off)
-  - 50 recommended for most images
-  - Larger = removes more background but may affect signal
+Rolling Ball Radius: Background subtraction (0 = disable)
+  - 50 recommended for most fluorescence images
+  - Smaller values (20-30) = preserve more fine detail, less background removal
+  - Larger values (100-200) = more aggressive background removal, may affect dim signals
+  - Radius should be larger than largest object of interest
 
 Regression/Displacement Thresholds: Stitching accuracy controls
   - Default values work for most cases

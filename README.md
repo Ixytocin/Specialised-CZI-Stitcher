@@ -63,7 +63,7 @@ The author is merely "the spark" - the real fire comes from these exceptional to
 ---
 
 ## Development Approach
-This project was developed through iterative AI-assisted prototyping - a method the author describes as "the blind following a guide that never drank water." 
+This project was developed through iterative AI-assisted prototyping - a method the author describes as "the blind following a guide that never drank to find water." 
 
 **What this means:**
 - The author identified a specific problem (cannot stitch CZI files at home without ZEN license)
