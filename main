@@ -1596,6 +1596,50 @@ if "input_dir_raw" not in globals():
     # Backward compatibility - save_3d is now do_save
     save_3d = do_save
     thread_count_slider = compute_threads()
+    
+    # Log all user settings for debugging
+    log(u"")
+    log(u"=" * 60)
+    log(u"USER SETTINGS")
+    log(u"=" * 60)
+    log(u"Paths:")
+    log(u"  Input:      {}".format(input_dir_raw))
+    log(u"  Processing: {}".format(proc_dir_raw))
+    log(u"  Output:     {}".format(output_dir_raw))
+    log(u"")
+    log(u"Processing Options:")
+    log(u"  RB Radius:           {}".format(rb_radius))
+    log(u"  Override LUTs:       {}".format(override_luts))
+    log(u"  Auto-adjust:         {}".format(auto_adjust))
+    log(u"  Correction Factor:   {}".format(corr_factor))
+    log(u"  Compute Overlap:     {}".format(compute_overlap))
+    log(u"  Subpixel Accuracy:   {}".format(subpixel_accuracy))
+    log(u"  Reg. Threshold:      {}".format(registration_threshold))
+    log(u"  Threads:             {}".format(thread_count_slider))
+    log(u"")
+    log(u"Output Options:")
+    log(u"  Show Stitched:       {}".format(do_show))
+    log(u"  Save Stitched:       {}".format(do_save))
+    log(u"  Show Z-Projection:   {}".format(view_zprojection))
+    log(u"  Save Z-Projection:   {}".format(save_zprojection))
+    log(u"")
+    log(u"Z-Stack Options:")
+    log(u"  Projection Method:   {}".format(zprojection_method))
+    log(u"  Sharp-Slice Detect:  {}".format(use_sharp_slice_detection))
+    if use_sharp_slice_detection:
+        log(u"    Detection Method:  {}".format(detection_method))
+        log(u"    Use ROI Mode:      {}".format(use_roi_mode))
+        if use_roi_mode:
+            log(u"      Grid Size:       {}x{}".format(grid_size, grid_size))
+        log(u"    Threshold:         {}".format(sharp_threshold))
+    log(u"")
+    log(u"Other:")
+    log(u"  Debug Mode:          {}".format(DEBUG_MODE))
+    log(u"  Notify on Complete:  {}".format(notify_on_complete))
+    log(u"  Clean Temp Files:    {}".format(do_clean))
+    log(u"=" * 60)
+    log(u"")
+    flush_log()
 
 def get_original_omexml_str_and_reader(czi_path):
     try:
