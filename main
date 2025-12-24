@@ -1517,10 +1517,9 @@ if "input_dir_raw" not in globals():
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", True)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
     gd.addCheckbox("Debug Mode (verbose logging)", False)
+    gd.addCheckbox("Call me when finished (audio alert)", False)
     gd.addMessage("")
-    gd.addMessage("Need help? Press 'H' key or see documentation for detailed explanations.")
-    # Note: Fiji's GenericDialog doesn't support custom help dialogs well
-    # Help text is comprehensive in the dialog itself via section headers
+    gd.addHelp("https://github.com/Ixytocin/Specialised-CZI-Stitcher/blob/main/README.md")
     gd.showDialog()
     if gd.wasCanceled():
         log("User cancelled parameter dialog. Exiting."); raise SystemExit("Cancelled by user")
@@ -1576,6 +1575,7 @@ if "input_dir_raw" not in globals():
     except:
         corr_factor = 10.0
     DEBUG_MODE = bool(gd.getNextBoolean())
+    notify_on_complete = bool(gd.getNextBoolean())
     
     # BigTIFF is now automatic based on file size
     save_bigtiff = False
@@ -1822,13 +1822,20 @@ class UltimateStitcher:
             c_cnt, z_cnt = res[0][4][2], res[0][4][3]
             if imp.getStackSize() == (c_cnt * z_cnt):
                 imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1, "grayscale", "Composite")
-        except Exception:
-            pass
-        try:
-            imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+                # Apply LUTs AFTER conversion to avoid creating duplicate images
+                try:
+                    imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+                except Exception as e:
+                    logv(u"LUT application failed: {}".format(e))
         except Exception as e:
-            logv(u"LUT application failed: {}".format(e))
-        # Note: setDisplayMode is now called inside apply_channel_luts_to_image
+            logv(u"HyperStack conversion failed: {}".format(e))
+            # Try applying LUTs even if conversion failed
+            try:
+                imp = apply_channel_luts_to_image(imp, ome_xml, gMeta, use_standard_luts)
+            except Exception as e2:
+                logv(u"LUT application failed: {}".format(e2))
+        
+        # Ensure composite display mode is set
         if isinstance(imp, CompositeImage):
             imp.setDisplayMode(IJ.COMPOSITE)
         imp.updateAndDraw()
@@ -1888,16 +1895,18 @@ class UltimateStitcher:
                     except Exception as e:
                         log(u"Saving 3D stitched failed: {}".format(e))
                 
-                # Create Z-projection if save or view is requested
+                # Create Z-projection if save OR view is requested AND stack has multiple slices
                 if (save_zprojection or view_zprojection) and imp.getNSlices() > 1:
                     try:
+                        log(u"Creating Z-projection using {} method...".format(zprojection_method))
                         proj_imp = create_zprojection(imp, zprojection_method)
                         if proj_imp:
-                            # Apply same LUTs to projection
+                            # Projection inherits channel structure but needs LUTs reapplied
                             try:
-                                proj_imp = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta, use_standard_luts)
+                                # The projection is already a composite if parent was, just ensure display mode
                                 if isinstance(proj_imp, CompositeImage):
                                     proj_imp.setDisplayMode(IJ.COMPOSITE)
+                                    proj_imp.updateAndDraw()
                             except:
                                 pass
                             
@@ -1996,6 +2005,48 @@ def main():
     
     log("Batch Done.")
     flush_log()
+    
+    # Show completion notification if requested
+    if notify_on_complete:
+        from ij.gui import GenericDialog
+        import java.awt.Toolkit
+        
+        complete_gd = GenericDialog("Processing Complete")
+        complete_gd.addMessage("All files have been processed successfully!")
+        complete_gd.addMessage("")
+        complete_gd.addMessage("Click OK to dismiss this notification.")
+        
+        # Play beep repeatedly until user dismisses
+        toolkit = java.awt.Toolkit.getDefaultToolkit()
+        
+        # Show dialog in non-modal way so we can keep beeping
+        def show_with_beep():
+            while not complete_gd.wasOKed() and not complete_gd.wasCanceled():
+                toolkit.beep()
+                try:
+                    from java.lang import Thread
+                    Thread.sleep(3000)  # Wait 3 seconds between beeps
+                except:
+                    pass
+                if complete_gd.wasOKed() or complete_gd.wasCanceled():
+                    break
+        
+        # Start beeping in background
+        from java.lang import Thread, Runnable
+        class BeepRunnable(Runnable):
+            def run(self):
+                while not complete_gd.wasOKed() and not complete_gd.wasCanceled():
+                    toolkit.beep()
+                    try:
+                        Thread.sleep(3000)
+                    except:
+                        pass
+        
+        beeper = Thread(BeepRunnable())
+        beeper.start()
+        
+        # Show dialog (blocks until user clicks OK)
+        complete_gd.showDialog()
     
     if PLAY_JINGLE_ON_DONE:
         play_clear_jingle()
