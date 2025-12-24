@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.2
+# SPECIALISED CZI STITCHER WITH Z-PROJECTION v34.3
 # A specialized batch processing pipeline for Zeiss CZI microscopy files
 # - Fixed color interpretation: Zeiss uses RGBA format (not ARGB)
 # - Channel colors: Respect metadata by default, optional standard microscopy LUT override
@@ -109,16 +109,28 @@ def ensure_unicode(o):
     if isinstance(o, bytes):
         try:
             # Try UTF-8 decode first for proper non-ASCII character handling
-            return unicode(o, 'utf-8', 'replace')
+            return o.decode('utf-8', 'replace')
         except:
             pass
         try:
             # Try Latin-1 as fallback (works for most Western European chars)
-            return unicode(o, 'latin-1', 'replace')
+            return o.decode('latin-1', 'replace')
         except:
             pass
+    # For str type in Jython/Python2 (which may contain UTF-8 bytes)
+    if isinstance(o, str):
+        try:
+            # Try .decode() method first (works if str has UTF-8 bytes)
+            return o.decode('utf-8', 'replace')
+        except (UnicodeDecodeError, AttributeError):
+            pass
+        try:
+            # Try Latin-1 as fallback
+            return o.decode('latin-1', 'replace')
+        except (UnicodeDecodeError, AttributeError):
+            pass
     try:
-        # For regular strings, convert to unicode
+        # For regular strings, convert to unicode - but this may fail with 0xc2
         return unicode(o, 'utf-8', 'replace')
     except:
         pass
@@ -649,6 +661,21 @@ def _parse_stagelabels_from_xml(xml):
 def _parse_pixels_physicalsize_from_xml(ome_xml):
     if not ome_xml:
         return None, ""
+    # Enhanced debugging: log type and sample of XML before conversion
+    if DEBUG_MODE:
+        xml_type = type(ome_xml).__name__
+        xml_sample = str(ome_xml)[:200] if ome_xml else ""
+        # Check for UTF-8 encoded µ character (0xC2 0xB5)
+        has_mu = False
+        if isinstance(ome_xml, (str, bytes)):
+            try:
+                # Check for UTF-8 mu sign
+                if '\xc2\xb5' in str(ome_xml) or 'xc2' in repr(ome_xml):
+                    has_mu = True
+                    log(u"XML Debug: Detected UTF-8 encoded µ character (0xC2 0xB5)")
+            except:
+                pass
+        log(u"XML Debug: Input type={}, has_mu={}, sample={}".format(xml_type, has_mu, xml_sample[:100]))
     ome_xml = ensure_unicode(ome_xml)
     m = _PIXELS_TAG_RE.search(ome_xml)
     if m:
@@ -1505,7 +1532,7 @@ if "input_dir_raw" not in globals():
     IJ.log("\\Clear")
     IJ.showStatus("Specialised CZI Stitcher - Initializing, please wait...")
     IJ.log("[Specialised CZI Stitcher] Initializing...")
-    IJ.log("[Specialised CZI Stitcher] Version: 34.2")
+    IJ.log("[Specialised CZI Stitcher] Version: 34.3")
     IJ.log("[Specialised CZI Stitcher] Loading Bio-Formats and stitching plugins...")
     
     # Load config for last used paths
@@ -2149,7 +2176,7 @@ def main():
     batch_elapsed_ms = (time.time() - batch_start_time) * 1000
     log(u"")
     log(u"Batch Done. Total time: {}".format(format_time_human(batch_elapsed_ms)))
-    log(u"[Specialised CZI Stitcher] Script Version: 34.2")
+    log(u"[Specialised CZI Stitcher] Script Version: 34.3")
     flush_log()
     
     # Show completion notification if requested
