@@ -37,6 +37,19 @@ Traditional 3D-stitching in Fiji often struggles with:
 **The Specialized Approach:** By decoupling the *Registration* (using 2D Maximum Intensity Projections) from the *Fusion* (applying calculated coordinates to 3D volumes), we ensure 100% metadata integrity and significantly higher processing stability for large-scale brain sections.
 
 
+## Known Issues & Bug Fixes
+
+**See [BUGFIXES.md](BUGFIXES.md) for complete technical details** on 6 critical bugs fixed in v34.1-v34.8:
+
+1. ⚠️ **Jython Boolean Conversion** - All checkboxes read as True (v34.6-v34.7 fix)
+2. 💥 **UTF-8 µ Character Crash** - ASCII codec errors parsing OME-XML (v34.3-v34.5 fix)
+3. 📏 **10× Pixel Size Error** - Correction factor misapplied to OME-XML (v34.8 fix)
+4. 📋 **Log Visibility Loss** - Diagnostic info cleared (v34.5 fix)
+5. 🔤 **Variable Name Error** - c_file undefined in DEBUG SUMMARY (v34.8 fix)
+6. 🇩🇪 **German Characters in Paths** - Encoding errors with ä, ü, ö (diagnostic tools fix)
+
+**Current Status (v34.8):** All known critical bugs fixed. Tested with real Zeiss CZI files containing unicode characters and German file paths.
+
 ## Requirements
 - **Fiji (ImageJ)**
 - **Bio-Formats Plugin**
