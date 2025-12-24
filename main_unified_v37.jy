@@ -9,7 +9,7 @@
 # DESIGN PRINCIPLE: Only include code that is PROVEN to work in isolation
 # NO experimental features - keep it simple and robust
 #
-# UNICODE SAFETY: Handles German characters (µ, ä, ö, ü, ß) gracefully
+# UNICODE SAFETY: Handles German characters gracefully (micro, umlaut, etc.)
 # - All string literals use u"..." unicode prefix
 # - ensure_unicode() for all external inputs
 # - .format() instead of + for string concatenation
@@ -138,7 +138,7 @@ def safe_unicode(o):
                 return u"<unrepresentable>"
 
 def log(msg):
-    """Thread-safe logging with unicode support (v34.8 fix + enhanced for µ, ä, ß)"""
+    """Thread-safe logging with unicode support (v34.8 fix + enhanced for German chars)"""
     try:
         # Use .format() to avoid string concatenation encoding issues
         IJ.log(u"[CZI-Stitcher] {}".format(safe_unicode(msg)))
@@ -178,7 +178,7 @@ def log_memory():
             logd(u"Memory logging failed: {}".format(e))
 
 def get_safe_path(f):
-    """Get safe file path as unicode (handles µ, ä, ö, ü, ß)"""
+    """Get safe file path as unicode (handles German chars)"""
     if f is None: 
         return u""
     try:
@@ -265,7 +265,7 @@ def _unit_to_um(value, unit):
     if not unit:
         return float(value)
     
-    # Ensure unit is unicode string to handle µ safely
+    # Ensure unit is unicode string to handle micro symbol safely
     try:
         u = ensure_unicode(unit).strip().lower()
     except:
@@ -276,9 +276,9 @@ def _unit_to_um(value, unit):
             return float(value)
     
     # Replace all variants of micro symbol
-    u = u.replace('micro', 'um').replace(u'µ', 'um').replace(u'μ', 'um').replace('Âµ','um')
+    u = u.replace('micro', 'um').replace(u'\u00b5', 'um').replace(u'\u03bc', 'um').replace('\xc3\x82\xc2\xb5','um')
     
-    if u in ('um', u'µm', u'μm', 'Âµm', 'm'): 
+    if u in ('um', u'\u00b5m', u'\u03bcm', '\xc3\x82\xc2\xb5m', 'm'): 
         # Check for meters vs micrometers
         if u == 'm':
             return float(value) * 1e6
@@ -357,7 +357,7 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
             if px_raw is not None:
                 logd(u"  Parsed raw value: {}".format(px_raw))
                 try:
-                    # Unit string may contain µ which causes encoding issues
+                    # Unit string may contain micro symbol which causes encoding issues
                     unit_safe = ensure_unicode(unit) if unit else u""
                     logd(u"  Unit (converted): {}".format(unit_safe))
                 except:
@@ -993,11 +993,11 @@ def get_original_omexml_str_and_reader(czi_path):
         return None, None, None, None, None
 
 # ==============================================================================
-# PART 9: MAIN STITCHER CLASS (from v31.16h - proven 2D→3D workflow)
+# PART 9: MAIN STITCHER CLASS (from v31.16h - proven 2D->3D workflow)
 # ==============================================================================
 
 class UltimateStitcher:
-    """Main stitcher class implementing proven 2D→3D workflow (v31.16h)"""
+    """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
     
     def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
                  do_show, do_save, save_bigtiff, do_clean, auto_adjust, corr_factor):
@@ -1017,8 +1017,8 @@ class UltimateStitcher:
         self.corr_factor = corr_factor
 
     def process_file(self, czi_path):
-        """Process single CZI file with proven 2D→3D stitching workflow"""
-        # Ensure unicode path handling for German characters (ä, ö, ü, ß, µ)
+        """Process single CZI file with proven 2D->3D stitching workflow"""
+        # Ensure unicode path handling for German characters
         try:
             czi_path_unicode = ensure_unicode(czi_path)
         except:
@@ -1174,7 +1174,7 @@ class UltimateStitcher:
             return False
 
         if len(res) < 2:
-            log(u"Only {} tile(s) for {} — skip stitching.".format(len(res), base_name))
+            log(u"Only {} tile(s) for {} - skip stitching.".format(len(res), base_name))
             try:
                 for r in res:
                     mip_name, nr = r[0], r[1]
