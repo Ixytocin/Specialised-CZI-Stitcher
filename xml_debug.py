@@ -236,6 +236,8 @@ def main():
         IJ.log("Step 2: Getting metadata store...")
         metadata = MetadataTools.createOMEXMLMetadata()
         reader.setMetadataStore(metadata)
+        # Re-initialize with metadata store (Bio-Formats requirement)
+        reader.close()
         reader.setId(file_path)
         IJ.log("  SUCCESS - Metadata store created")
         IJ.log("")
