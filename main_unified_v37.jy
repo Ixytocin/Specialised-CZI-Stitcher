@@ -1187,15 +1187,39 @@ class UltimateStitcher:
             return True
 
         # Create tile configuration for 2D registration
+        # The stitching plugin expects individual tile files in the directory
+        # For 3D: each tile file is a complete z-stack (all channels, all slices)
         conf = os.path.join(file_dst, u"TileConfiguration.txt")
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== CREATING TILE CONFIGURATION ===")
+            log(u"  2D Configuration (for registration): {}".format(conf))
+            log(u"  Number of tiles: {}".format(len(res)))
+        
         with codecs.open(conf, 'w', encoding='utf-8') as f:
             f.write(u"dim = 2\n")
             for r in res:
-                f.write(u"{}; ; ({:.3f}, {:.3f})\n".format(r[0], r[2], r[3]))
+                tile_line = u"{}; ; ({:.3f}, {:.3f})\n".format(r[0], r[2], r[3])
+                f.write(tile_line)
+                if DEBUG_STITCHING:
+                    logd(u"    Tile: {} at ({:.1f}, {:.1f}) px".format(r[0], r[2], r[3]))
+        
+        if DEBUG_STITCHING:
+            log(u"  2D TileConfiguration written")
 
         clean_dir = file_dst.replace(u"\\",u"/")
         
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 1: 2D REGISTRATION ===")
+            log(u"  Stitching 2D MIPs to compute tile positions...")
+            log(u"  Fusion method: {}".format(self.fusion_method))
+            log(u"  Regression threshold: {}".format(reg_local))
+            log(u"  Max displacement: {}".format(disp_local))
+        
         # Step 1: Stitch 2D MIPs for registration
+        stitch_start = time.time()
         try:
             IJ.run("Grid/Collection stitching", 
                    "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + 
@@ -1204,13 +1228,32 @@ class UltimateStitcher:
                    " max/avg_displacement_threshold=" + str(disp_local) + 
                    " absolute_displacement_threshold=" + str(disp_local + 1.0) + 
                    " compute_overlap subpixel_accuracy image_output=[Fuse and display]")
+            stitch_2d_time = time.time() - stitch_start
+            if DEBUG_STITCHING:
+                log(u"  2D registration completed in {:.1f} seconds".format(stitch_2d_time))
         except Exception as e:
             log(u"Stitching (2D) failed: {}".format(e))
+            if DEBUG_STITCHING:
+                import traceback
+                logd(u"  Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    logd(u"    {}".format(line))
 
         if WindowManager.getCurrentImage(): 
             WindowManager.getCurrentImage().close()
 
         # Step 2: Transfer registration to 3D configuration
+        # CRITICAL: The stitching plugin needs 3D stacks (not 2D slices)
+        # Each tile file (S000_3D.tif) contains the full z-stack with all channels
+        # The (x, y, z) coordinates in TileConfiguration_3D.txt define:
+        #   x, y: tile position in pixels (from 2D registration)
+        #   z: always 0.0 (all tiles at same z-plane, stacks fused together)
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 2: TRANSFER TO 3D ===")
+            log(u"  Creating 3D configuration from 2D registration results...")
+        
         final_conf = os.path.join(file_dst, u"TileConfiguration_3D.txt")
         reg_conf = os.path.join(file_dst, u"TileConfiguration.registered.txt")
         mip_to_3d = {r[0]: r[1] for r in res}
@@ -1237,6 +1280,7 @@ class UltimateStitcher:
 
         with codecs.open(src_c, 'r', encoding='utf-8') as fr, codecs.open(final_conf, 'w', encoding='utf-8') as fw:
             fw.write(u"dim = 3\n")
+            tile_count = 0
             for line in fr:
                 if ".tif" in line and "(" in line and ")" in line:
                     xy = extract_xy_from_parentheses(line)
@@ -1245,20 +1289,48 @@ class UltimateStitcher:
                         continue
                     name = line.split(";")[0].strip()
                     name3d = mip_to_3d.get(name, name)
-                    fw.write(u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1]))
+                    tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
+                    fw.write(tile_line)
+                    if DEBUG_STITCHING:
+                        logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0)".format(name3d, xy[0], xy[1]))
+                    tile_count += 1
                 else:
                     if line.strip().lower().startswith("dim"):
                         continue
                     fw.write(line)
+        
+        if DEBUG_STITCHING:
+            log(u"  Wrote {} tiles to 3D configuration".format(tile_count))
+            log(u"  3D config file: {}".format(final_conf))
 
         # Step 3: Stitch 3D stacks using transferred registration
+        # IMPORTANT: Each file in TileConfiguration_3D.txt must be a 3D stack
+        # The plugin will load each stack and fuse them at the specified x,y positions
+        # All z-slices from each tile are preserved in the final stitched volume
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 3: 3D FUSION ===")
+            log(u"  Fusing 3D stacks using computed positions...")
+            log(u"  This preserves all z-slices from each tile")
+        
+        stitch_3d_start = time.time()
         try:
             IJ.run("Grid/Collection stitching", 
                    "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + 
                    "] layout_file=TileConfiguration_3D.txt fusion_method=[" + self.fusion_method + 
                    "] subpixel_accuracy image_output=[Fuse and display]")
+            stitch_3d_time = time.time() - stitch_3d_start
+            if DEBUG_STITCHING:
+                log(u"  3D fusion completed in {:.1f} seconds".format(stitch_3d_time))
+                log(u"  Total stitching time: {:.1f} seconds".format(stitch_2d_time + stitch_3d_time))
         except Exception as e:
             log(u"Stitching (3D) failed: {}".format(e))
+            if DEBUG_STITCHING:
+                import traceback
+                logd(u"  Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    logd(u"    {}".format(line))
 
         imp = WindowManager.getCurrentImage()
         if imp is None:
