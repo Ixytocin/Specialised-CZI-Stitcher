@@ -48,6 +48,30 @@ Traditional 3D-stitching in Fiji often struggles with:
 3. Restart Fiji and run the script from the menu.
 4. Select Source and Target folders. Use 'Rolling Ball' (Radius ~50-100) if tiling artifacts are visible.
 
+## Roadmap & Future Features
+
+### Planned Enhancements (Not Yet Implemented)
+**Stage 1: Advanced Z-Slice Detection**
+- **Monte Carlo Gatekeeper:** Fast pre-screening using random sample probes to classify slices as REJECT/COMMIT/INSPECT
+- **Spreading-Fire Optimization:** Propagate from known-sharp slices to neighbors instead of binary search (~30-50% faster)
+- **REJECT/COMMIT/INSPECT Triage:** Efficient three-state classification before detailed analysis
+
+**Stage 2: True Focus Stacking (Extended Depth of Field)**
+- **Fractal Tessellation Engine:** Recursive spatial subdivision with adaptive sharpness-based region selection
+- **Per-Pixel Z-Selection:** Create single 2D composite from sharpest pixels at each x,y location across z-slices
+- **Boundary Blending:** Seamless tile integration for artifact-free focus stacking
+
+**Stage 3: Non-Coplanar Plane Fitting**
+- **Geometric Tilt Detection:** 9-point "pillar" sampling to detect systematic sample tilt
+- **Adaptive Z-Range Selection:** Compute intersection of focus plane with z-stack for optimal slice selection
+- **Bed-Leveling Analogy:** Correct for coverslip tilt (e.g., 200µm over 50mm) without over-sampling
+
+### Rejected/Deferred Ideas
+- **Multi-File Fusion:** Out of scope - current focus is single-file stitching and projection
+- **GPU Acceleration:** Bio-Formats and Stitching plugins don't expose GPU hooks
+- **Dynamic Thread Allocation:** Too complex vs benefit - current (cores-1) approach is stable
+- **Custom Stitching Algorithm:** Reimplementing Preibisch et al.'s work not justified given quality and stability
+
 ## Credits & Attribution
 This tool is a specialized orchestration wrapper for several powerful open-source components. The author's role was identifying the problem and testing - not creating new solutions:
 
