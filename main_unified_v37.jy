@@ -344,7 +344,7 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
             logd(u"  Parsed raw value: {}, unit: {}".format(px_raw, unit))
             if px_raw is not None:
                 px_um = _unit_to_um(px_raw, unit)
-                log(u"Pixel size from OME-XML <Pixels>: {} {} (TRUSTED VALUE)".format(px_um, MICRO))
+                log(u"Pixel size from OME-XML <Pixels>: {} um (TRUSTED VALUE)".format(px_um))
                 logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
                 return float(px_um)
             else:
@@ -362,15 +362,20 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
             q = omeMeta.getPixelsPhysicalSizeX(0)
             logd(u"  getPixelsPhysicalSizeX returned: {}".format(q))
             if q is not None and q.value() is not None:
-                v = float(q.value().doubleValue())
+                # q.value() returns a Java Number object
+                try:
+                    v = float(q.value().doubleValue())
+                except AttributeError:
+                    # If q.value() is already a Python float/int
+                    v = float(q.value())
                 logd(u"  Raw value: {}".format(v))
                 if abs(v) < 1e-3:
                     v_um = v * 1e6
-                    log(u"Pixel size from OME metadata (meters->µm): {} {}".format(v_um, MICRO))
+                    log(u"Pixel size from OME metadata (meters->um): {} um".format(v_um))
                     logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
                     return float(v_um)
                 else:
-                    log(u"Pixel size from OME metadata (assumed µm): {} {}".format(v, MICRO))
+                    log(u"Pixel size from OME metadata (assumed um): {} um".format(v))
                     logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
                     return float(v)
             else:
@@ -400,7 +405,7 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
                     um = re.search(r'PhysicalSizeXUnit\s*=\s*"([^"]+)"', mdxml, re.IGNORECASE)
                     unitm = um.group(1) if um else ""
                     px_um = _unit_to_um(val, unitm)
-                    log(u"Pixel size from reader metadata store: {} {}".format(px_um, MICRO))
+                    log(u"Pixel size from reader metadata store: {} um".format(px_um))
                     return float(px_um)
     except:
         pass
@@ -410,14 +415,14 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
     cam_min, cam_med = _pixel_from_global_metadata(gMeta)
     logd(u"  Global metadata candidates - min: {}, median: {}".format(cam_min, cam_med))
     if cam_med is not None:
-        log(u"Pixel size candidate (median) from global metadata: {} {} (MAY NEED CORRECTION)".format(cam_med, MICRO))
+        log(u"Pixel size candidate (median) from global metadata: {} um (MAY NEED CORRECTION)".format(cam_med))
         if cam_min is not None and abs(cam_min - cam_med) > 1e-6:
-            logd(u"  Pixel size candidate (min) from global metadata: {} {}".format(cam_min, MICRO))
+            logd(u"  Pixel size candidate (min) from global metadata: {} um".format(cam_min))
         logd(u"=== PIXEL SIZE EXTRACTION END (success, method 4) ===")
         return float(cam_med)
     
     # Default fallback
-    log(u"Pixel size not found in any source; defaulting to 0.345 {} (FALLBACK)".format(MICRO))
+    log(u"Pixel size not found in any source; defaulting to 0.345 um (FALLBACK)")
     logd(u"=== PIXEL SIZE EXTRACTION END (fallback default) ===")
     return 0.345
 
@@ -1038,17 +1043,17 @@ class UltimateStitcher:
             # Pixel size from OME-XML is already correct
             px_um_eff = px_um
             if cf != 1.0:
-                log(u"px = {} {} (from XML, correction factor NOT applied)".format(px_um_eff, MICRO))
+                log(u"px = {} um (from XML, correction factor NOT applied)".format(px_um_eff))
             else:
-                log(u"px = {} {}".format(px_um_eff, MICRO))
+                log(u"px = {} um".format(px_um_eff))
         else:
             # Pixel size from fallback methods, apply correction factor
             px_um_eff = px_um / cf if cf != 1.0 else px_um
             if cf != 1.0:
-                log(u"px = {} {}, corr_factor {}, effective = {} {} (fallback)".format(
-                    px_um, MICRO, cf, px_um_eff, MICRO))
+                log(u"px = {} um, corr_factor {}, effective = {} um (fallback)".format(
+                    px_um, cf, px_um_eff))
             else:
-                log(u"px = {} {}".format(px_um_eff, MICRO))
+                log(u"px = {} um".format(px_um_eff))
 
         try:
             full_res_indices = get_full_res_series_indices(reader)
