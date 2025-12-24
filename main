@@ -161,12 +161,10 @@ def format_time_human(ms):
     seconds = ms / 1000.0
     if seconds < 60:
         return u"{:.1f}s".format(seconds)
-    minutes = int(seconds / 60)
-    secs = int(seconds % 60)
+    minutes, secs = divmod(int(seconds), 60)
     if minutes < 60:
         return u"{}m {}s".format(minutes, secs)
-    hours = int(minutes / 60)
-    mins = int(minutes % 60)
+    hours, mins = divmod(minutes, 60)
     return u"{}h {}m".format(hours, mins)
 
 def logv(msg):
