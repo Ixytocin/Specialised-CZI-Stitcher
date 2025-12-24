@@ -1582,6 +1582,10 @@ if "input_dir_raw" not in globals():
     sharp_threshold = float(gd.getNextNumber())
     sharp_method_name = gd.getNextChoice()
     sharp_method = SHARPNESS_METHODS.get(sharp_method_name, "laplacian")
+    # Declare global variables to update module-level constants
+    # MUST come before any other code in this scope
+    global DEBUG_MODE, LUT_DEBUG, VERBOSE
+    
     roi_grid_size = int(gd.getNextNumber())
     use_standard_luts = bool(gd.getNextBoolean())
     do_clean = bool(gd.getNextBoolean())
@@ -1590,9 +1594,6 @@ if "input_dir_raw" not in globals():
         corr_factor = float(gd.getNextNumber())
     except:
         corr_factor = 10.0
-    
-    # Declare global variables to update module-level constants
-    global DEBUG_MODE, LUT_DEBUG, VERBOSE
     
     DEBUG_MODE = bool(gd.getNextBoolean())
     LUT_DEBUG = DEBUG_MODE  # Tie LUT debug logging to debug mode checkbox
