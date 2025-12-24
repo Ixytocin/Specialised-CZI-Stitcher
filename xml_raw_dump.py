@@ -82,20 +82,21 @@ def dump_raw_xml(file_path):
             log(u"  Metadata store may not support dumpXML()")
             return None
         
-        # Step 5: Analyze OME-XML for StageLabel tags
-        log(u"Step 5: Analyzing OME-XML structure...")
+        # Step 5a: Analyze OME-XML for StageLabel tags
+        log(u"Step 5a: Analyzing OME-XML structure...")
         log(u"")
         
         # Count StageLabel occurrences
         import re
         stagelabel_pattern = re.compile(r'<(?:[A-Za-z0-9_]+:)?StageLabel\b([^>]*)/?>', re.IGNORECASE)
         matches = stagelabel_pattern.findall(ome_xml)
-        log(u"  Found {} StageLabel tags".format(len(matches)))
+        log(u"  Found {} StageLabel tags in OME-XML".format(len(matches)))
         log(u"")
         
-        # Extract and display each StageLabel
+        # Extract and display each StageLabel from OME-XML
+        ome_positions = []
         if len(matches) > 0:
-            log(u"  StageLabel Details:")
+            log(u"  StageLabel Details (from OME-XML):")
             log(u"  " + u"-" * 66)
             
             attr_pattern = re.compile(r'([A-Za-z_:][-A-Za-z0-9_:.]*)="([^"]*)"')
@@ -112,9 +113,84 @@ def dump_raw_xml(file_path):
                 log(u"      Y: {} um".format(y))
                 log(u"      Z: {} um".format(z))
                 log(u"")
+                
+                ome_positions.append((name, x, y, z))
         else:
             log(u"  WARNING: No StageLabel tags found in OME-XML!")
-            log(u"  This CZI may not have stage position metadata.")
+            log(u"")
+        
+        # Step 5b: Mine Global Metadata for positions (Zeiss CZI workaround)
+        log(u"Step 5b: Mining Global Metadata for tile positions...")
+        log(u"  (Alternative method for Zeiss CZI files)")
+        log(u"")
+        
+        global_meta = reader.getGlobalMetadata()
+        log(u"  Global metadata keys: {}".format(len(global_meta.keys()) if global_meta else 0))
+        log(u"")
+        
+        if global_meta and series_count > 1:
+            log(u"  Searching for tile positions in global metadata...")
+            log(u"  " + u"-" * 66)
+            
+            global_positions = []
+            
+            # Search for each tile (1-based indexing in Zeiss metadata)
+            for i in range(series_count):
+                index_tag = u"#{}".format(i + 1)  # Zeiss uses #1, #2, etc.
+                found_x = 0.0
+                found_y = 0.0
+                found_z = 0.0
+                found_key = None
+                
+                # Search through all global metadata keys
+                for key in global_meta.keys():
+                    key_str = unicode(key)
+                    
+                    # Filter: Must contain tile index AND position keyword
+                    # Exclude false positives like SampleHolder
+                    if (index_tag in key_str and 
+                        (u"Position" in key_str or u"Stage" in key_str or u"Center" in key_str) and
+                        u"SampleHolder" not in key_str):
+                        
+                        try:
+                            raw_value = unicode(global_meta.get(key))
+                            
+                            # Parse different formats
+                            if u"," in raw_value:
+                                # Format: "X, Y" as single string
+                                parts = raw_value.split(u",")
+                                if len(parts) >= 2:
+                                    found_x = float(parts[0].strip())
+                                    found_y = float(parts[1].strip())
+                                    if len(parts) >= 3:
+                                        found_z = float(parts[2].strip())
+                                    found_key = key_str
+                            elif u"X" in key_str:
+                                # Separate X key
+                                found_x = float(raw_value)
+                                found_key = key_str
+                            elif u"Y" in key_str:
+                                # Separate Y key
+                                found_y = float(raw_value)
+                                found_key = key_str
+                            elif u"Z" in key_str:
+                                # Separate Z key
+                                found_z = float(raw_value)
+                                found_key = key_str
+                        except:
+                            pass  # Skip unparseable values
+                
+                if found_x != 0.0 or found_y != 0.0:
+                    log(u"  Tile {}: X={:.2f}, Y={:.2f}, Z={:.2f} um".format(i, found_x, found_y, found_z))
+                    if found_key:
+                        log(u"         Key: {}".format(found_key[:80]))  # Show first 80 chars
+                    global_positions.append((i, found_x, found_y, found_z))
+            
+            log(u"")
+            log(u"  Found {} positions via global metadata mining".format(len(global_positions)))
+            log(u"")
+        else:
+            log(u"  Skipped (single series or no global metadata)")
             log(u"")
         
         # Step 6: Show XML structure summary
