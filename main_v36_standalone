@@ -22,6 +22,7 @@ from loci.formats import ImageReader, MetadataTools
 from ij.gui import GenericDialog
 from ij.io import FileSaver
 
+VERSION = "v36.4"
 MICRO = u"\u00b5"
 
 # ==============================================================================
@@ -101,17 +102,17 @@ class OMEMetadataAccessor(object):
         self.verbose = verbose
         
         if verbose:
-            IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Initializing OMEMetadataAccessor...")
+            IJ.log(u"[CZI Stitcher {}]   [VERBOSE] Initializing OMEMetadataAccessor...".format(VERSION))
         
         # Get metadata store
         try:
             self.metadata = reader.getMetadataStore()
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Got metadata store: {}".format(
-                    type(self.metadata).__name__))
+                IJ.log(u"[CZI Stitcher {}]   [VERBOSE] Got metadata store: {}".format(
+                    VERSION, type(self.metadata).__name__))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Failed to get metadata store: {}".format(e))
+                IJ.log(u"[CZI Stitcher {}]   [VERBOSE] Failed to get metadata store: {}".format(VERSION, e))
             self.metadata = None
         
         # Cache OME-XML string
@@ -119,15 +120,15 @@ class OMEMetadataAccessor(object):
         try:
             if self.metadata:
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Dumping OME-XML...")
+                    IJ.log(u"[CZI Stitcher {}]   [VERBOSE] Dumping OME-XML...".format(VERSION))
                 xml_str = self.metadata.dumpXML()
                 self._ome_xml = ensure_unicode(xml_str)
                 if verbose:
-                    IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] OME-XML dumped: {} characters".format(
-                        len(self._ome_xml)))
+                    IJ.log(u"[CZI Stitcher {}]   [VERBOSE] OME-XML dumped: {} characters".format(
+                        VERSION, len(self._ome_xml)))
         except Exception as e:
             if verbose:
-                IJ.log(u"[CZI Stitcher v36.4]   [VERBOSE] Failed to dump OME-XML: {}".format(e))
+                IJ.log(u"[CZI Stitcher {}]   [VERBOSE] Failed to dump OME-XML: {}".format(VERSION, e))
     
     def get_physical_size_x(self, series=0):
         """Get physical size X in micrometers"""
@@ -583,13 +584,13 @@ def main():
     """Main entry point"""
     
     log(u"")
-    log(u"SPECIALISED CZI STITCHER v36.3")
+    log(u"SPECIALISED CZI STITCHER {}".format(VERSION))
     log(u"Single-file standalone with complete stitching")
     log(u"Core: LUTs + Scaling + Positions + Stitching + Jingle")
     log(u"")
     
     # Create dialog
-    gd = GenericDialog("CZI Stitcher v36.3")
+    gd = GenericDialog("CZI Stitcher {}".format(VERSION))
     gd.addMessage("=== DIRECTORIES ===")
     gd.addDirectoryField("Input (CZI files):", os.path.expanduser("~"), 50)
     gd.addDirectoryField("Output:", os.path.expanduser("~"), 50)
