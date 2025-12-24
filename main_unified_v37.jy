@@ -1,4 +1,4 @@
-# SPECIALISED CZI STITCHER v37.2 - UNIFIED WORKING VERSION
+# SPECIALISED CZI STITCHER v37.3 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
@@ -31,7 +31,7 @@ import jarray
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v37.2"
+VERSION = "v37.3"
 MICRO = u"\u00b5"
 
 # Debug flags - ALL ENABLED for maximum debugging
@@ -1404,12 +1404,25 @@ class UltimateStitcher:
         
         # Apply LUTs from metadata
         try:
-            imp = apply_channel_luts_to_image(imp, ome_xml, gMeta)
+            imp_with_luts = apply_channel_luts_to_image(imp, ome_xml, gMeta)
+            if imp_with_luts is not None:
+                imp = imp_with_luts
+                logd(u"  LUTs applied successfully, image updated")
+            else:
+                logd(u"  LUT application returned None, keeping original image")
         except Exception as e:
             logv(u"LUT application failed: {}".format(e))
+            logd(u"  Exception during LUT application, keeping original image")
         
-        imp.setDisplayMode(IJ.COMPOSITE)
-        imp.updateAndDraw()
+        # Ensure we're in composite mode for multi-channel display
+        # Only call this if image is already a CompositeImage (has LUTs applied)
+        if imp.isComposite():
+            imp.setDisplayMode(IJ.COMPOSITE)
+            imp.updateAndDraw()
+            logd(u"  Display mode set to COMPOSITE and image updated")
+        else:
+            logd(u"  Image is not CompositeImage, skipping setDisplayMode")
+            imp.updateAndDraw()
 
         if self.do_save:
             if imp is None or imp.getProcessor() is None:
@@ -1488,7 +1501,7 @@ def show_splash():
     """Display ASCII art splash screen with corrective padding for proportional fonts"""
     splash = u"""
       +---+---+---+
-      | C | Z | I  |    CZI-STITCHER v37.2
+      | C | Z | I  |    CZI-STITCHER v37.3
       +---+---+---+     ======================
       | S | t  | i  |   > Workflow: v31.16h
       +---+---+---+     > UTF-8:    v34.8
