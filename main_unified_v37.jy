@@ -1,0 +1,1682 @@
+# SPECIALISED CZI STITCHER v37.4 - UNIFIED WORKING VERSION
+# Consolidated from all working versions to prevent regression
+#
+# PROVEN WORKING COMPONENTS EXTRACTED FROM:
+# - v31.16h: Dual 2D/3D stitching workflow, thread pool execution
+# - v34.8:   Bug fixes for UTF-8, booleans, pixel size correction
+# - v36.5:   LUT detection (RGBA format), single-pass metadata
+#
+# DESIGN PRINCIPLE: Only include code that is PROVEN to work in isolation
+# NO experimental features - keep it simple and robust
+#
+# UNICODE SAFETY: Handles German characters gracefully (micro, umlaut, etc.)
+# - All string literals use u"..." unicode prefix
+# - ensure_unicode() for all external inputs
+# - .format() instead of + for string concatenation
+# - codecs.open() for file I/O with UTF-8 encoding
+
+import os, time, shutil, math, re, sys, json, codecs
+from java.lang import Runtime, Thread, System
+from java.awt import Color
+from java.util.concurrent import Executors, Callable
+from ij import IJ, ImagePlus, WindowManager, CompositeImage
+from ij.plugin import ZProjector, HyperStackConverter
+from ij.process import LUT
+from loci.plugins import BF
+from loci.plugins.in import ImporterOptions, ImportProcess
+from java.io import File
+from ij.gui import GenericDialog
+import jarray
+
+# ==============================================================================
+# VERSION AND CONFIGURATION
+# ==============================================================================
+VERSION = "v37.4"
+MICRO = u"\u00b5"
+
+# Debug flags - ALL ENABLED for maximum debugging
+VERBOSE = True
+LOG_TILE_POS = True
+LUT_DEBUG = True
+DUMP_DEBUG = True
+DEBUG_METADATA = True
+DEBUG_STITCHING = True
+DEBUG_FILE_OPS = True
+DEBUG_MEMORY = True
+PLAY_JINGLE_ON_DONE = True
+
+# Regular expressions (compiled once for performance)
+FLOAT_RE = re.compile(r"([-+]?\d*\.\d+|[-+]?\d+)(?:[eE][-+]?\d+)?")
+ATTR_RE = re.compile(r'([A-Za-z_:][-A-Za-z0-9_:.]*)="([^"]*)"')
+STAGELABEL_RE = re.compile(r'<(?:[A-Za-z0-9_]+:)?StageLabel\b([^>]*)/?>', re.IGNORECASE)
+_PIXELS_TAG_RE = re.compile(r'<Pixels\b([^>]*)>', re.IGNORECASE)
+_PHYSICAL_X_RE = re.compile(r'PhysicalSizeX\s*=\s*"([^"]+)"', re.IGNORECASE)
+_PHYSICAL_XUNIT_RE = re.compile(r'PhysicalSizeXUnit\s*=\s*"([^"]+)"', re.IGNORECASE)
+_CHANNEL_COLOR_RE = re.compile(r'<(?:[A-Za-z0-9_]+:)?Channel\b([^>]*)>', re.IGNORECASE)
+
+# Config file for remembering last used directories
+_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ixytocin_stitcher.json")
+
+# ==============================================================================
+# PART 1: UTILITY FUNCTIONS (from v31.16h + v34.8 bug fixes)
+# ==============================================================================
+
+def _load_config():
+    """Load last used directories from config file (UTF-8 safe)"""
+    logd(u"Loading config from: {}".format(_CONFIG_PATH))
+    try:
+        if os.path.exists(_CONFIG_PATH):
+            with codecs.open(_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                logd(u"Config loaded: {}".format(cfg))
+                return cfg
+        else:
+            logd(u"Config file does not exist, using defaults")
+    except Exception as e:
+        logd(u"Config load failed: {}".format(e))
+    return {}
+
+def _save_config(cfg):
+    """Save directories to config file (UTF-8 safe)"""
+    logd(u"Saving config: {}".format(cfg))
+    try:
+        with codecs.open(_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+            logd(u"Config saved successfully")
+    except Exception as e:
+        logd(u"Config save failed: {}".format(e))
+
+def ensure_unicode(o):
+    """Convert any object to unicode safely (v34.8 fix for German characters)"""
+    if o is None:
+        return None
+    if isinstance(o, unicode):
+        return o
+    
+    # Try multiple conversion strategies with debug logging
+    try:
+        result = unicode(bytearray(o.getBytes("UTF-8")), 'utf-8', 'replace')
+        if DUMP_DEBUG and len(str(result)) > 50:
+            logd(u"Unicode conversion (method 1) succeeded for: {}...".format(str(result)[:50]))
+        return result
+    except Exception as e1:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 1 failed: {}".format(e1))
+    
+    try:
+        result = unicode(o, 'utf-8', 'replace')
+        return result
+    except Exception as e2:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 2 failed: {}".format(e2))
+    
+    try:
+        result = unicode(str(o), 'utf-8', 'replace')
+        return result
+    except Exception as e3:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion method 3 failed: {}".format(e3))
+    
+    try:
+        return u"%s" % o
+    except:
+        if DUMP_DEBUG:
+            logd(u"Unicode conversion: all methods failed, returning empty string")
+        return u""
+
+def safe_unicode(o):
+    """Safe unicode conversion with fallback"""
+    try:
+        return ensure_unicode(o)
+    except:
+        try:
+            return unicode(o)
+        except:
+            try:
+                return u"%s" % o
+            except:
+                return u"<unrepresentable>"
+
+def log(msg):
+    """Thread-safe logging with unicode support (v34.8 fix + enhanced for German chars)"""
+    try:
+        # Use .format() to avoid string concatenation encoding issues
+        IJ.log(u"[CZI-Stitcher] {}".format(safe_unicode(msg)))
+    except UnicodeEncodeError:
+        # Fallback for extreme unicode issues
+        try:
+            IJ.log("[CZI-Stitcher] <message contains unsupported characters>")
+        except:
+            pass
+    except:
+        try:
+            IJ.log(str(msg))
+        except:
+            pass
+
+def logv(msg):
+    """Verbose logging"""
+    if VERBOSE:
+        log(u"[VERBOSE] {}".format(msg))
+
+def logd(msg):
+    """Debug logging"""
+    if DUMP_DEBUG:
+        log(u"[DEBUG] {}".format(msg))
+
+def log_memory():
+    """Log current memory usage"""
+    if DEBUG_MEMORY:
+        try:
+            runtime = Runtime.getRuntime()
+            total_mb = runtime.totalMemory() / (1024.0 * 1024.0)
+            free_mb = runtime.freeMemory() / (1024.0 * 1024.0)
+            used_mb = total_mb - free_mb
+            max_mb = runtime.maxMemory() / (1024.0 * 1024.0)
+            log(u"[MEMORY] Used: {:.1f}MB / Total: {:.1f}MB / Max: {:.1f}MB".format(used_mb, total_mb, max_mb))
+        except Exception as e:
+            logd(u"Memory logging failed: {}".format(e))
+
+def get_safe_path(f):
+    """Get safe file path as unicode (handles German chars)"""
+    if f is None: 
+        return u""
+    try:
+        # Get absolute path and ensure unicode
+        path = f.getAbsolutePath()
+        return ensure_unicode(path)
+    except:
+        try:
+            return ensure_unicode(f)
+        except:
+            return u"<path>"
+
+def find_floats(s):
+    """Extract all float numbers from a string"""
+    if s is None: 
+        return []
+    return [float(x) for x in FLOAT_RE.findall(u"{}".format(s))]
+
+# ==============================================================================
+# PART 2: METADATA EXTRACTION (from v31.16h + v36.5 improvements)
+# ==============================================================================
+
+def _parse_stagelabels_from_xml(xml):
+    """Parse all StageLabel tags from OME-XML (v31.16h proven pattern)"""
+    labels = []
+    if not xml:
+        return labels
+    xml = ensure_unicode(xml)
+    for m in STAGELABEL_RE.finditer(xml):
+        attr_blob = m.group(1)
+        attrs = dict(ATTR_RE.findall(attr_blob))
+        name = attrs.get('Name') or attrs.get('name') or ""
+        x_str = attrs.get('X') or attrs.get('x')
+        y_str = attrs.get('Y') or attrs.get('y')
+        z_str = attrs.get('Z') or attrs.get('z')
+        xunit = attrs.get('XUnit') or attrs.get('xUnit') or attrs.get('xunit') or attrs.get('Xunit') or ""
+        yunit = attrs.get('YUnit') or attrs.get('yUnit') or attrs.get('yunit') or ""
+        zunit = attrs.get('ZUnit') or attrs.get('zUnit') or attrs.get('zunit') or ""
+        try: 
+            x = float(x_str) if x_str is not None else None
+        except: 
+            x = None
+        try: 
+            y = float(y_str) if y_str is not None else None
+        except: 
+            y = None
+        try: 
+            z = float(z_str) if z_str is not None else None
+        except: 
+            z = None
+        labels.append({
+            'name': name, 'x': x, 'y': y, 'z': z, 
+            'xunit': xunit, 'yunit': yunit, 'zunit': zunit, 
+            'raw_attrs': attrs
+        })
+    return labels
+
+def _parse_pixels_physicalsize_from_xml(ome_xml):
+    """Parse pixel physical size from OME-XML (v31.16h)"""
+    if not ome_xml:
+        return None, ""
+    ome_xml = ensure_unicode(ome_xml)
+    m = _PIXELS_TAG_RE.search(ome_xml)
+    if m:
+        attrs = m.group(1)
+        pat = re.compile(r'PhysicalSizeX\s*=\s*"([^"]+)"', re.IGNORECASE)
+        mm = pat.search(attrs)
+        px = float(mm.group(1)) if mm else None
+        um = re.search(r'PhysicalSizeXUnit\s*=\s*"([^"]+)"', attrs, re.IGNORECASE)
+        unit_mm = um.group(1) if um else ""
+        return px, unit_mm
+    mxx = _PHYSICAL_X_RE.search(ome_xml)
+    if mxx:
+        val = float(mxx.group(1))
+        um = _PHYSICAL_XUNIT_RE.search(ome_xml)
+        unit = um.group(1) if um else ""
+        return val, unit
+    return None, ""
+
+def _unit_to_um(value, unit):
+    """Convert various units to micrometers (v31.16h)"""
+    if value is None:
+        return None
+    if not unit:
+        return float(value)
+    
+    # Ensure unit is unicode string to handle micro symbol safely
+    try:
+        u = ensure_unicode(unit).strip().lower()
+    except:
+        # If unicode conversion fails, try as-is
+        try:
+            u = unit.strip().lower()
+        except:
+            return float(value)
+    
+    # Replace all variants of micro symbol
+    u = u.replace('micro', 'um').replace(u'\u00b5', 'um').replace(u'\u03bc', 'um').replace('\xc3\x82\xc2\xb5','um')
+    
+    if u in ('um', u'\u00b5m', u'\u03bcm', '\xc3\x82\xc2\xb5m', 'm'): 
+        # Check for meters vs micrometers
+        if u == 'm':
+            return float(value) * 1e6
+        return float(value)
+    if u == 'cm': 
+        return float(value) * 1e4
+    if u == 'mm': 
+        return float(value) * 1e3
+    if u in ('nm',): 
+        return float(value) * 1e-3
+    if u in ('pm',): 
+        return float(value) * 1e-6
+    if 'meter' in u or 'metre' in u:
+        if 'micrometer' in u or 'micron' in u: 
+            return float(value)
+        return float(value) * 1e6
+    return float(value)
+
+def _pixel_from_global_metadata(gMeta):
+    """Extract pixel size from global metadata (v31.16h fallback)"""
+    if not gMeta:
+        return None, None
+    cams = []
+    generic = []
+    for k in gMeta.keySet():
+        try:
+            keystr = safe_unicode(k)
+            val = safe_unicode(gMeta.get(k))
+        except:
+            continue
+        lkey = keystr.lower()
+        nums = find_floats(val)
+        nums = [n for n in nums if n > 0]
+        if not nums:
+            continue
+        if "camerapixeldistance" in lkey or "camerapixeldistances" in lkey:
+            cams.extend(nums)
+        elif ("pixel" in lkey and "dist" in lkey) or ("pixel" in lkey and "size" in lkey) or ("physicalsizex" in lkey):
+            generic.extend(nums)
+    
+    def pick_min_med(lst):
+        if not lst: 
+            return None, None
+        lst = [c for c in lst if 0.01 <= c <= 50.0]
+        if not lst: 
+            return None, None
+        lst.sort()
+        mid = len(lst)//2
+        med = lst[mid] if len(lst)%2==1 else 0.5*(lst[mid-1]+lst[mid])
+        return lst[0], med
+    
+    cam_min, cam_med = pick_min_med(cams)
+    gen_min, gen_med = pick_min_med(generic)
+    if cam_med is not None:
+        return cam_min, cam_med
+    if gen_min is not None:
+        return gen_min, gen_med
+    return None, None
+
+def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
+    """Get pixel size in micrometers with fallback chain (v31.16h + v34.8 fix)"""
+    logd(u"=== PIXEL SIZE EXTRACTION START ===")
+    try:
+        ome_xml = ensure_unicode(ome_xml)
+        if ome_xml:
+            logd(u"OME-XML length: {} characters".format(len(ome_xml)))
+    except Exception as e:
+        logd(u"OME-XML unicode conversion failed: {}".format(e))
+        ome_xml = ome_xml
+    
+    # Priority 1: OME-XML <Pixels> tag (most reliable for Zeiss)
+    logd(u"Attempting method 1: OME-XML <Pixels> tag")
+    try:
+        if ome_xml:
+            px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
+            if px_raw is not None:
+                logd(u"  Parsed raw value: {}".format(px_raw))
+                try:
+                    # Unit string may contain micro symbol which causes encoding issues
+                    unit_safe = ensure_unicode(unit) if unit else u""
+                    logd(u"  Unit (converted): {}".format(unit_safe))
+                except:
+                    logd(u"  Unit conversion issue, using unit as-is")
+                    unit_safe = unit
+                
+                px_um = _unit_to_um(px_raw, unit_safe)
+                log(u"Pixel size from OME-XML <Pixels>: {} um (TRUSTED VALUE)".format(px_um))
+                logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
+                return float(px_um)
+            else:
+                logd(u"  No PhysicalSizeX found in OME-XML")
+        else:
+            logd(u"  OME-XML is None or empty")
+    except Exception as e:
+        logd(u"  Method 1 exception: {}".format(e))
+    
+    # Priority 2: OME metadata object
+    logd(u"Attempting method 2: OME metadata object")
+    try:
+        if omeMeta is not None:
+            logd(u"  OMEMeta object is available")
+            q = omeMeta.getPixelsPhysicalSizeX(0)
+            logd(u"  getPixelsPhysicalSizeX returned: {}".format(q))
+            if q is not None and q.value() is not None:
+                # q.value() returns a Java Number object
+                try:
+                    v = float(q.value().doubleValue())
+                except AttributeError:
+                    # If q.value() is already a Python float/int
+                    v = float(q.value())
+                logd(u"  Raw value: {}".format(v))
+                if abs(v) < 1e-3:
+                    v_um = v * 1e6
+                    log(u"Pixel size from OME metadata (meters->um): {} um".format(v_um))
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    return float(v_um)
+                else:
+                    log(u"Pixel size from OME metadata (assumed um): {} um".format(v))
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    return float(v)
+            else:
+                logd(u"  Query returned None")
+        else:
+            logd(u"  OMEMeta object is None")
+    except Exception as e:
+        logd(u"  Method 2 exception: {}".format(e))
+    
+    # Priority 3: Reader metadata store
+    try:
+        if reader is not None:
+            md = reader.getMetadataStore()
+            mdxml = None
+            try:
+                mdxml = md.dumpXML()
+            except:
+                try:
+                    mdxml = md.toString()
+                except:
+                    mdxml = None
+            if mdxml:
+                mdxml = ensure_unicode(mdxml)
+                m = re.search(r'PhysicalSizeX\s*=\s*"([^"]+)"', mdxml, re.IGNORECASE)
+                if m:
+                    val = float(m.group(1))
+                    um = re.search(r'PhysicalSizeXUnit\s*=\s*"([^"]+)"', mdxml, re.IGNORECASE)
+                    unitm = um.group(1) if um else ""
+                    px_um = _unit_to_um(val, unitm)
+                    log(u"Pixel size from reader metadata store: {} um".format(px_um))
+                    return float(px_um)
+    except:
+        pass
+    
+    # Priority 4: Global metadata (with v34.8 fix - don't auto-apply correction factor)
+    logd(u"Attempting method 4: Global metadata")
+    cam_min, cam_med = _pixel_from_global_metadata(gMeta)
+    logd(u"  Global metadata candidates - min: {}, median: {}".format(cam_min, cam_med))
+    if cam_med is not None:
+        log(u"Pixel size candidate (median) from global metadata: {} um (MAY NEED CORRECTION)".format(cam_med))
+        if cam_min is not None and abs(cam_min - cam_med) > 1e-6:
+            logd(u"  Pixel size candidate (min) from global metadata: {} um".format(cam_min))
+        logd(u"=== PIXEL SIZE EXTRACTION END (success, method 4) ===")
+        return float(cam_med)
+    
+    # Default fallback
+    log(u"Pixel size not found in any source; defaulting to 0.345 um (FALLBACK)")
+    logd(u"=== PIXEL SIZE EXTRACTION END (fallback default) ===")
+    return 0.345
+
+def _parse_stage_labels_list_from_xml(ome_xml):
+    """Parse stage labels as simple list (v31.16h)"""
+    labs = _parse_stagelabels_from_xml(ome_xml)
+    out = []
+    for L in labs:
+        out.append((L.get('name', ''), L.get('x', None), L.get('y', None), L.get('xunit',''), L.get('yunit','')))
+    return out
+
+def try_ome_stage_labels_from_xml(xml, reader, series_index):
+    """Try to get stage label position for specific series (v31.16h)"""
+    if not xml: 
+        return None
+    xml = ensure_unicode(xml)
+    labels = _parse_stagelabels_from_xml(xml)
+    if not labels: 
+        return None
+    idx = series_index + 1
+    for lab in labels:
+        nm = lab.get('name', '') or ""
+        if ("#{}".format(idx) in nm) or (re.search(r'\b{}$'.format(idx), nm)):
+            return lab.get('x'), lab.get('y'), "StageLabel-Name-match"
+    try:
+        s_count = reader.getSeriesCount()
+    except:
+        s_count = None
+    if s_count and len(labels) == s_count:
+        lab = labels[series_index]
+        return lab.get('x'), lab.get('y'), "StageLabel-order-map"
+    if len(labels) > 0 and series_index < len(labels):
+        lab = labels[series_index]
+        return lab.get('x'), lab.get('y'), "StageLabel-best-effort-index"
+    return None
+
+# ==============================================================================
+# PART 3: LUT/COLOR DETECTION (from v36.5 - RGBA format, first image only)
+# ==============================================================================
+
+def parse_channel_colors_from_ome_xml(ome_xml):
+    """Parse channel colors from OME-XML (v36.5 fix: first image only, RGBA format)
+    
+    Only extracts colors from the first <Image> element to avoid
+    duplicates when multiple images/series are present.
+    """
+    logd(u"=== PARSING CHANNEL COLORS FROM OME-XML ===")
+    colors = []
+    if not ome_xml:
+        logd(u"  OME-XML is None, returning empty colors list")
+        return colors
+    xml = ensure_unicode(ome_xml)
+    logd(u"  OME-XML length: {} characters".format(len(xml)))
+    
+    # Find the first <Image> element
+    image_match = re.search(r'<(?:[A-Za-z0-9_]+:)?Image\b[^>]*>(.*?)</(?:[A-Za-z0-9_]+:)?Image>', xml, re.IGNORECASE | re.DOTALL)
+    if image_match:
+        logd(u"  Found <Image> tag, searching within first image only")
+        # Only search for channels within the first image
+        image_content = image_match.group(1)
+        channel_count = 0
+        for m in _CHANNEL_COLOR_RE.finditer(image_content):
+            attrs = dict(ATTR_RE.findall(m.group(1)))
+            c = attrs.get('Color') or attrs.get('color')
+            logd(u"  Channel {} raw color value: {}".format(channel_count, c))
+            if c:
+                try: 
+                    color_int = int(c)
+                    colors.append(color_int)
+                    logd(u"    Parsed as signed int: {}".format(color_int))
+                except (ValueError, TypeError):
+                    try: 
+                        color_int = int(c,0)
+                        colors.append(color_int)
+                        logd(u"    Parsed with base detection: {}".format(color_int))
+                    except (ValueError, TypeError) as e:
+                        logd(u"    Failed to parse: {}".format(e))
+            channel_count += 1
+    else:
+        logd(u"  No <Image> tag found, searching all Channel tags (fallback)")
+        # Fallback: search all Channel tags if no Image tag found
+        channel_count = 0
+        for m in _CHANNEL_COLOR_RE.finditer(xml):
+            attrs = dict(ATTR_RE.findall(m.group(1)))
+            c = attrs.get('Color') or attrs.get('color')
+            logd(u"  Channel {} raw color value: {}".format(channel_count, c))
+            if c:
+                try: 
+                    color_int = int(c)
+                    colors.append(color_int)
+                    logd(u"    Parsed as signed int: {}".format(color_int))
+                except (ValueError, TypeError):
+                    try: 
+                        color_int = int(c,0)
+                        colors.append(color_int)
+                        logd(u"    Parsed with base detection: {}".format(color_int))
+                    except (ValueError, TypeError) as e:
+                        logd(u"    Failed to parse: {}".format(e))
+            channel_count += 1
+    
+    logd(u"  Total colors found: {}".format(len(colors)))
+    logd(u"=== CHANNEL COLOR PARSING COMPLETE ===")
+    return colors
+
+def extract_channel_colors_from_gmeta(gMeta):
+    """Extract channel colors from global metadata (v36.5)
+    
+    Looks for keys containing 'channel' and 'color' or similar patterns
+    that indicate color information per channel.
+    """
+    colors = []
+    if not gMeta:
+        return colors
+    
+    # Try to find channel color information in global metadata
+    color_map = {}
+    try:
+        for k in gMeta.keySet():
+            try:
+                keystr = safe_unicode(k)
+                val = safe_unicode(gMeta.get(k))
+            except (AttributeError, TypeError):
+                continue
+            
+            lkey = keystr.lower()
+            
+            # Look for keys that contain channel and color information
+            if ('channel' in lkey or 'ch' in lkey) and 'color' in lkey:
+                # Try to extract channel index
+                match = re.search(r'(\d+)', keystr)
+                if match:
+                    ch_idx = int(match.group(1))
+                    # Try to parse the color value
+                    try:
+                        # Could be hex string or integer
+                        if val.startswith('#'):
+                            color_int = int(val[1:], 16)
+                        elif val.startswith('0x'):
+                            color_int = int(val, 16)
+                        else:
+                            color_int = int(val)
+                        color_map[ch_idx] = color_int
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+    except Exception as e:
+        logv(u"extract_channel_colors_from_gmeta error: {}".format(e))
+    
+    # Convert to ordered list
+    if color_map:
+        max_idx = max(color_map.keys())
+        for i in range(max_idx + 1):
+            if i in color_map:
+                colors.append(color_map[i])
+    
+    return colors
+
+def _hex_to_rgb(hexstr):
+    """Convert hex string to RGB tuple (v31.16h)"""
+    if not hexstr:
+        return None
+    s = hexstr.strip()
+    if s.startswith('#'):
+        s = s[1:]
+    if len(s) == 6:
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+    elif len(s) == 8:
+        r = int(s[2:4], 16)
+        g = int(s[4:6], 16)
+        b = int(s[6:8], 16)
+    else:
+        try:
+            r = int(s[-6:-4], 16)
+            g = int(s[-4:-2], 16)
+            b = int(s[-2:], 16)
+        except:
+            return None
+    return (r, g, b)
+
+def build_lut_from_rgb(rgb):
+    """Build ImageJ LUT from RGB tuple (v31.16h + v36.5 array.array fix)"""
+    if rgb is None:
+        logd(u"  build_lut_from_rgb: rgb is None, returning None")
+        return None
+    
+    R, G, B = rgb
+    logd(u"  Building LUT from RGB({}, {}, {})".format(R, G, B))
+    
+    r_arr = [int(round((i/255.0)*R)) for i in range(256)]
+    g_arr = [int(round((i/255.0)*G)) for i in range(256)]
+    b_arr = [int(round((i/255.0)*B)) for i in range(256)]
+    
+    def to_signed_byte_list(lst):
+        out = []
+        for v in lst:
+            out.append(v-256 if v>127 else v)
+        return out
+    
+    rb = jarray.array(to_signed_byte_list(r_arr), 'b')
+    gb = jarray.array(to_signed_byte_list(g_arr), 'b')
+    bb = jarray.array(to_signed_byte_list(b_arr), 'b')
+    
+    logd(u"  Created Java byte arrays (length={})".format(len(rb)))
+    
+    try:
+        lut = LUT(rb, gb, bb)
+        logd(u"  LUT created successfully")
+        return lut
+    except Exception as e:
+        logd(u"  LUT creation failed: {}".format(e))
+        return None
+
+def apply_channel_luts_to_image(imp, ome_xml, gMeta):
+    """Apply channel LUTs to image (v37.1 FIX: Prevents double-wrapping CompositeImage)"""
+    logd(u"=== APPLYING CHANNEL LUTS ===")
+    
+    if imp is None:
+        logd(u"  Image is None, returning")
+        return imp
+    
+    logd(u"  Image: {} channels, {} slices, stack size={}".format(
+        imp.getNChannels(), imp.getNSlices(), imp.getStackSize()))
+    
+    colors_ome = parse_channel_colors_from_ome_xml(ome_xml)
+    colors_gm = extract_channel_colors_from_gmeta(gMeta)
+    colors = []
+    
+    # Prefer OME if present, else gMeta
+    if colors_ome:
+        colors = colors_ome
+        logd(u"  Using OME-XML colors (preferred)")
+    elif colors_gm:
+        colors = colors_gm
+        logd(u"  Using global metadata colors (fallback)")
+    else:
+        logd(u"  No colors found in either source")
+    
+    if LUT_DEBUG:
+        log(u"LUT Debug: OME colors={}, GM colors={}, chosen={}".format(colors_ome, colors_gm, colors))
+    
+    # Build luts from colors (RGBA format: RR GG BB AA)
+    logd(u"  Building LUTs from colors...")
+    luts = []
+    if colors and isinstance(colors[0], int):
+        logd(u"  Colors are integers (RGBA format expected)")
+        for i, ci in enumerate(colors):
+            logd(u"  Channel {}: raw int = {}".format(i, ci))
+            # Convert signed to unsigned 32-bit
+            u = int(ci) & 0xFFFFFFFF
+            hex8 = "%08X" % u
+            logd(u"    As unsigned hex: 0x{}".format(hex8))
+            
+            # RGBA format: RR GG BB AA
+            # Bytes: [0:2]=Red, [2:4]=Green, [4:6]=Blue, [6:8]=Alpha
+            R = int(hex8[0:2], 16)
+            G = int(hex8[2:4], 16)
+            B = int(hex8[4:6], 16)
+            A = int(hex8[6:8], 16)
+            logd(u"    Parsed RGBA: R={}, G={}, B={}, A={}".format(R, G, B, A))
+            
+            rgb = (R, G, B)
+            logd(u"    Using RGB tuple: {}".format(rgb))
+            lut = build_lut_from_rgb(rgb)
+            if lut: 
+                luts.append(lut)
+                logd(u"    LUT added successfully")
+            else:
+                logd(u"    LUT creation failed")
+    else:
+        logd(u"  Colors are not integers (hex string format?)")
+        for i, c in enumerate(colors):
+            logd(u"  Channel {}: {}".format(i, c))
+            rgb = _hex_to_rgb(c)
+            logd(u"    Converted to RGB: {}".format(rgb))
+            lut = build_lut_from_rgb(rgb)
+            if lut: 
+                luts.append(lut)
+                logd(u"    LUT added successfully")
+            else:
+                logd(u"    LUT creation failed")
+    
+    if LUT_DEBUG:
+        log(u"LUT Debug: built {} LUTs from {} colors".format(len(luts), len(colors)))
+    
+    if not luts:
+        logd(u"  No LUTs to apply, returning original image")
+        logd(u"=== LUT APPLICATION COMPLETE (no LUTs) ===")
+        return imp
+    
+    logd(u"  Attempting to apply {} LUTs to image...".format(len(luts)))
+    
+    # Multi-channel: Apply LUTs to CompositeImage
+    if imp.getNChannels() > 1:
+        try:
+            # Create CompositeImage if not already one
+            # HyperStackConverter.toHyperStack() creates a basic HyperStack, NOT a CompositeImage
+            # We need to explicitly create CompositeImage to enable per-channel LUTs
+            if imp.isComposite():
+                logd(u"  Image is ALREADY a CompositeImage. Using existing instance.")
+                cimp = imp
+            else:
+                logd(u"  Image is HyperStack. Creating CompositeImage for custom LUTs.")
+                cimp = CompositeImage(imp, CompositeImage.COMPOSITE)
+            
+            # Force mode to COMPOSITE (required for custom LUTs)
+            cimp.setMode(CompositeImage.COMPOSITE)
+            logd(u"  CompositeImage mode set to COMPOSITE")
+            
+            nchan = cimp.getNChannels()
+            logd(u"  CompositeImage has {} channels".format(nchan))
+            
+            for i in range(min(nchan, len(luts))):
+                logd(u"  Applying LUT to channel {}".format(i+1))
+                try: 
+                    # Set position to ensure we are targeting the right channel processor
+                    cimp.setPosition(i+1, 1, 1)
+                    cimp.setChannelLut(luts[i], i+1)
+                    logd(u"    setChannelLut succeeded")
+                except Exception as e1:
+                    logd(u"    setChannelLut failed: {}".format(e1))
+            
+            logd(u"  Calling updateAllChannelsAndDraw on CompositeImage")
+            cimp.updateAllChannelsAndDraw()
+            logd(u"  Returning CompositeImage (SUCCESS)")
+            logd(u"=== LUT APPLICATION COMPLETE (CompositeImage) ===")
+            return cimp
+            
+        except Exception as e:
+            if LUT_DEBUG: 
+                log(u"LUT Debug: multi-channel apply failed: {}".format(e))
+            logd(u"  Multi-channel LUT application exception: {}".format(e))
+            logd(u"  Returning original image (exception fallback)")
+            logd(u"=== LUT APPLICATION COMPLETE (exception fallback) ===")
+            return imp
+    
+    # Single channel: Apply color model
+    else:
+        logd(u"  Image is single channel")
+        try:
+            imp.getProcessor().setColorModel(luts[0].getColorModel())
+            logd(u"  Set color model from first LUT")
+            imp.updateAndDraw()
+            logd(u"  updateAndDraw called")
+            logd(u"=== LUT APPLICATION COMPLETE (single channel) ===")
+            return imp
+        except Exception as e:
+            logd(u"  setColorModel failed: {}".format(e))
+            logd(u"=== LUT APPLICATION COMPLETE (single channel fallback) ===")
+            return imp
+
+# ==============================================================================
+# PART 4: STITCHING SUPPORT (from v31.16h)
+# ==============================================================================
+
+def suggest_stitcher_thresholds(tile_width_px, tile_height_px, avg_disp_px):
+    """Calculate suggested stitching thresholds (v31.16h)"""
+    ox = max(0.0, 1.0 - (avg_disp_px / float(tile_width_px)))
+    oy = max(0.0, 1.0 - (avg_disp_px / float(tile_height_px)))
+    avg_overlap = (ox + oy) / 2.0
+    if avg_overlap >= 0.6: 
+        reg = 0.3
+    elif avg_overlap >= 0.4: 
+        reg = 0.25
+    elif avg_overlap >= 0.2: 
+        reg = 0.18
+    else: 
+        reg = 0.12
+    max_disp = max(tile_width_px, tile_height_px) * 0.5
+    return {
+        'avg_overlap': avg_overlap, 
+        'suggested_regression_threshold': reg, 
+        'suggested_max_disp_px': max_disp
+    }
+
+def get_full_res_series_indices(reader):
+    """Get indices of full-resolution series (v31.16h)"""
+    try:
+        counts = []
+        total = reader.getSeriesCount()
+        for s in range(total):
+            sx, sy = None, None
+            try:
+                sx = int(reader.getSizeX(s))
+                sy = int(reader.getSizeY(s))
+            except:
+                try:
+                    md = reader.getMetadataStore()
+                    sx = int(md.getPixelsSizeX(s).getValue().doubleValue())
+                    sy = int(md.getPixelsSizeY(s).getValue().doubleValue())
+                except:
+                    sx, sy = 0, 0
+            counts.append((s, sx, sy))
+        if not counts:
+            return []
+        max_area = max([x*y for (_, x, y) in counts])
+        full = [s for (s, x, y) in counts if x*y == max_area]
+        full.sort()
+        return full
+    except Exception as e:
+        log(u"get_full_res_series_indices failed: {}".format(e))
+        try:
+            return list(range(reader.getSeriesCount()))
+        except:
+            return []
+
+# ==============================================================================
+# PART 5: TILE WORKER (from v31.16h - proven thread pool pattern)
+# ==============================================================================
+
+class TileWorker(Callable):
+    """Worker thread for processing individual tiles (v31.16h)"""
+    def __init__(self, czi_path, series_index, x, y, out_dir, rb_radius):
+        self.czi_path = czi_path
+        self.i = int(series_index)
+        self.x = float(x)
+        self.y = float(y)
+        self.out_dir = out_dir
+        self.rb_radius = int(rb_radius)
+    
+    def call(self):
+        try:
+            opts = ImporterOptions()
+            opts.setId(self.czi_path)
+            opts.setSeriesOn(self.i, True)
+            opts.setGroupFiles(False)
+            opts.setQuiet(True)
+            opts.setWindowless(True)
+            ims = BF.openImagePlus(opts)
+            imp = ims[0]
+            
+            # Rolling ball background subtraction if enabled
+            if self.rb_radius > 0:
+                try:
+                    IJ.run(imp, "Subtract Background...", "radius=" + str(self.rb_radius) + " stack")
+                except Exception as e:
+                    logv(u"Background subtraction failed for series {}: {}".format(self.i, e))
+            
+            # Save 3D stack
+            nr = u"S{:03d}_3D.tif".format(self.i)
+            try:
+                IJ.saveAs(imp, "Tiff", os.path.join(self.out_dir, nr))
+                logd(u"  Saved 3D stack: {}".format(nr))
+            except Exception as e:
+                log(u"  !!! CRITICAL: Failed to save 3D stack for series {}: {}".format(self.i, e))
+                raise  # Re-raise because we can't continue without the 3D stack
+            
+            # Create and save 2D MIP for registration
+            zp = ZProjector(imp)
+            zp.setMethod(ZProjector.MAX_METHOD)
+            zp.doProjection()
+            mip = zp.getProjection()
+            nm = u"S{:03d}_MIP.tif".format(self.i)
+            try:
+                if mip.getNChannels() > 1:
+                    mip.setC(1)
+                    t_mip = ImagePlus("MIP", mip.getProcessor())
+                    IJ.saveAs(t_mip, "Tiff", os.path.join(self.out_dir, nm))
+                    t_mip.close()
+                else:
+                    IJ.saveAs(mip, "Tiff", os.path.join(self.out_dir, nm))
+            except Exception as e:
+                logv(u"Saving MIP failed for series {}: {}".format(self.i, e))
+            
+            d = imp.getDimensions()
+            
+            try: 
+                imp.close()
+            except: 
+                pass
+            try: 
+                mip.close()
+            except: 
+                pass
+            
+            return (nm, nr, self.x, self.y, d)
+        except Exception as e:
+            log(u"TileWorker series {} failed: {}".format(self.i, e))
+            return None
+
+# ==============================================================================
+# PART 6: AUDIO FEEDBACK (from v31.16h)
+# ==============================================================================
+
+def play_clear_jingle():
+    """Play completion jingle (v31.16h)"""
+    try:
+        from javax.sound.midi import MidiSystem
+        syn = MidiSystem.getSynthesizer()
+        syn.open()
+        ch = syn.getChannels()[0]
+        ch.programChange(11)
+        noten = [64, 68, 72]
+        laut = [100, 80, 60]
+        for n, v in zip(noten, laut):
+            ch.noteOn(n, v)
+            ch.noteOn(n-20, max(0,v-10))
+            ch.noteOn(n+10, max(0,v-10))
+            time.sleep(0.2)
+        time.sleep(4.0)
+        for n in noten:
+            ch.noteOff(n)
+        syn.close()
+    except Exception as e:
+        logv(u"MIDI jingle failed: {}".format(e))
+
+# ==============================================================================
+# PART 7: RAM DISK SUPPORT (from v31.16h)
+# ==============================================================================
+
+def choose_temp_root(dst_dir, files):
+    """Choose temp directory, prefer RAM disk if available (v31.16h)"""
+    try:
+        ram = File("R:\\")
+        if ram.exists() and ram.isDirectory():
+            total = ram.getTotalSpace()
+            free = ram.getUsableSpace()
+            need = 0
+            for fp in files:
+                try: 
+                    need += os.path.getsize(fp)
+                except: 
+                    pass
+            need *= 2
+            if total < 256*(1024**3) and free >= need:
+                ram_path = os.path.join("R:\\", "ixy_tmp")
+                try:
+                    if not os.path.exists(ram_path):
+                        os.makedirs(ram_path)
+                    log(u"Using RAM drive R: for temp (need {:.1f} GB, free {:.1f} GB)".format(need/1e9, free/1e9))
+                    return ram_path
+                except Exception as e:
+                    logv(u"RAM drive create failed: {}".format(e))
+    except Exception as e:
+        logv(u"RAM drive check failed: {}".format(e))
+    return dst_dir
+
+# ==============================================================================
+# PART 8: FILE I/O HELPERS (from v31.16h)
+# ==============================================================================
+
+def get_original_omexml_str_and_reader(czi_path):
+    """Get OME-XML and reader for CZI file (v31.16h)"""
+    try:
+        opts = ImporterOptions()
+        opts.setId(czi_path)
+        opts.setQuiet(True)
+        opts.setGroupFiles(False)
+        proc = ImportProcess(opts)
+        proc.execute()
+        try:
+            xml = proc.getOMEXML()
+        except:
+            try:
+                omeMeta = proc.getOMEMetadata()
+                xml = omeMeta.dumpXML() if omeMeta is not None else None
+            except:
+                xml = None
+        omeMeta = proc.getOMEMetadata()
+        reader = proc.getReader()
+        try:
+            gMeta = reader.getGlobalMetadata()
+        except:
+            gMeta = {}
+        if xml is not None:
+            xml = ensure_unicode(xml)
+        return xml, proc, omeMeta, reader, gMeta
+    except Exception as e:
+        log(u"get_original_omexml_str_and_reader failed: {}".format(e))
+        return None, None, None, None, None
+
+# ==============================================================================
+# PART 9: MAIN STITCHER CLASS (from v31.16h - proven 2D->3D workflow)
+# ==============================================================================
+
+class UltimateStitcher:
+    """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
+    
+    def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
+                 do_show, do_save, save_bigtiff, do_clean, auto_adjust, corr_factor):
+        self.src = src
+        self.dst = dst
+        self.t_limit = t_limit
+        self.temp_root = temp_root
+        self.fusion_method = fusion_method
+        self.rb_radius = rb_radius
+        self.reg_thresh = reg_thresh
+        self.disp_thresh = disp_thresh
+        self.do_show = do_show
+        self.do_save = do_save
+        self.save_bigtiff = save_bigtiff
+        self.do_clean = do_clean
+        self.auto_adjust = auto_adjust
+        self.corr_factor = corr_factor
+
+    def process_file(self, czi_path):
+        """Process single CZI file with proven 2D->3D stitching workflow"""
+        # Ensure unicode path handling for German characters
+        try:
+            czi_path_unicode = ensure_unicode(czi_path)
+        except Exception as e:
+            logd(u"  Unicode conversion failed for path: {}".format(e))
+            czi_path_unicode = czi_path
+        
+        base_name = os.path.splitext(os.path.basename(czi_path_unicode))[0]
+        file_dst = os.path.join(self.temp_root, u"temp_{}".format(int(time.time())))
+        if not os.path.exists(file_dst): 
+            os.makedirs(file_dst)
+        
+        log(u"--- Processing: {} ---".format(base_name))
+
+        ome_xml, proc, omeMeta, reader, gMeta = get_original_omexml_str_and_reader(czi_path)
+
+        if reader is None:
+            log(u"No reader available for {}; skipping.".format(base_name))
+            if proc:
+                try: 
+                    proc.close()
+                except: 
+                    pass
+            if self.do_clean:
+                try: 
+                    shutil.rmtree(file_dst)
+                except: 
+                    pass
+            return False
+
+        # Get pixel size (v34.8 fix: only apply correction if not from OME-XML)
+        px_um = get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta)
+        try:
+            cf = float(self.corr_factor)
+        except Exception as e:
+            logd(u"  Invalid correction factor, using default 10.0: {}".format(e))
+            cf = 10.0
+        
+        # v34.8: Only apply correction factor if pixel size is NOT from OME-XML
+        if px_um and 0.01 <= px_um <= 50.0:
+            # Pixel size from OME-XML is already correct
+            px_um_eff = px_um
+            if cf != 1.0:
+                log(u"px = {} um (from XML, correction factor NOT applied)".format(px_um_eff))
+            else:
+                log(u"px = {} um".format(px_um_eff))
+        else:
+            # Pixel size from fallback methods, apply correction factor
+            px_um_eff = px_um / cf if cf != 1.0 else px_um
+            if cf != 1.0:
+                log(u"px = {} um, corr_factor {}, effective = {} um (fallback)".format(
+                    px_um, cf, px_um_eff))
+            else:
+                log(u"px = {} um".format(px_um_eff))
+
+        try:
+            full_res_indices = get_full_res_series_indices(reader)
+        except Exception as e:
+            logv(u"Failed to determine full-res series: {}".format(e))
+            full_res_indices = list(range(reader.getSeriesCount() or 0))
+
+        stage_labels = _parse_stage_labels_list_from_xml(ome_xml)
+        series_to_label = {}
+        if stage_labels and len(stage_labels) == len(full_res_indices):
+            for idx, s in enumerate(full_res_indices):
+                name, x_um, y_um, xu, yu = stage_labels[idx]
+                series_to_label[s] = (x_um, y_um, "StageLabel-order-map")
+        else:
+            for s in full_res_indices:
+                sl = None
+                try:
+                    sl = try_ome_stage_labels_from_xml(ome_xml, reader, s)
+                except Exception as e:
+                    logd(u"  Stage label extraction failed for series {}: {}".format(s, e))
+                    sl = None
+                if sl:
+                    series_to_label[s] = (sl[0], sl[1], sl[2])
+                else:
+                    series_to_label[s] = (None, None, None)
+
+        tiles = []
+        fx = []
+        fy = []
+        for s in full_res_indices:
+            x_s, y_s, m = series_to_label.get(s,(None,None,None))
+            if x_s is None: 
+                x_s = 0.0
+            if y_s is None: 
+                y_s = 0.0
+            if m is None: 
+                m = "fallback-zero"
+            tiles.append({'i': s, 'x_s': x_s, 'y_s': y_s, 'method': m})
+            fx.append(x_s)
+            fy.append(y_s)
+            if LOG_TILE_POS:
+                log(u"Series {} -> raw pos ({}, {}) via {}".format(s, x_s, y_s, m))
+
+        min_x = min(fx) if fx else 0.0
+        min_y = min(fy) if fy else 0.0
+        for t in tiles:
+            t['x'] = (t['x_s'] - min_x) / px_um_eff
+            t['y'] = (t['y_s'] - min_y) / px_um_eff
+        
+        xs = [t['x'] for t in tiles]
+        ys = [t['y'] for t in tiles]
+        if xs and ys:
+            log(u"Tiles: {} | px-range x=[{:.1f},{:.1f}] y=[{:.1f},{:.1f}]".format(
+                len(tiles), min(xs), max(xs), min(ys), max(ys)))
+
+        reg_local = self.reg_thresh
+        disp_local = self.disp_thresh
+        if self.auto_adjust and len(tiles) > 1:
+            deltas = []
+            for i in range(1, len(tiles)):
+                dx = tiles[i]['x_s'] - tiles[i-1]['x_s']
+                dy = tiles[i]['y_s'] - tiles[i-1]['y_s']
+                deltas.append(math.hypot(dx, dy))
+            if deltas:
+                avg_sep_um = sum(deltas) / len(deltas)
+                avg_sep_px = avg_sep_um / px_um_eff
+                try:
+                    sx = int(reader.getSizeX(0))
+                    sy = int(reader.getSizeY(0))
+                except:
+                    sx, sy = 1216, 1028
+                sug = suggest_stitcher_thresholds(sx, sy, avg_sep_px)
+                reg_local = sug['suggested_regression_threshold']
+                disp_local = sug['suggested_max_disp_px']
+                log(u"Auto-adjust: avg_sep {:.1f}px, overlap {:.1%}, reg={}, max_disp={}".format(
+                    avg_sep_px, sug['avg_overlap'], reg_local, disp_local))
+
+        # Extract tiles using thread pool (v31.16h proven pattern)
+        num_threads = min(self.t_limit, Runtime.getRuntime().availableProcessors())
+        exc = Executors.newFixedThreadPool(num_threads)
+        futs = [exc.submit(TileWorker(czi_path, t['i'], t['x'], t['y'], file_dst, self.rb_radius)) for t in tiles]
+        exc.shutdown()
+        while not exc.isTerminated():
+            Thread.sleep(200)
+        res = [f.get() for f in futs if f.get() is not None]
+
+        if not res:
+            log(u"No tile outputs were produced for {}. Skipping file.".format(base_name))
+            try: 
+                reader.close()
+            except: 
+                pass
+            if proc:
+                try: 
+                    proc.close()
+                except: 
+                    pass
+            if self.do_clean:
+                try: 
+                    shutil.rmtree(file_dst)
+                except: 
+                    pass
+            return False
+
+        if len(res) < 2:
+            log(u"Only {} tile(s) for {} - skip stitching.".format(len(res), base_name))
+            try:
+                for r in res:
+                    mip_name, nr = r[0], r[1]
+                    src_mip = os.path.join(file_dst, mip_name)
+                    src_3d = os.path.join(file_dst, nr)
+                    try: 
+                        shutil.copy(src_mip, os.path.join(self.dst, base_name + "_" + mip_name))
+                    except: 
+                        pass
+                    try: 
+                        shutil.copy(src_3d, os.path.join(self.dst, base_name + "_" + nr))
+                    except: 
+                        pass
+            except Exception as e:
+                logv(u"Copy single-tile outputs failed: {}".format(e))
+            try: 
+                reader.close()
+            except: 
+                pass
+            if proc:
+                try: 
+                    proc.close()
+                except: 
+                    pass
+            if self.do_clean:
+                try: 
+                    shutil.rmtree(file_dst)
+                except: 
+                    pass
+            return True
+
+        # Create tile configuration for 2D registration
+        # The stitching plugin expects individual tile files in the directory
+        # For 3D: each tile file is a complete z-stack (all channels, all slices)
+        conf = os.path.join(file_dst, u"TileConfiguration.txt")
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== CREATING TILE CONFIGURATION ===")
+            log(u"  2D Configuration (for registration): {}".format(conf))
+            log(u"  Number of tiles: {}".format(len(res)))
+        
+        with codecs.open(conf, 'w', encoding='utf-8') as f:
+            f.write(u"dim = 2\n")
+            for r in res:
+                tile_line = u"{}; ; ({:.3f}, {:.3f})\n".format(r[0], r[2], r[3])
+                f.write(tile_line)
+                if DEBUG_STITCHING:
+                    logd(u"    Tile: {} at ({:.1f}, {:.1f}) px".format(r[0], r[2], r[3]))
+        
+        if DEBUG_STITCHING:
+            log(u"  2D TileConfiguration written")
+
+        clean_dir = file_dst.replace(u"\\",u"/")
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 1: 2D REGISTRATION ===")
+            log(u"  Stitching 2D MIPs to compute tile positions...")
+            log(u"  Fusion method: {}".format(self.fusion_method))
+            log(u"  Regression threshold: {}".format(reg_local))
+            log(u"  Max displacement: {}".format(disp_local))
+        
+        # Step 1: Stitch 2D MIPs for registration
+        stitch_start = time.time()
+        try:
+            IJ.run("Grid/Collection stitching", 
+                   "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + 
+                   "] layout_file=TileConfiguration.txt fusion_method=[" + self.fusion_method + 
+                   "] regression_threshold=" + str(reg_local) + 
+                   " max/avg_displacement_threshold=" + str(disp_local) + 
+                   " absolute_displacement_threshold=" + str(disp_local + 1.0) + 
+                   " compute_overlap subpixel_accuracy image_output=[Fuse and display]")
+            stitch_2d_time = time.time() - stitch_start
+            if DEBUG_STITCHING:
+                log(u"  2D registration completed in {:.1f} seconds".format(stitch_2d_time))
+        except Exception as e:
+            log(u"Stitching (2D) failed: {}".format(e))
+            if DEBUG_STITCHING:
+                import traceback
+                logd(u"  Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    logd(u"    {}".format(line))
+
+        if WindowManager.getCurrentImage(): 
+            WindowManager.getCurrentImage().close()
+
+        # Step 2: Transfer registration to 3D configuration
+        # CRITICAL: The stitching plugin needs 3D stacks (not 2D slices)
+        # Each tile file (S000_3D.tif) contains the full z-stack with all channels
+        # The (x, y, z) coordinates in TileConfiguration_3D.txt define:
+        #   x, y: tile position in pixels (from 2D registration)
+        #   z: always 0.0 (all tiles at same z-plane, stacks fused together)
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 2: TRANSFER TO 3D ===")
+            log(u"  Creating 3D configuration from 2D registration results...")
+        
+        final_conf = os.path.join(file_dst, u"TileConfiguration_3D.txt")
+        reg_conf = os.path.join(file_dst, u"TileConfiguration.registered.txt")
+        mip_to_3d = {r[0]: r[1] for r in res}
+        src_c = reg_conf if os.path.exists(reg_conf) else conf
+
+        def extract_xy_from_parentheses(s):
+            try:
+                a = s.index('(')
+                b = s.index(')', a+1)
+                inner = s[a+1:b]
+                parts = [p.strip() for p in inner.split(',')]
+                nums = []
+                for p in parts:
+                    m = FLOAT_RE.search(p)
+                    if m: 
+                        nums.append(m.group(0))
+                    if len(nums) >= 2: 
+                        break
+                if len(nums) >= 2: 
+                    return float(nums[0]), float(nums[1])
+            except:
+                pass
+            return None
+
+        with codecs.open(src_c, 'r', encoding='utf-8') as fr, codecs.open(final_conf, 'w', encoding='utf-8') as fw:
+            fw.write(u"dim = 3\n")
+            tile_count = 0
+            for line in fr:
+                if ".tif" in line and "(" in line and ")" in line:
+                    xy = extract_xy_from_parentheses(line)
+                    if xy is None:
+                        logv(u"Could not parse coordinates: {}".format(line.strip()))
+                        continue
+                    name = line.split(";")[0].strip()
+                    name3d = mip_to_3d.get(name, name)
+                    tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
+                    fw.write(tile_line)
+                    if DEBUG_STITCHING:
+                        logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0)".format(name3d, xy[0], xy[1]))
+                    tile_count += 1
+                else:
+                    if line.strip().lower().startswith("dim"):
+                        continue
+                    fw.write(line)
+        
+        if DEBUG_STITCHING:
+            log(u"  Wrote {} tiles to 3D configuration".format(tile_count))
+            log(u"  3D config file: {}".format(final_conf))
+
+        # Step 3: Stitch 3D stacks using transferred registration
+        # IMPORTANT: Each file in TileConfiguration_3D.txt must be a 3D stack
+        # The plugin will load each stack and fuse them at the specified x,y positions
+        # All z-slices from each tile are preserved in the final stitched volume
+        
+        if DEBUG_STITCHING:
+            log(u"")
+            log(u"=== STEP 3: 3D FUSION ===")
+            log(u"  Fusing 3D stacks using computed positions...")
+            log(u"  This preserves all z-slices from each tile")
+        
+        stitch_3d_start = time.time()
+        try:
+            IJ.run("Grid/Collection stitching", 
+                   "type=[Positions from file] order=[Defined by TileConfiguration] directory=[" + clean_dir + 
+                   "] layout_file=TileConfiguration_3D.txt fusion_method=[" + self.fusion_method + 
+                   "] subpixel_accuracy image_output=[Fuse and display]")
+            stitch_3d_time = time.time() - stitch_3d_start
+            if DEBUG_STITCHING:
+                log(u"  3D fusion completed in {:.1f} seconds".format(stitch_3d_time))
+                log(u"  Total stitching time: {:.1f} seconds".format(stitch_2d_time + stitch_3d_time))
+        except Exception as e:
+            log(u"Stitching (3D) failed: {}".format(e))
+            if DEBUG_STITCHING:
+                import traceback
+                logd(u"  Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    logd(u"    {}".format(line))
+
+        imp = WindowManager.getCurrentImage()
+        if imp is None:
+            log(u"No fused image produced; skipping save for {}.".format(base_name))
+            try: 
+                reader.close()
+            except: 
+                pass
+            if proc:
+                try: 
+                    proc.close()
+                except: 
+                    pass
+            if self.do_clean:
+                try: 
+                    shutil.rmtree(file_dst)
+                except Exception as e:
+                    logv(u"Cleanup temp dir failed: {}".format(e))
+            return False
+
+        imp.setTitle(base_name + "_stitched")
+        
+        logd(u"")
+        logd(u"=== IMAGE CONVERSION AND LUT APPLICATION ===")
+        logd(u"  Initial image state:")
+        logd(u"    - Stack size: {}".format(imp.getStackSize()))
+        logd(u"    - Is composite: {}".format(imp.isComposite()))
+        logd(u"    - Type: {}".format(imp.getType()))
+        
+        # Convert to hyperstack if needed (DO NOT create CompositeImage here - let apply_channel_luts_to_image do it)
+        try:
+            c_cnt, z_cnt = res[0][4][2], res[0][4][3]
+            logd(u"  Expected: {} channels, {} slices (total: {})".format(c_cnt, z_cnt, c_cnt * z_cnt))
+            
+            if imp.getStackSize() == (c_cnt * z_cnt):
+                # Just create basic HyperStack, LUT application will handle CompositeImage conversion
+                logd(u"  Creating HyperStack (NOT CompositeImage yet)...")
+                imp = HyperStackConverter.toHyperStack(imp, c_cnt, z_cnt, 1)
+                logd(u"  >>> HyperStack created: {} channels, {} slices".format(c_cnt, z_cnt))
+                logd(u"  >>> Is composite after HyperStack creation: {}".format(imp.isComposite()))
+            else:
+                logd(u"  Stack size mismatch, skipping HyperStack conversion")
+        except Exception as e:
+            log(u"  !!! HyperStack conversion EXCEPTION: {}".format(e))
+            logd(u"  Stack will remain in original format")
+            pass
+        
+        # Apply LUTs from metadata
+        logd(u"")
+        logd(u"  Applying channel LUTs...")
+        logd(u"  Image before LUT application:")
+        logd(u"    - Is composite: {}".format(imp.isComposite()))
+        logd(u"    - Channels: {}".format(imp.getNChannels()))
+        
+        try:
+            imp_with_luts = apply_channel_luts_to_image(imp, ome_xml, gMeta)
+            if imp_with_luts is not None:
+                logd(u"  LUT application SUCCESS - checking result...")
+                logd(u"    - Returned image is composite: {}".format(imp_with_luts.isComposite()))
+                logd(u"    - Returned image channels: {}".format(imp_with_luts.getNChannels()))
+                imp = imp_with_luts
+                log(u"  >>> LUTs applied successfully, CompositeImage created and assigned")
+            else:
+                log(u"  !!! LUT application returned None - keeping original image")
+                logd(u"  WARNING: No LUTs will be applied to saved image")
+        except Exception as e:
+            log(u"  !!! LUT application EXCEPTION: {}".format(e))
+            logd(u"  Keeping original image without custom LUTs")
+            import traceback
+            for line in traceback.format_exc().split('\n'):
+                logd(u"    {}".format(line))
+        
+        # Ensure we're in composite mode for multi-channel display
+        # Only call this if image is already a CompositeImage (has LUTs applied)
+        logd(u"")
+        logd(u"  Setting display mode...")
+        if imp.isComposite():
+            logd(u"  Image IS CompositeImage - setting COMPOSITE display mode")
+            imp.setDisplayMode(IJ.COMPOSITE)
+            imp.updateAndDraw()
+            log(u"  >>> Display mode set to COMPOSITE, image updated")
+        else:
+            log(u"  !!! Image is NOT CompositeImage - skipping setDisplayMode")
+            logd(u"  WARNING: Image will display with default grayscale/color mode")
+            imp.updateAndDraw()
+        
+        logd(u"=== IMAGE CONVERSION COMPLETE ===")
+        logd(u"")
+
+        if self.do_save:
+            if imp is None or imp.getProcessor() is None:
+                log(u"Skipping save: image or processor is None for {}.".format(base_name))
+            else:
+                out = os.path.join(self.dst, base_name + u"_stitched.tif")
+                try:
+                    IJ.saveAs(imp, "Tiff", out)
+                    log(u"Saved stitched: {}".format(out))
+                except Exception as e:
+                    log(u"Saving final stitched failed: {}".format(e))
+        
+        if not self.do_show:
+            imp.close()
+
+        try:
+            reader.close()
+        except:
+            pass
+        if proc:
+            try:
+                proc.close()
+            except:
+                pass
+        if self.do_clean:
+            System.gc()
+            Thread.sleep(1000)
+            try:
+                shutil.rmtree(file_dst)
+            except Exception as e:
+                logv(u"Cleanup temp dir failed: {}".format(e))
+        
+        return True
+
+# ==============================================================================
+# PART 10: DIRECTORY PICKER (from v31.16h)
+# ==============================================================================
+
+def pick_directory_with_jfilechooser(title, default_path):
+    """Pick directory using Swing file chooser (v31.16h + unicode safety)"""
+    try:
+        from javax.swing import JFileChooser
+        jc = JFileChooser()
+        _home = os.path.expanduser("~")
+        try:
+            # Ensure unicode path for Java File object
+            path_to_use = ensure_unicode(default_path) if default_path and os.path.isdir(default_path) else _home
+            # Convert to string for Java File constructor (Java handles UTF-8)
+            jc.setCurrentDirectory(File(path_to_use.encode('utf-8') if isinstance(path_to_use, unicode) else path_to_use))
+        except:
+            pass
+        jc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
+        jc.setDialogTitle(ensure_unicode(title))
+        res = jc.showOpenDialog(None)
+        from javax.swing import JFileChooser as _JC
+        if res == _JC.APPROVE_OPTION:
+            sel = jc.getSelectedFile()
+            return ensure_unicode(sel.getAbsolutePath())
+    except Exception as e:
+        logv(u"JFileChooser failed: {}".format(e))
+        return default_path
+    return None
+
+def compute_threads():
+    """Compute optimal thread count (v31.16h)"""
+    max_cores = int(Runtime.getRuntime().availableProcessors())
+    if max_cores < 10:
+        return max_cores
+    return max_cores - 1
+
+# ==============================================================================
+# PART 11: MAIN ENTRY POINT (from v31.16h + v34.8 bug fixes)
+# ==============================================================================
+
+def show_splash():
+    """Display ASCII art splash screen with corrective padding for proportional fonts"""
+    splash = u"""
+      +---+---+---+
+      | C | Z | I  |    CZI-STITCHER v37.4
+      +---+---+---+     ======================
+      | S | t  | i  |   > Workflow: v31.16h
+      +---+---+---+     > UTF-8:    v34.8
+      | t  | c | h |    > LUTs:     v36.5
+      +---+---+---+
+
+      [Target] Zeiss Zen/CZI Analysis
+      [Status] Initializing environment...
+    """
+    log(splash)
+
+def main():
+    """Main entry point"""
+    IJ.log("\\Clear")
+    show_splash()
+    
+    # Load config
+    _config = _load_config()
+    
+    # Add filesystem loading message for user expectation management
+    log(u"")
+    log(u"Loading filesystem... This might take a while with sleeping HDDs.")
+    log(u"")
+    
+    _home = os.path.expanduser("~")
+    _last_in = _config.get("last_input_dir", "") or _home
+    _last_out = _config.get("last_output_dir", "") or _home
+    if not os.path.isdir(_last_in): 
+        _last_in = _home
+    if not os.path.isdir(_last_out): 
+        _last_out = _home
+    
+    # Select directories
+    in_path = pick_directory_with_jfilechooser("Select Source Folder (CZI Files)", _last_in)
+    if not in_path: 
+        log("No source selected. Exiting.")
+        raise SystemExit("Cancelled by user")
+    
+    out_path = pick_directory_with_jfilechooser("Select Target Folder (Results)", _last_out)
+    if not out_path: 
+        log("No target selected. Exiting.")
+        raise SystemExit("Cancelled by user")
+    
+    _config["last_input_dir"] = in_path
+    _config["last_output_dir"] = out_path
+    _save_config(_config)
+    
+    input_dir_raw = File(unicode(in_path))
+    output_dir_raw = File(unicode(out_path))
+    
+    # Parameter dialog
+    gd = GenericDialog("Ixytocin Stitcher - Parameters")
+    gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
+    gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
+    gd.addNumericField("Regression Threshold", 0.30, 2)
+    gd.addNumericField("Max Displacement (px)", 5.0, 1)
+    gd.addCheckbox("Show Results (Preview)", True)
+    gd.addCheckbox("Save Results", True)
+    gd.addCheckbox("Als BigTIFF speichern", False)
+    gd.addCheckbox("Cleanup Temp Files", True)
+    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
+    gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
+    gd.showDialog()
+    
+    if gd.wasCanceled():
+        log("User cancelled parameter dialog. Exiting.")
+        raise SystemExit("Cancelled by user")
+    
+    # Get parameters (v34.8 fix: convert booleans to int first)
+    fusion_method = gd.getNextChoice()
+    rb_radius = int(gd.getNextNumber())
+    reg_thresh = float(gd.getNextNumber())
+    disp_thresh = float(gd.getNextNumber())
+    do_show = (int(gd.getNextBoolean()) == 1)
+    do_save = (int(gd.getNextBoolean()) == 1)
+    save_bigtiff = (int(gd.getNextBoolean()) == 1)
+    do_clean = (int(gd.getNextBoolean()) == 1)
+    auto_adjust = (int(gd.getNextBoolean()) == 1)
+    try:
+        corr_factor = float(gd.getNextNumber())
+    except:
+        corr_factor = 10.0
+    
+    thread_count_slider = compute_threads()
+    
+    # Process files
+    s_dir, t_dir = get_safe_path(input_dir_raw), get_safe_path(output_dir_raw)
+    files = sorted([os.path.join(s_dir, f) for f in os.listdir(s_dir) if f.lower().endswith(".czi")])
+    
+    if not files:
+        log(u"No CZI files found in {}".format(s_dir))
+        return
+    
+    temp_root = choose_temp_root(t_dir, files)
+    t_lim = int(compute_threads())
+    
+    try:
+        log(u"Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(
+            unicode(s_dir), unicode(t_dir), t_lim, temp_root))
+    except:
+        log("Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(
+            s_dir, t_dir, t_lim, temp_root))
+    
+    log(u"")
+    log(u"Parameters:")
+    log(u"  Fusion: {}".format(fusion_method))
+    log(u"  Rolling Ball Radius: {}".format(rb_radius))
+    log(u"  Regression Threshold: {}".format(reg_thresh))
+    log(u"  Max Displacement: {}".format(disp_thresh))
+    log(u"  Auto-adjust: {}".format(auto_adjust))
+    log(u"  Correction Factor: {}".format(corr_factor))
+    log(u"")
+    
+    stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, fusion_method, rb_radius, 
+                                 reg_thresh, disp_thresh, do_show, do_save, save_bigtiff, 
+                                 do_clean, auto_adjust, corr_factor)
+    
+    for f in files:
+        try:
+            stitcher.process_file(f)
+        except Exception as e:
+            log(u"Processing file {} failed: {}".format(f, e))
+            import traceback
+            traceback.print_exc()
+    
+    log(u"")
+    log(u"=" * 70)
+    log(u"Batch Done.")
+    log(u"=" * 70)
+    
+    if PLAY_JINGLE_ON_DONE:
+        play_clear_jingle()
+
+# Run main
+if __name__ in [None, "__main__", "__builtin__"]:
+    main()

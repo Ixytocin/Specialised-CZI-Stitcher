@@ -1,0 +1,334 @@
+# Specialised CZI Stitcher v37.4 (Beta)
+
+> **First Stable Minimal Viable Beta Release**
+>
+> **Development Method:** Vibe Coding  
+> **Vision & Validation:** [Ixytocin](https://github.com/Ixytocin)  
+> **Implementation Partner:** AI Research Assistant
+
+---
+
+## What This Tool Does
+
+Stitches multi-tile Zeiss .czi microscopy images while preserving:
+- **Original channel colors (LUTs)** from Zeiss metadata
+- **Accurate pixel size** for proper tile positioning
+- **All z-slices** in 3D stacks
+- **Multi-channel information** without dimension confusion
+
+Designed for ApoTome imaging and large-scale brain section reconstruction.
+
+---
+
+## Key Features
+
+### Core Functionality
+- **Batch Processing**: Handles entire directories of .czi files automatically
+- **Dual 2D/3D Workflow**: Fast 2D registration, then applies coordinates to full 3D volumes
+- **LUT Retention**: Preserves original Zeiss channel colors from OME-XML metadata
+- **Pixel Size Accuracy**: Extracts correct scaling from OME-XML (avoiding 10x errors)
+- **Rolling Ball Background Subtraction**: Optional per-tile shading correction
+
+### Reliability Features (v37.4)
+- **Comprehensive Debug Logging**: Visual markers (>>>, !!!) show success/failure at each step
+- **Exception Handling**: All critical operations logged with clear error messages
+- **Unicode Support**: Handles German characters (ä, ö, ü, ß) in file paths
+- **Pure ASCII Source**: No encoding declaration errors in Jython 2.7
+
+### User Experience
+- **ASCII Art Splash Screen**: Shows version and component tracking
+- **Progress Messages**: Clear status updates including filesystem loading warnings
+- **Configurable Defaults**: Auto-adjust OFF, user controls parameters
+
+---
+
+## Requirements
+
+- **Fiji (ImageJ)** - Download from https://fiji.sc/
+- **Bio-Formats Plugin** - Included in Fiji
+- **Stitching Plugin** - Included in Fiji (Preibisch et al.)
+
+No additional installation required if using recent Fiji distribution.
+
+---
+
+## Installation
+
+1. Download `main_unified_v37.jy`
+2. Place in your `Fiji.app/scripts/` folder (or any folder)
+3. Open Fiji
+4. Use File → Open or drag the .jy file into Fiji window
+5. Click "Run" in the script editor
+
+---
+
+## Usage
+
+### Basic Workflow
+
+1. **Start the script**
+   - Splash screen shows version v37.4
+   - "Initializing environment..." message appears
+   - "Loading filesystem..." warning for sleeping HDDs
+
+2. **Configure parameters** (dialog appears)
+   - **Source Directory**: Folder containing .czi files
+   - **Target Directory**: Where to save stitched results
+   - **Threads**: Number of CPU threads (default: 31)
+   - **Temp Root**: Temporary file location (default: same as target)
+   - **Fusion Method**: Linear Blending (recommended)
+   - **Rolling Ball Radius**: 0-200, typically 50-100 for shading correction
+   - **Regression Threshold**: 0.3 (default, controls stitching quality)
+   - **Max Displacement**: 5.0 pixels (default, controls tile overlap search)
+   - **Auto-adjust**: OFF (default, user controls brightness/contrast)
+   - **Correction Factor**: 10.0 (only applied to fallback metadata, NOT OME-XML)
+
+3. **Monitor progress**
+   - Look for `>>>` (success) or `!!!` (warning/error) markers in log
+   - Key section: `=== IMAGE CONVERSION AND LUT APPLICATION ===`
+   - Shows HyperStack creation, LUT application, display mode setting
+
+4. **Check results**
+   - Stitched images saved in target directory
+   - Check if colors match original Zeiss data
+   - Verify pixel size and scaling
+
+---
+
+## Understanding the Debug Output (v37.4)
+
+### Success Pattern
+```
+=== IMAGE CONVERSION AND LUT APPLICATION ===
+  Initial image state:
+    - Stack size: 12
+    - Is composite: False
+  >>> HyperStack created: 3 channels, 4 slices
+  >>> Is composite after HyperStack creation: False
+  >>> LUTs applied successfully, CompositeImage created
+  >>> Display mode set to COMPOSITE, image updated
+=== IMAGE CONVERSION COMPLETE ===
+```
+
+### Failure Pattern
+```
+  !!! HyperStack conversion EXCEPTION: ...
+  !!! LUT application returned None
+  !!! Image is NOT CompositeImage - skipping setDisplayMode
+  WARNING: Image will display with default grayscale/color mode
+```
+
+---
+
+## Known Limitations
+
+### Current Scope (v37.4 Beta)
+- **Tested**: Zeiss .czi files from ApoTome systems
+- **Tested**: Multi-channel (1-4 channels), multi-tile, 3D stacks
+- **Tested**: German file paths with special characters
+- **Not Tested**: Files >100 tiles, files >4 channels
+- **Not Tested**: Non-Zeiss formats (other .czi variants)
+
+### Technical Constraints
+- **Jython 2.7**: Limited to Fiji's built-in Jython version
+- **Memory**: Large datasets (100+ tiles, many z-slices) require sufficient RAM
+- **Disk Space**: Temporary files require 2-3x the size of input data
+- **Processing Time**: 2D registration is fast, 3D fusion can take minutes per file
+
+### LUT Color Application
+The script extracts colors from OME-XML metadata and attempts to apply them to the stitched image. This works for most Zeiss files but may show default colors if:
+- OME-XML lacks color information
+- Color format is non-standard
+- CompositeImage creation fails
+
+**Check the debug log** for LUT application status. Look for success markers (>>>) or errors (!!!).
+
+---
+
+## Troubleshooting
+
+### Colors Show as Red/Green/Blue/Gray Instead of Custom Colors
+
+**Diagnosis**: Check debug log for `=== IMAGE CONVERSION AND LUT APPLICATION ===` section
+
+**If you see:**
+- `!!! Image is NOT CompositeImage` → LUT application failed
+- `!!! LUT application returned None` → Color parsing failed
+- Missing `>>>` markers → Exception occurred during conversion
+
+**Solutions:**
+1. Verify you're running v37.4 (check splash screen)
+2. Close Fiji completely and reload the script
+3. Check earlier in log for color parsing: "Parsed RGBA: R=X, G=Y, B=Z"
+4. If colors parse correctly but don't apply, report the issue
+
+### Pixel Size 10x Too Large/Small
+
+**Symptom**: Tiles don't align properly, huge gaps or massive overlap
+
+**Diagnosis**: Check log for "px = X um (from XML, correction factor NOT applied)"
+
+**If value is wrong:**
+- Should see 0.3-0.5 um for typical microscopy (20x-40x objectives)
+- If you see 3-5 um, it used global metadata instead of OME-XML
+
+**Solutions:**
+1. Check for earlier exception in pixel size extraction
+2. Verify OME-XML contains PhysicalSizeX attribute
+3. Adjust Correction Factor parameter (but this shouldn't be needed for OME-XML)
+
+### Script Won't Load - "ParseException"
+
+**Error**: `org.python.antlr.ParseException: encoding declaration in Unicode string`
+
+**Cause**: File contains non-ASCII characters or has encoding declaration
+
+**Solution**: You're using an older version. Download v37.4 which is pure ASCII.
+
+### Filesystem Loading Takes Forever
+
+**Expected**: HDD spin-up can take 10-30 seconds with sleeping drives
+
+**Message**: "Loading filesystem... This might take a while with sleeping HDDs."
+
+**Not an error**: Script is waiting for operating system to access network/external drives
+
+---
+
+## Bug Reporting
+
+If you encounter issues, please include:
+
+1. **Version number** from splash screen
+2. **Complete debug log** from Fiji Log window
+3. **Input file characteristics**:
+   - Number of tiles
+   - Number of channels
+   - Number of z-slices
+   - File size
+4. **Expected vs actual behavior**
+5. **Look for `>>>` and `!!!` markers** in your log and include those sections
+
+---
+
+## Version History
+
+### v37.4 (Current - First Stable Beta)
+- Added comprehensive debug logging with visual markers
+- Fixed critical silent exception in 3D stack saving
+- Added exception logging for stage label extraction
+- Improved visibility into image conversion workflow
+- Status: First minimal viable beta for production testing
+
+### v37.3
+- Fixed setDisplayMode overwriting custom LUTs
+- Added check before calling setDisplayMode on CompositeImage
+
+### v37.2
+- Fixed exception handling returning wrong image
+- Fixed HyperStack creation (removed confusing parameters)
+- Ensured single point of CompositeImage creation
+
+### v37.1
+- Added ASCII splash screen
+- Fixed splash spacing for proportional fonts
+- Added filesystem loading message
+- Changed auto-adjust default to OFF
+
+### v37.0
+- Fixed Jython compilation error (encoding declaration)
+- Fixed pixel size extraction (ASCII codec errors with µ character)
+- Removed all non-ASCII characters from source
+
+---
+
+## Credits & Attribution
+
+### Core Components
+This tool orchestrates several powerful open-source projects:
+
+- **Stitching Logic**: [BigStitcher/Stitching Plugin](https://imagej.net/plugins/stitching/) by Stephan Preibisch et al.
+- **Metadata Handling**: [Bio-Formats](https://www.openmicroscopy.org/bio-formats/) by Open Microscopy Environment (OME)
+- **Platform**: [Fiji](https://fiji.sc/) - ImageJ distribution for scientific image analysis
+
+### Development
+- **Vision & Testing**: Ixytocin - Identified problems, tested solutions, validated fixes
+- **Implementation**: AI Research Partner - Coded solutions based on Ixytocin's specifications
+- **Methodology**: Vibe Coding - User-driven iterative development
+
+### Inspiration
+- **Viveca Stitching Tool** by seiryoku-zenyo - Initial reference implementation
+
+---
+
+## Technical Details
+
+### Architecture
+
+**Dual 2D→3D Workflow**:
+1. Extract 2D Maximum Intensity Projection (MIP) from each 3D tile
+2. Perform fast 2D registration on MIPs
+3. Transfer calculated coordinates to 3D tile configuration
+4. Fuse 3D volumes using known positions (no re-calculation)
+
+**Why this approach?**
+- Avoids dimension confusion (channels vs z-slices)
+- Faster: 2D registration is much quicker than 3D
+- More reliable: 3D fusion with known positions rarely fails
+- Preserves: All z-slices and channel information intact
+
+### Color Handling
+
+**RGBA Format** (verified against Zeiss CZI specification):
+```python
+# Zeiss stores signed 32-bit integers
+color_value = -16771841  # Example: Red channel
+unsigned = color_value & 0xFFFFFFFF  # → 4278195455
+hex_string = "%08X" % unsigned  # → "FF0014FF"
+# RGBA layout: RR GG BB AA
+R = int(hex_string[0:2], 16)  # → 255
+G = int(hex_string[2:4], 16)  # → 0
+B = int(hex_string[4:6], 16)  # → 20
+# Alpha is ignored
+```
+
+### Pixel Size Extraction
+
+**Priority order**:
+1. OME-XML `<Pixels PhysicalSizeX="0.345">` - TRUSTED (no correction)
+2. OME metadata object `.getPixelsPhysicalSizeX()` - Attempted
+3. Global metadata `ScalingX` - Used with caution (may need correction)
+
+**Critical**: OME-XML values are considered authoritative and never corrected.
+
+---
+
+## License
+
+This project is provided "as-is" for research use.
+
+Core dependencies (Bio-Formats, Stitching Plugin, Fiji) have their own licenses:
+- Bio-Formats: [GPL-2.0](https://www.openmicroscopy.org/licensing/)
+- Fiji/ImageJ: [GPL-2.0](https://imagej.net/licensing/)
+
+---
+
+## Status: Beta
+
+**What "Beta" means**:
+- Core functionality tested on real data
+- Known issues documented
+- May have edge cases not yet discovered
+- Suitable for evaluation and testing
+- Not recommended for production pipelines without validation
+
+**Before production use**:
+- Test with your specific .czi files
+- Verify colors match Zeiss ZEN software
+- Confirm pixel size and scaling are correct
+- Check that all z-slices are preserved
+- Run a few samples manually before batch processing
+
+---
+
+**Questions?** Check the troubleshooting section first. For bugs, include complete debug logs with `>>>` and `!!!` markers.
