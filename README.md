@@ -21,7 +21,7 @@ Standard stitching routines often fail with Zeiss .czi files by:
 - **Shading Correction:** Integrated per-tile Rolling Ball background subtraction to ensure seamless transitions.
 - **Batch Processing:** Handles entire directories of CZI files automatically.
 - **Unicode Safety:** Robust handling of file paths containing spaces or special characters.
-- **Audio Feedback:** Plays a MIDI triad (E-G#-C) on the system synthesizer upon completion.
+
 
 ### Technical Background: The Hybrid Solution
 The decision to implement a **2D-Registration / 3D-Fusion Hybrid** was born out of necessity. 
