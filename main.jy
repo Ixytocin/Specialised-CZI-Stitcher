@@ -17,6 +17,7 @@
 # - codecs.open() for file I/O with UTF-8 encoding
 
 import os, time, shutil, math, re, sys, json, codecs
+from datetime import datetime, timedelta
 from java.lang import Runtime, Thread, System
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
@@ -1721,9 +1722,14 @@ def estimate_batch_time(files):
     total_time_sec = (total_voxels / 1e6) * COST_PER_MVOX_MS / 1000.0
     total_time_min = total_time_sec / 60.0
     
+    # Calculate estimated completion time
+    completion_time = datetime.now() + timedelta(seconds=total_time_sec)
+    completion_str = completion_time.strftime("%H:%M:%S")
+    
     log(u"")
     log(u"Total estimated processing time: {:.1f} minutes ({:.1f} seconds)".format(
         total_time_min, total_time_sec))
+    log(u"Estimated completion time: {} (24h format)".format(completion_str))
     log(u"=== END BATCH ANALYSIS ===")
     log(u"")
     
@@ -1960,11 +1966,16 @@ def main():
             est_remaining_sec = avg_time_per_file * remaining_files
             est_remaining_min = est_remaining_sec / 60.0
             
+            # Calculate estimated completion time
+            completion_time = datetime.now() + timedelta(seconds=est_remaining_sec)
+            completion_str = completion_time.strftime("%H:%M:%S")
+            
             log(u"")
             log(u"File completed in {:.1f} seconds".format(file_elapsed))
             log(u"Progress: {}/{} files ({:.1f}%)".format(
                 files_completed, len(files), (files_completed * 100.0) / len(files)))
             log(u"Estimated time remaining: {:.1f} minutes".format(est_remaining_min))
+            log(u"Estimated completion time: {} (24h format)".format(completion_str))
             
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
