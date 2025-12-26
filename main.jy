@@ -17,7 +17,6 @@
 # - codecs.open() for file I/O with UTF-8 encoding
 
 import os, time, shutil, math, re, sys, json, codecs
-from datetime import datetime, timedelta
 from java.lang import Runtime, Thread, System
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
@@ -1659,9 +1658,10 @@ def estimate_batch_time(files):
     
     total_time_min = total_time_sec / 60.0
     
-    # Calculate estimated completion time
-    completion_time = datetime.now() + timedelta(seconds=total_time_sec)
-    completion_str = completion_time.strftime("%H:%M:%S")
+    # Calculate estimated completion time in 24h format
+    completion_timestamp = time.time() + total_time_sec
+    completion_struct = time.localtime(completion_timestamp)
+    completion_str = time.strftime("%H:%M:%S", completion_struct)
     
     log(u"")
     log(u"Total estimated processing time: {:.1f} minutes ({:.1f} seconds)".format(
@@ -2017,63 +2017,59 @@ def main():
     output_dir_raw = File(unicode(out_path))
     processing_dir_raw = File(unicode(proc_path))
     
-        # Get parameters
-        fusion_method = gd.getNextChoice()
-        rb_radius = int(gd.getNextNumber())
-        reg_thresh = float(gd.getNextNumber())
-        disp_thresh = float(gd.getNextNumber())
-        
-        # Output options
-        save_stack = (int(gd.getNextBoolean()) == 1)
-        show_stack = (int(gd.getNextBoolean()) == 1)
-        save_projection = (int(gd.getNextBoolean()) == 1)
-        show_projection = (int(gd.getNextBoolean()) == 1)
-        projection_method = gd.getNextChoice()
-        
-        # Processing options
-        verbose_mode = (int(gd.getNextBoolean()) == 1)
-        do_clean = (int(gd.getNextBoolean()) == 1)
-        auto_adjust = (int(gd.getNextBoolean()) == 1)
-        corr_factor = float(gd.getNextNumber())
-        
-        # Set global VERBOSE flag
-        global VERBOSE
-        VERBOSE = verbose_mode
-        
-        # Validate output options
-        do_projection = save_projection or show_projection
-        has_any_output = save_stack or show_stack or save_projection or show_projection
-        
-        # Show popup and return to parameters if illegal settings detected
-        if not has_any_output:
-            from ij.gui import MessageDialog
-            MessageDialog(None, "Illegal Settings", 
-                         "At least one output option must be enabled:\n" +
-                         "- Save Stitched Stack\n" +
-                         "- Show Stitched Stack\n" +
-                         "- Save Z-Projection\n" +
-                         "- Show Z-Projection\n\n" +
-                         "Please select at least one option.").show()
-            log(u"Error: No output options selected. Returning to parameters.")
-            continue  # Return to parameter dialog
-        
-        # CRITICAL: If projection is requested, save_stack MUST be enabled
-        if do_projection and not save_stack:
-            from ij.gui import MessageDialog
-            MessageDialog(None, "Illegal Settings", 
-                         "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
-                         "Projections are created from saved *_stitched.tif files\n" +
-                         "after stitching completes.\n\n" +
-                         "Please enable 'Save Stitched Stack' to proceed.").show()
-            log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
-            continue  # Return to parameter dialog
-        
-        # If we reach here, settings are valid - break out of loop
-        break
-    try:
-        corr_factor = float(gd.getNextNumber())
-    except:
-        corr_factor = 10.0
+    # Get parameters
+    fusion_method = gd.getNextChoice()
+    rb_radius = int(gd.getNextNumber())
+    reg_thresh = float(gd.getNextNumber())
+    disp_thresh = float(gd.getNextNumber())
+    
+    # Output options
+    save_stack = (int(gd.getNextBoolean()) == 1)
+    show_stack = (int(gd.getNextBoolean()) == 1)
+    save_projection = (int(gd.getNextBoolean()) == 1)
+    show_projection = (int(gd.getNextBoolean()) == 1)
+    projection_method = gd.getNextChoice()
+    
+    # Processing options
+    verbose_mode = (int(gd.getNextBoolean()) == 1)
+    do_clean = (int(gd.getNextBoolean()) == 1)
+    auto_adjust = (int(gd.getNextBoolean()) == 1)
+    corr_factor = float(gd.getNextNumber())
+    
+    # Set global VERBOSE flag
+    global VERBOSE
+    VERBOSE = verbose_mode
+    
+    # Validate output options
+    do_projection = save_projection or show_projection
+    has_any_output = save_stack or show_stack or save_projection or show_projection
+    
+    # Show popup and return to parameters if illegal settings detected
+    if not has_any_output:
+        from ij.gui import MessageDialog
+        MessageDialog(None, "Illegal Settings", 
+                     "At least one output option must be enabled:\n" +
+                     "- Save Stitched Stack\n" +
+                     "- Show Stitched Stack\n" +
+                     "- Save Z-Projection\n" +
+                     "- Show Z-Projection\n\n" +
+                     "Please select at least one option.").show()
+        log(u"Error: No output options selected. Returning to parameters.")
+        continue  # Return to parameter dialog
+    
+    # CRITICAL: If projection is requested, save_stack MUST be enabled
+    if do_projection and not save_stack:
+        from ij.gui import MessageDialog
+        MessageDialog(None, "Illegal Settings", 
+                     "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
+                     "Projections are created from saved *_stitched.tif files\n" +
+                     "after stitching completes.\n\n" +
+                     "Please enable 'Save Stitched Stack' to proceed.").show()
+        log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
+        continue  # Return to parameter dialog
+    
+    # If we reach here, settings are valid - break out of loop
+    break
     
     thread_count_slider = compute_threads()
     
@@ -2147,9 +2143,10 @@ def main():
             est_remaining_sec = avg_time_per_file * remaining_files
             est_remaining_min = est_remaining_sec / 60.0
             
-            # Calculate estimated completion time
-            completion_time = datetime.now() + timedelta(seconds=est_remaining_sec)
-            completion_str = completion_time.strftime("%H:%M:%S")
+            # Calculate estimated completion time in 24h format
+            completion_timestamp = time.time() + est_remaining_sec
+            completion_struct = time.localtime(completion_timestamp)
+            completion_str = time.strftime("%H:%M:%S", completion_struct)
             
             log(u"")
             log(u"File completed in {:.1f} seconds".format(file_elapsed))
