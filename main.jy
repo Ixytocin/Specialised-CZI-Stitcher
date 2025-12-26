@@ -1,10 +1,11 @@
-# SPECIALISED CZI STITCHER v37.4 - UNIFIED WORKING VERSION
+# SPECIALISED CZI STITCHER v37.5 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
 # - v31.16h: Dual 2D/3D stitching workflow, thread pool execution
 # - v34.8:   Bug fixes for UTF-8, booleans, pixel size correction
 # - v36.5:   LUT detection (RGBA format), single-pass metadata
+# - v37.5:   Path selection improvements, z-projection, garbage collection
 #
 # DESIGN PRINCIPLE: Only include code that is PROVEN to work in isolation
 # NO experimental features - keep it simple and robust
@@ -20,7 +21,7 @@ from java.lang import Runtime, Thread, System
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
 from ij import IJ, ImagePlus, WindowManager, CompositeImage
-from ij.plugin import ZProjector, HyperStackConverter
+from ij.plugin import ZProjector, HyperStackConverter, ChannelSplitter, RGBStackMerge, Duplicator
 from ij.process import LUT
 from loci.plugins import BF
 from loci.plugins.in import ImporterOptions, ImportProcess
@@ -31,7 +32,7 @@ import jarray
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v37.4"
+VERSION = "v37.5"
 MICRO = u"\u00b5"
 
 # Debug flags - ALL ENABLED for maximum debugging
@@ -54,8 +55,8 @@ _PHYSICAL_X_RE = re.compile(r'PhysicalSizeX\s*=\s*"([^"]+)"', re.IGNORECASE)
 _PHYSICAL_XUNIT_RE = re.compile(r'PhysicalSizeXUnit\s*=\s*"([^"]+)"', re.IGNORECASE)
 _CHANNEL_COLOR_RE = re.compile(r'<(?:[A-Za-z0-9_]+:)?Channel\b([^>]*)>', re.IGNORECASE)
 
-# Config file for remembering last used directories
-_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ixytocin_stitcher.json")
+# Config file for remembering last used directories (unique name to avoid conflicts)
+_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".specialised_czi_stitcher_config.json")
 
 # ==============================================================================
 # PART 1: UTILITY FUNCTIONS (from v31.16h + v34.8 bug fixes)
@@ -951,38 +952,7 @@ def play_clear_jingle():
         logv(u"MIDI jingle failed: {}".format(e))
 
 # ==============================================================================
-# PART 7: RAM DISK SUPPORT (from v31.16h)
-# ==============================================================================
-
-def choose_temp_root(dst_dir, files):
-    """Choose temp directory, prefer RAM disk if available (v31.16h)"""
-    try:
-        ram = File("R:\\")
-        if ram.exists() and ram.isDirectory():
-            total = ram.getTotalSpace()
-            free = ram.getUsableSpace()
-            need = 0
-            for fp in files:
-                try: 
-                    need += os.path.getsize(fp)
-                except: 
-                    pass
-            need *= 2
-            if total < 256*(1024**3) and free >= need:
-                ram_path = os.path.join("R:\\", "ixy_tmp")
-                try:
-                    if not os.path.exists(ram_path):
-                        os.makedirs(ram_path)
-                    log(u"Using RAM drive R: for temp (need {:.1f} GB, free {:.1f} GB)".format(need/1e9, free/1e9))
-                    return ram_path
-                except Exception as e:
-                    logv(u"RAM drive create failed: {}".format(e))
-    except Exception as e:
-        logv(u"RAM drive check failed: {}".format(e))
-    return dst_dir
-
-# ==============================================================================
-# PART 8: FILE I/O HELPERS (from v31.16h)
+# PART 7: FILE I/O HELPERS (from v31.16h)
 # ==============================================================================
 
 def get_original_omexml_str_and_reader(czi_path):
@@ -1023,7 +993,7 @@ class UltimateStitcher:
     """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
     
     def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
-                 do_show, do_save, save_bigtiff, do_clean, auto_adjust, corr_factor):
+                 do_show, do_save, do_clean, auto_adjust, corr_factor):
         self.src = src
         self.dst = dst
         self.t_limit = t_limit
@@ -1034,7 +1004,6 @@ class UltimateStitcher:
         self.disp_thresh = disp_thresh
         self.do_show = do_show
         self.do_save = do_save
-        self.save_bigtiff = save_bigtiff
         self.do_clean = do_clean
         self.auto_adjust = auto_adjust
         self.corr_factor = corr_factor
@@ -1173,6 +1142,13 @@ class UltimateStitcher:
                     avg_sep_px, sug['avg_overlap'], reg_local, disp_local))
 
         # Extract tiles using thread pool (v31.16h proven pattern)
+        # Garbage collection before major processing step
+        log_memory()
+        System.gc()
+        Thread.sleep(500)
+        log(u"Garbage collection completed before tile extraction")
+        log_memory()
+        
         num_threads = min(self.t_limit, Runtime.getRuntime().availableProcessors())
         exc = Executors.newFixedThreadPool(num_threads)
         futs = [exc.submit(TileWorker(czi_path, t['i'], t['x'], t['y'], file_dst, self.rb_radius)) for t in tiles]
@@ -1287,6 +1263,13 @@ class UltimateStitcher:
 
         if WindowManager.getCurrentImage(): 
             WindowManager.getCurrentImage().close()
+        
+        # Garbage collection after 2D registration
+        log_memory()
+        System.gc()
+        Thread.sleep(500)
+        log(u"Garbage collection completed after 2D registration")
+        log_memory()
 
         # Step 2: Transfer registration to 3D configuration
         # CRITICAL: The stitching plugin needs 3D stacks (not 2D slices)
@@ -1396,6 +1379,13 @@ class UltimateStitcher:
                 except Exception as e:
                     logv(u"Cleanup temp dir failed: {}".format(e))
             return False
+        
+        # Garbage collection after 3D fusion
+        log_memory()
+        System.gc()
+        Thread.sleep(500)
+        log(u"Garbage collection completed after 3D fusion")
+        log_memory()
 
         imp.setTitle(base_name + "_stitched")
         
@@ -1470,12 +1460,52 @@ class UltimateStitcher:
             if imp is None or imp.getProcessor() is None:
                 log(u"Skipping save: image or processor is None for {}.".format(base_name))
             else:
+                # Determine if BigTIFF is needed (>4GB or close to it)
+                # Estimate size: width * height * slices * channels * bytesPerPixel
+                width = imp.getWidth()
+                height = imp.getHeight()
+                slices = imp.getNSlices()
+                channels = imp.getNChannels()
+                frames = imp.getNFrames()
+                bit_depth = imp.getBitDepth()
+                bytes_per_pixel = 1 if bit_depth == 8 else 2 if bit_depth == 16 else 4
+                estimated_size = width * height * slices * channels * frames * bytes_per_pixel
+                # Use BigTIFF if size is > 3.5GB (leave safety margin below 4GB limit)
+                use_bigtiff = estimated_size > (3.5 * 1024 * 1024 * 1024)
+                
                 out = os.path.join(self.dst, base_name + u"_stitched.tif")
                 try:
-                    IJ.saveAs(imp, "Tiff", out)
-                    log(u"Saved stitched: {}".format(out))
+                    if use_bigtiff:
+                        # Save as BigTIFF for large files
+                        log(u"File size ~{:.2f}GB, using BigTIFF format".format(estimated_size / (1024.0**3)))
+                        IJ.run(imp, "Bio-Formats Exporter", "save=[" + out + "] compression=Uncompressed")
+                        log(u"Saved stitched (BigTIFF): {}".format(out))
+                    else:
+                        # Save as standard TIFF for smaller files
+                        log(u"File size ~{:.2f}GB, using standard TIFF format".format(estimated_size / (1024.0**3)))
+                        IJ.saveAs(imp, "Tiff", out)
+                        log(u"Saved stitched: {}".format(out))
                 except Exception as e:
-                    log(u"Saving final stitched failed: {}".format(e))
+                    # Fallback: try the other format
+                    try:
+                        if use_bigtiff:
+                            log(u"BigTIFF save failed, trying standard TIFF: {}".format(e))
+                            IJ.saveAs(imp, "Tiff", out)
+                            log(u"Saved stitched (standard TIFF fallback): {}".format(out))
+                        else:
+                            log(u"Standard TIFF save failed, trying BigTIFF: {}".format(e))
+                            IJ.run(imp, "Bio-Formats Exporter", "save=[" + out + "] compression=Uncompressed")
+                            log(u"Saved stitched (BigTIFF fallback): {}".format(out))
+                    except Exception as e2:
+                        log(u"Saving final stitched failed: {}".format(e2))
+                
+                
+        # Garbage collection after saving
+        log_memory()
+        System.gc()
+        Thread.sleep(500)
+        log(u"Garbage collection completed after saving")
+        log_memory()
         
         if not self.do_show:
             imp.close()
@@ -1535,6 +1565,349 @@ def compute_threads():
         return max_cores
     return max_cores - 1
 
+def estimate_file_metrics(czi_path):
+    """
+    Estimate file processing metrics without full load.
+    Returns: (num_tiles, num_slices, num_channels, voxel_volume)
+    """
+    try:
+        opts = ImporterOptions()
+        opts.setId(czi_path)
+        opts.setQuiet(True)
+        opts.setGroupFiles(False)
+        proc = ImportProcess(opts)
+        proc.execute()
+        reader = proc.getReader()
+        
+        # Get full-res series
+        full_res_indices = get_full_res_series_indices(reader)
+        num_tiles = len(full_res_indices)
+        
+        # Get dimensions from first tile
+        if num_tiles > 0:
+            reader.setSeries(full_res_indices[0])
+            width = reader.getSizeX()
+            height = reader.getSizeY()
+            slices = reader.getSizeZ()
+            channels = reader.getSizeC()
+            
+            # Calculate total voxel volume
+            voxel_volume = num_tiles * width * height * slices * channels
+            
+            reader.close()  # CRITICAL: Close reader, not proc
+            
+            return (num_tiles, slices, channels, voxel_volume)
+        
+        reader.close()
+        return (0, 0, 0, 0)
+        
+    except Exception as e:
+        logd(u"Metadata Error: {}".format(e))
+        return (0, 0, 0, 0)
+
+def estimate_batch_time(files):
+    """
+    Estimate total batch processing time using composite linear model.
+    Based on user's live data coefficients:
+    - K_REG: 330ms per tile (2D registration)
+    - K_IO: 105ms per slice (I/O overhead)
+    - K_FUSION: 70.5ms per MVox (3D fusion)
+    """
+    log(u"")
+    log(u"=== BATCH ANALYSIS ===")
+    log(u"Analyzing {} files...".format(len(files)))
+    
+    # Coefficients from user's live data
+    K_REG = 330.0     # ms per Tile (2D registration)
+    K_IO = 105.0      # ms per Slice (I/O overhead)
+    K_FUSION = 70.5   # ms per MVox (3D fusion)
+    
+    # Load config for performance scaling factor
+    _config = _load_config()
+    S = _config.get("performance_scale", 1.0)
+    
+    file_info = []
+    total_time_sec = 0
+    
+    for f in files:
+        fname = os.path.basename(f)
+        tiles, slices, channels, voxels = estimate_file_metrics(f)
+        
+        if tiles == 0:
+            log(u"  {}: Unable to read metadata, skipping estimate".format(fname))
+            continue
+        
+        # Composite linear model: T = S * (K_REG*T + K_IO*Z + K_FUSION*V_MVox)
+        mvox = voxels / 1e6
+        est_time_ms = S * (K_REG * tiles + K_IO * slices + K_FUSION * mvox)
+        est_time_sec = est_time_ms / 1000.0
+        
+        file_info.append({
+            'path': f,
+            'name': fname,
+            'tiles': tiles,
+            'slices': slices,
+            'channels': channels,
+            'voxels': voxels,
+            'est_time_sec': est_time_sec
+        })
+        total_time_sec += est_time_sec
+        
+        log(u"  {}: {} tiles, {} slices, {} ch, ~{:.1f}s".format(
+            fname, tiles, slices, channels, est_time_sec))
+    
+    total_time_min = total_time_sec / 60.0
+    
+    # Calculate estimated completion time in 24h format
+    completion_timestamp = time.time() + total_time_sec
+    completion_struct = time.localtime(completion_timestamp)
+    completion_str = time.strftime("%H:%M:%S", completion_struct)
+    
+    log(u"")
+    log(u"Total estimated processing time: {:.1f} minutes ({:.1f} seconds)".format(
+        total_time_min, total_time_sec))
+    log(u"Estimated completion time: {} (24h format)".format(completion_str))
+    log(u"Performance scale factor: {:.2f}".format(S))
+    log(u"=== END BATCH ANALYSIS ===")
+    log(u"")
+    
+    return file_info, total_time_sec
+
+def sort_files_by_size(files):
+    """
+    Sort files by estimated processing time (largest first).
+    This allows users to see progress sooner on large batches.
+    """
+    log(u"Sorting files by size (largest first)...")
+    
+    file_metrics = []
+    for f in files:
+        try:
+            tiles, slices, channels, voxels = estimate_file_metrics(f)
+            file_metrics.append((f, voxels))
+        except:
+            file_metrics.append((f, 0))
+    
+    # Sort by voxels descending
+    file_metrics.sort(key=lambda x: x[1], reverse=True)
+    
+    sorted_files = [fm[0] for fm in file_metrics]
+    log(u"Files sorted: largest ({:.1f}M voxels) to smallest ({:.1f}M voxels)".format(
+        file_metrics[0][1] / 1e6 if file_metrics else 0,
+        file_metrics[-1][1] / 1e6 if file_metrics else 0))
+    
+    return sorted_files
+
+def create_robust_projection(imp, projection_method, num_z_slices):
+    """
+    Create z-projection using proven channel-splitting method.
+    Based on the working pipeline from user's reference script.
+    
+    Args:
+        imp: Source ImagePlus (must be multi-slice stack)
+        projection_method: String method name
+        num_z_slices: Number of z-slices being projected
+    
+    Returns:
+        ImagePlus with projection, or None if failed
+    """
+    try:
+        logd(u"  Creating robust projection using channel-splitting method...")
+        
+        # Store original LUTs for color transfer
+        source_luts = None
+        if imp.isComposite():
+            source_luts = imp.getLuts()
+            logd(u"  Retrieved {} LUTs from source".format(len(source_luts) if source_luts else 0))
+        
+        # Create safe duplicate to work on
+        dup = Duplicator().run(imp)
+        
+        # SPLIT CHANNELS (CRITICAL STABILITY STEP)
+        # Processing single channels prevents composite-mode crashes
+        channels = ChannelSplitter.split(dup)
+        dup.close()  # Free memory
+        
+        logd(u"  Split into {} channels".format(len(channels)))
+        
+        # Map method name to ZProjector constant
+        method_map = {
+            "Max Intensity": ZProjector.MAX_METHOD,
+            "Average Intensity": ZProjector.AVG_METHOD,
+            "Sum Slices": ZProjector.SUM_METHOD,
+            "Standard Deviation": ZProjector.SD_METHOD,
+            "Median": ZProjector.MEDIAN_METHOD,
+            "Min Intensity": ZProjector.MIN_METHOD
+        }
+        method_id = method_map.get(projection_method, ZProjector.MAX_METHOD)
+        
+        # Project each channel individually
+        projected_channels = []
+        for i, c_imp in enumerate(channels):
+            zp = ZProjector(c_imp)
+            zp.setMethod(method_id)
+            zp.setStartSlice(1)
+            zp.setStopSlice(c_imp.getNSlices())
+            zp.doProjection()
+            projected_channels.append(zp.getProjection())
+            logd(u"    Channel {} projected".format(i + 1))
+        
+        # MERGE CHANNELS back to Composite
+        # This restores the multi-channel structure
+        merged_proj = RGBStackMerge.mergeChannels(projected_channels, False)
+        
+        # Cleanup split channels to free RAM
+        for c_imp in channels:
+            c_imp.close()
+        System.gc()
+        
+        logd(u"  Channels merged, {} channels in result".format(merged_proj.getNChannels()))
+        
+        # Apply original LUTs if available
+        if source_luts and merged_proj.getNChannels() > 1:
+            # Convert to CompositeImage to apply LUTs
+            proj_comp = CompositeImage(merged_proj, CompositeImage.COMPOSITE)
+            
+            # Apply each LUT
+            for i, lut in enumerate(source_luts):
+                if i < proj_comp.getNChannels():
+                    proj_comp.setChannelLut(lut, i + 1)
+            
+            # Set COMPOSITE mode
+            proj_comp.setMode(CompositeImage.COMPOSITE)
+            proj_comp.updateAllChannelsAndDraw()
+            
+            logd(u"  >>> LUTs applied successfully")
+            return proj_comp
+        else:
+            logd(u"  Returning merged projection without LUT transfer")
+            return merged_proj
+            
+    except Exception as e:
+        log(u"Robust projection failed: {}".format(e))
+        import traceback
+        for line in traceback.format_exc().split('\n'):
+            logd(u"  {}".format(line))
+        return None
+
+def process_projection_batch(output_dir, projection_method, do_show, do_save):
+    """
+    Process all *_stitched.tif files in output directory to create projections.
+    Runs as separate batch after stitching is complete.
+    
+    Args:
+        output_dir: Directory containing *_stitched.tif files
+        projection_method: String method name for projection
+        do_show: Whether to display projections
+        do_save: Whether to save projections
+    """
+    log(u"")
+    log(u"=" * 70)
+    log(u"=== STARTING Z-PROJECTION BATCH ===")
+    log(u"=" * 70)
+    log(u"Method: {}".format(projection_method))
+    log(u"")
+    
+    # Find all *_stitched.tif files
+    stitched_files = []
+    for f in os.listdir(output_dir):
+        if f.endswith("_stitched.tif") or f.endswith("_stitched.tiff"):
+            stitched_files.append(os.path.join(output_dir, f))
+    
+    if not stitched_files:
+        log(u"No *_stitched.tif files found in output directory")
+        log(u"Skipping projection batch")
+        return
+    
+    log(u"Found {} stitched file(s) to process".format(len(stitched_files)))
+    
+    proj_count = 0
+    for idx, stitched_path in enumerate(stitched_files):
+        try:
+            fname = os.path.basename(stitched_path)
+            base_name = fname.replace("_stitched.tif", "").replace("_stitched.tiff", "")
+            
+            log(u"")
+            log(u"[{}/{}] Processing: {}".format(idx + 1, len(stitched_files), fname))
+            
+            # Load stitched file
+            imp = IJ.openImage(stitched_path)
+            if imp is None:
+                log(u"  Failed to load image, skipping")
+                continue
+            
+            num_slices = imp.getNSlices()
+            if num_slices <= 1:
+                log(u"  Only {} slice(s), skipping projection".format(num_slices))
+                imp.close()
+                continue
+            
+            log(u"  Loaded: {} slices, {} channels".format(num_slices, imp.getNChannels()))
+            
+            # Create projection using robust method
+            proj_imp = create_robust_projection(imp, projection_method, num_slices)
+            
+            if proj_imp is None:
+                log(u"  Projection creation failed, skipping")
+                imp.close()
+                continue
+            
+            # Create filename with z-count and method
+            # Format: basename_<num>z_<method>.tif
+            method_short = projection_method.replace(" Intensity", "").replace(" Slices", "").replace(" ", "")
+            proj_filename = u"{}_{}z_{}.tif".format(base_name, num_slices, method_short)
+            proj_imp.setTitle(proj_filename.replace(".tif", ""))
+            
+            # Auto brightness/contrast adjustment
+            # Apply to each channel to handle varying intensity ranges (especially for Min/Sum methods)
+            try:
+                if proj_imp.isComposite():
+                    log(u"  Applying auto brightness/contrast...")
+                    for c in range(1, proj_imp.getNChannels() + 1):
+                        proj_imp.setC(c)
+                        IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    proj_imp.setC(1)  # Reset to first channel
+                    log(u"  Auto B&C applied to all channels")
+                else:
+                    IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    log(u"  Auto B&C applied")
+            except Exception as e:
+                logd(u"  Auto B&C failed: {}".format(e))
+            
+            # Save if requested
+            if do_save:
+                proj_out = os.path.join(output_dir, proj_filename)
+                try:
+                    IJ.saveAs(proj_imp, "Tiff", proj_out)
+                    log(u"  Saved: {}".format(proj_filename))
+                    proj_count += 1
+                except Exception as e:
+                    log(u"  Save failed: {}".format(e))
+            
+            # Show if requested
+            if do_show:
+                proj_imp.show()
+                log(u"  Displayed projection")
+            elif not do_save:
+                proj_imp.close()
+            
+            # Close source image
+            imp.close()
+            
+            # Garbage collection
+            System.gc()
+            
+        except Exception as e:
+            log(u"  Processing failed: {}".format(e))
+            import traceback
+            traceback.print_exc()
+    
+    log(u"")
+    log(u"=" * 70)
+    log(u"Projection batch complete: {} projection(s) created".format(proj_count))
+    log(u"=" * 70)
+    log(u"")
+
 # ==============================================================================
 # PART 11: MAIN ENTRY POINT (from v31.16h + v34.8 bug fixes)
 # ==============================================================================
@@ -1543,12 +1916,12 @@ def show_splash():
     """Display ASCII art splash screen with corrective padding for proportional fonts"""
     splash = u"""
       +---+---+---+
-      | C | Z | I  |    CZI-STITCHER v37.4
+      | C | Z | I  |    CZI-STITCHER v37.5
       +---+---+---+     ======================
       | S | t  | i  |   > Workflow: v31.16h
       +---+---+---+     > UTF-8:    v34.8
       | t  | c | h |    > LUTs:     v36.5
-      +---+---+---+
+      +---+---+---+     > Paths:    v37.5
 
       [Target] Zeiss Zen/CZI Analysis
       [Status] Initializing environment...
@@ -1571,81 +1944,164 @@ def main():
     _home = os.path.expanduser("~")
     _last_in = _config.get("last_input_dir", "") or _home
     _last_out = _config.get("last_output_dir", "") or _home
+    _last_proc = _config.get("last_processing_dir", "") or _last_out
     if not os.path.isdir(_last_in): 
         _last_in = _home
     if not os.path.isdir(_last_out): 
         _last_out = _home
+    if not os.path.isdir(_last_proc):
+        _last_proc = _last_out
     
-    # Select directories
-    in_path = pick_directory_with_jfilechooser("Select Source Folder (CZI Files)", _last_in)
-    if not in_path: 
-        log("No source selected. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    out_path = pick_directory_with_jfilechooser("Select Target Folder (Results)", _last_out)
-    if not out_path: 
-        log("No target selected. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    _config["last_input_dir"] = in_path
-    _config["last_output_dir"] = out_path
-    _save_config(_config)
-    
-    input_dir_raw = File(unicode(in_path))
-    output_dir_raw = File(unicode(out_path))
-    
-    # Parameter dialog
-    gd = GenericDialog("Ixytocin Stitcher - Parameters")
-    gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
-    gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
-    gd.addNumericField("Regression Threshold", 0.30, 2)
-    gd.addNumericField("Max Displacement (px)", 5.0, 1)
-    gd.addCheckbox("Show Results (Preview)", True)
-    gd.addCheckbox("Save Results", True)
-    gd.addCheckbox("Als BigTIFF speichern", False)
-    gd.addCheckbox("Cleanup Temp Files", True)
-    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
-    gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
-    gd.showDialog()
-    
-    if gd.wasCanceled():
-        log("User cancelled parameter dialog. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    # Get parameters (v34.8 fix: convert booleans to int first)
-    fusion_method = gd.getNextChoice()
-    rb_radius = int(gd.getNextNumber())
-    reg_thresh = float(gd.getNextNumber())
-    disp_thresh = float(gd.getNextNumber())
-    do_show = (int(gd.getNextBoolean()) == 1)
-    do_save = (int(gd.getNextBoolean()) == 1)
-    save_bigtiff = (int(gd.getNextBoolean()) == 1)
-    do_clean = (int(gd.getNextBoolean()) == 1)
-    auto_adjust = (int(gd.getNextBoolean()) == 1)
-    try:
+    # Parameter dialog loop - allows returning to dialog if illegal settings detected
+    while True:
+        # Parameter dialog with path fields
+        gd = GenericDialog("Specialised CZI Stitcher - Parameters v37.5")
+        gd.addMessage("=== Directory Paths ===")
+        gd.addStringField("Input Folder (CZI files):", _last_in, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        gd.addStringField("Output Folder (Results):", _last_out, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        gd.addStringField("Processing Folder (Temp):", _last_proc, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        
+        gd.addMessage("=== Stitching Parameters ===")
+        gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
+        gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
+        gd.addNumericField("Regression Threshold", 0.30, 2)
+        gd.addNumericField("Max Displacement (px)", 5.0, 1)
+        
+        gd.addMessage("=== Output Options (at least one must be enabled) ===")
+        gd.addCheckbox("Save Stitched Stack", True)
+        gd.addCheckbox("Show Stitched Stack", True)
+        gd.addCheckbox("Save Z-Projection", False)
+        gd.addCheckbox("Show Z-Projection", False)
+        gd.addChoice("Z-Projection Method", ["Max Intensity", "Average Intensity", "Sum Slices", "Standard Deviation", "Median", "Min Intensity"], "Max Intensity")
+        
+        gd.addMessage("=== Processing Options ===")
+        gd.addCheckbox("Verbose/Debug Logging", True)
+        gd.addCheckbox("Cleanup Temp Files", True)
+        gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
+        gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
+        gd.showDialog()
+        
+        if gd.wasCanceled():
+            log("User cancelled parameter dialog. Exiting.")
+            raise SystemExit("Cancelled by user")
+        
+        # Get directory paths
+        in_path = gd.getNextString().strip()
+        out_path = gd.getNextString().strip()
+        proc_path = gd.getNextString().strip()
+        
+        # Validate paths
+        if not in_path or not os.path.isdir(in_path):
+            log(u"Error: Input folder '{}' does not exist or is invalid.".format(in_path))
+            raise SystemExit("Invalid input folder")
+        if not out_path or not os.path.isdir(out_path):
+            log(u"Error: Output folder '{}' does not exist or is invalid.".format(out_path))
+            raise SystemExit("Invalid output folder")
+        if not proc_path or not os.path.isdir(proc_path):
+            log(u"Error: Processing folder '{}' does not exist or is invalid.".format(proc_path))
+            raise SystemExit("Invalid processing folder")
+        
+        # Save config
+        _config["last_input_dir"] = in_path
+        _config["last_output_dir"] = out_path
+        _config["last_processing_dir"] = proc_path
+        _save_config(_config)
+        
+        input_dir_raw = File(unicode(in_path))
+        output_dir_raw = File(unicode(out_path))
+        processing_dir_raw = File(unicode(proc_path))
+        
+        # Get parameters
+        fusion_method = gd.getNextChoice()
+        rb_radius = int(gd.getNextNumber())
+        reg_thresh = float(gd.getNextNumber())
+        disp_thresh = float(gd.getNextNumber())
+        
+        # Output options
+        save_stack = (int(gd.getNextBoolean()) == 1)
+        show_stack = (int(gd.getNextBoolean()) == 1)
+        save_projection = (int(gd.getNextBoolean()) == 1)
+        show_projection = (int(gd.getNextBoolean()) == 1)
+        projection_method = gd.getNextChoice()
+        
+        # Processing options
+        verbose_mode = (int(gd.getNextBoolean()) == 1)
+        do_clean = (int(gd.getNextBoolean()) == 1)
+        auto_adjust = (int(gd.getNextBoolean()) == 1)
         corr_factor = float(gd.getNextNumber())
-    except:
-        corr_factor = 10.0
+        
+        # Set global VERBOSE flag
+        global VERBOSE
+        VERBOSE = verbose_mode
+        
+        # Validate output options
+        do_projection = save_projection or show_projection
+        has_any_output = save_stack or show_stack or save_projection or show_projection
+        
+        # Show popup and return to parameters if illegal settings detected
+        if not has_any_output:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "At least one output option must be enabled:\n" +
+                         "- Save Stitched Stack\n" +
+                         "- Show Stitched Stack\n" +
+                         "- Save Z-Projection\n" +
+                         "- Show Z-Projection\n\n" +
+                         "Please select at least one option.").show()
+            log(u"Error: No output options selected. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # CRITICAL: If projection is requested, save_stack MUST be enabled
+        if do_projection and not save_stack:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
+                         "Projections are created from saved *_stitched.tif files\n" +
+                         "after stitching completes.\n\n" +
+                         "Please enable 'Save Stitched Stack' to proceed.").show()
+            log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # If we reach here, settings are valid - break out of loop
+        break
     
     thread_count_slider = compute_threads()
     
     # Process files
-    s_dir, t_dir = get_safe_path(input_dir_raw), get_safe_path(output_dir_raw)
+    s_dir = get_safe_path(input_dir_raw)
+    t_dir = get_safe_path(output_dir_raw)
+    temp_root = get_safe_path(processing_dir_raw)
+    
     files = sorted([os.path.join(s_dir, f) for f in os.listdir(s_dir) if f.lower().endswith(".czi")])
     
     if not files:
         log(u"No CZI files found in {}".format(s_dir))
         return
     
-    temp_root = choose_temp_root(t_dir, files)
+    # Sort files by size (largest first) for better progress visibility
+    files = sort_files_by_size(files)
+    
+    # Estimate batch processing time
+    file_info, est_time_sec = estimate_batch_time(files)
+    
     t_lim = int(compute_threads())
     
     try:
-        log(u"Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(
-            unicode(s_dir), unicode(t_dir), t_lim, temp_root))
+        log(u"Input: {}".format(unicode(s_dir)))
+        log(u"Output: {}".format(unicode(t_dir)))
+        log(u"Processing/Temp: {}".format(unicode(temp_root)))
+        log(u"Threads: {}".format(t_lim))
     except:
-        log("Source: {} , Target: {} , Threads: {} , TempRoot: {}".format(
-            s_dir, t_dir, t_lim, temp_root))
+        log("Input: {}".format(s_dir))
+        log("Output: {}".format(t_dir))
+        log("Processing/Temp: {}".format(temp_root))
+        log("Threads: {}".format(t_lim))
     
     log(u"")
     log(u"Parameters:")
@@ -1655,24 +2111,112 @@ def main():
     log(u"  Max Displacement: {}".format(disp_thresh))
     log(u"  Auto-adjust: {}".format(auto_adjust))
     log(u"  Correction Factor: {}".format(corr_factor))
+    log(u"  Save Stack: {} | Show Stack: {}".format(save_stack, show_stack))
+    log(u"  Z-Projection: {}".format("Enabled ({})".format(projection_method) if do_projection else "Disabled"))
+    if do_projection:
+        log(u"    Save Projection: {} | Show Projection: {}".format(save_projection, show_projection))
     log(u"")
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, fusion_method, rb_radius, 
-                                 reg_thresh, disp_thresh, do_show, do_save, save_bigtiff, 
+                                 reg_thresh, disp_thresh, show_stack, save_stack, 
                                  do_clean, auto_adjust, corr_factor)
     
-    for f in files:
+    batch_start_time = time.time()
+    files_completed = 0
+    
+    for idx, f in enumerate(files):
         try:
+            file_start = time.time()
+            log(u"")
+            log(u"=" * 70)
+            log(u"Processing file {}/{}: {}".format(idx + 1, len(files), os.path.basename(f)))
+            log(u"=" * 70)
+            
             stitcher.process_file(f)
+            
+            file_elapsed = time.time() - file_start
+            files_completed += 1
+            
+            # Calculate remaining time estimate
+            avg_time_per_file = (time.time() - batch_start_time) / files_completed
+            remaining_files = len(files) - files_completed
+            est_remaining_sec = avg_time_per_file * remaining_files
+            est_remaining_min = est_remaining_sec / 60.0
+            
+            # Calculate estimated completion time in 24h format
+            completion_timestamp = time.time() + est_remaining_sec
+            completion_struct = time.localtime(completion_timestamp)
+            completion_str = time.strftime("%H:%M:%S", completion_struct)
+            
+            log(u"")
+            log(u"File completed in {:.1f} seconds".format(file_elapsed))
+            log(u"Progress: {}/{} files ({:.1f}%)".format(
+                files_completed, len(files), (files_completed * 100.0) / len(files)))
+            
+            # Special message when 100% complete
+            if files_completed >= len(files) and est_time_sec > 0:
+                # Calculate deviation from original estimate
+                actual_time = time.time() - batch_start_time
+                deviation_pct = ((actual_time - est_time_sec) / est_time_sec) * 100.0
+                
+                if abs(deviation_pct) <= 5.0:
+                    log(u"Estimate deviation: {:.1f}% :) made it in time".format(deviation_pct))
+                elif deviation_pct > 10.0:
+                    log(u"Estimate deviation: +{:.1f}% :| sorry for the delay".format(deviation_pct))
+                elif deviation_pct < -10.0:
+                    log(u"Estimate deviation: {:.1f}% o.O that was kinda fast".format(deviation_pct))
+                else:
+                    log(u"Estimate deviation: {:.1f}%".format(deviation_pct))
+            else:
+                log(u"Estimated time remaining: {:.1f} minutes".format(est_remaining_min))
+                log(u"Estimated completion time: {} (24h format)".format(completion_str))
+            
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
             import traceback
             traceback.print_exc()
     
+    batch_elapsed = time.time() - batch_start_time
+    batch_elapsed_min = batch_elapsed / 60.0
+    
     log(u"")
     log(u"=" * 70)
-    log(u"Batch Done.")
+    log(u"Stitching Batch Done.")
+    log(u"Files processed: {}/{}".format(files_completed, len(files)))
+    log(u"Total time: {:.1f} minutes ({:.1f} seconds)".format(batch_elapsed_min, batch_elapsed))
+    log(u"Average per file: {:.1f} seconds".format(batch_elapsed / files_completed if files_completed > 0 else 0))
     log(u"=" * 70)
+    
+    # Update performance scale factor based on actual performance
+    if est_time_sec > 0 and files_completed > 0:
+        old_scale = _config.get("performance_scale", 1.0)
+        actual_time = batch_elapsed
+        deviation_pct = ((actual_time - est_time_sec) / est_time_sec) * 100.0
+        
+        # Check for major deviation (2x or more off)
+        if abs(deviation_pct) > 100.0:
+            # Set directly to match last performance
+            new_scale = old_scale * (actual_time / est_time_sec)
+            _config["performance_scale"] = new_scale
+            log(u"")
+            log(u"o_O man I was way off - setting scale to match last performance")
+            log(u"Performance scale factor: {:.2f} -> {:.2f}".format(old_scale, new_scale))
+        else:
+            # Normal learning with exponential moving average (70% old, 30% new)
+            new_scale = old_scale * (actual_time / est_time_sec)
+            final_scale = 0.7 * old_scale + 0.3 * new_scale
+            _config["performance_scale"] = final_scale
+            log(u"")
+            log(u"Updated performance scale factor: {:.2f} -> {:.2f} (learning enabled)".format(
+                old_scale, final_scale))
+        
+        _save_config(_config)
+    
+    # Run projection batch if requested
+    if do_projection:
+        log(u"")
+        log(u"Stitching complete. Starting projection batch...")
+        process_projection_batch(t_dir, projection_method, show_projection, save_projection)
     
     if PLAY_JINGLE_ON_DONE:
         play_clear_jingle()

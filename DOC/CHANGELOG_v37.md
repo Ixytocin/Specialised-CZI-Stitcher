@@ -1,7 +1,71 @@
 # Changelog - v37.x Series (Beta Development)
 
 ## Purpose
-This changelog documents the evolution from broken code to first stable beta (v37.4), tracking all critical fixes applied during the consolidation process.
+This changelog documents the evolution from broken code to stable beta releases, tracking all critical fixes and enhancements applied during the consolidation process.
+
+---
+
+## v37.5 (2025-12-26) - Enhanced Path Management & Z-Projection
+**Status**: Enhanced Beta with Improved Workflow
+
+### Added
+- **Three-Folder System**: Separate input, output, and processing/temp directory selection
+  - Input folder: Source .czi files
+  - Output folder: Final stitched results
+  - Processing/Temp folder: Temporary files during stitching (can be RAM disk)
+- **Z-Projection Support**: Optional automatic projection generation
+  - Checkbox to enable/disable projection
+  - Dropdown with 6 projection methods: Max Intensity, Average, Sum, SD, Median, Min
+  - Projections saved as `*_projection.tif` alongside stitched results
+  - LUTs automatically applied to projections for multi-channel images
+- **Garbage Collection**: Automatic memory cleanup at major processing steps
+  - Before tile extraction
+  - After 2D registration
+  - After 3D fusion
+  - After saving results
+  - Memory usage logged before and after each GC
+- **Smart BigTIFF**: Automatic format selection based on estimated file size
+  - Uses BigTIFF only when necessary (>3.5GB estimated size)
+  - Logs file size estimate and chosen format
+  - Fallback handling if primary save method fails
+
+### Changed
+- **Settings File**: Renamed from `.ixytocin_stitcher.json` to `.specialised_czi_stitcher_config.json`
+  - Unique name prevents conflicts with other tools
+  - Saves all three directory paths (input, output, processing)
+- **Directory Selection**: Three separate dialogs for clearer workflow
+  - "Select Input Folder (CZI Files)"
+  - "Select Output Folder (Stitched Results)"
+  - "Select Processing/Temp Folder (use RAM disk for speed)"
+- **RAM Disk Handling**: Removed automatic RAM disk detection
+  - Users now manually select RAM disk as processing folder if desired
+  - Documented in README as performance tip
+- **Parameter Dialog**: Reorganized with section headers
+  - "=== Stitching Parameters ==="
+  - "=== Output Options ==="
+  - "=== Processing Options ==="
+- **Removed**: "Als BigTIFF speichern" checkbox (now automatic)
+
+### Fixed
+- Potential RAM overflow from large temporary files (garbage collection)
+- Memory not freed between processing steps
+- No option to use different drives for temp files
+
+### Performance Improvements
+- Garbage collection between major steps prevents RAM buildup
+- Option to use RAM disk for processing folder significantly speeds up I/O
+- Automatic BigTIFF selection avoids unnecessary overhead for small files
+
+### Documentation
+- Updated README with v37.5 features and three-folder workflow
+- Added RAM disk usage tips
+- Added z-projection parameter explanations
+- Documented automatic BigTIFF behavior
+
+### Testing Status
+- Code changes validated for syntax
+- Documentation updated and cross-referenced
+- Ready for user testing
 
 ---
 

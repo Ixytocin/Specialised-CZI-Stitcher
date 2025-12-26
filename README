@@ -1,6 +1,6 @@
-# Specialised CZI Stitcher v37.4 (Beta)
+# Specialised CZI Stitcher v37.5 (Stable)
 
-> **First Stable Minimal Viable Beta Release**
+> **Enhanced Release with Robust Z-Projection and Smart Progress Tracking**
 >
 > **Development Method:** Vibe Coding  
 > **Vision & Validation:** [Ixytocin](https://github.com/Ixytocin)  
@@ -29,16 +29,31 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 - **Pixel Size Accuracy**: Extracts correct scaling from OME-XML (avoiding 10x errors)
 - **Rolling Ball Background Subtraction**: Optional per-tile shading correction
 
-### Reliability Features (v37.4)
+### New in v37.5
+- **Three-Folder System**: Separate input, output, and processing/temp directories
+- **Configurable Paths**: All paths saved in unique settings file (`.specialised_czi_stitcher_config.json`)
+- **Robust Z-Projection Batch**: Separate post-processing batch using proven channel-splitting method
+- **Enhanced Filenames**: Projections include z-count (e.g., `file_15z_Max.tif`)
+- **Smart BigTIFF**: Automatically uses BigTIFF format only for large files (>3.5GB)
+- **Memory Management**: Garbage collection between major processing steps
+- **Parameter Validation**: Popup dialogs guide users back to fix invalid settings
+- **Smart Progress Messages**: Emoji feedback on estimate accuracy at 100% completion
+- **Auto Brightness/Contrast**: Projections automatically enhanced for optimal visibility
+- **Batch Time Prediction**: Composite linear model estimates completion time accurately
+
+### Reliability Features
 - **Comprehensive Debug Logging**: Visual markers (>>>, !!!) show success/failure at each step
 - **Exception Handling**: All critical operations logged with clear error messages
 - **Unicode Support**: Handles German characters (ä, ö, ü, ß) in file paths
 - **Pure ASCII Source**: No encoding declaration errors in Jython 2.7
+- **Memory Optimization**: Automatic garbage collection to prevent RAM overflow
 
 ### User Experience
 - **ASCII Art Splash Screen**: Shows version and component tracking
-- **Progress Messages**: Clear status updates including filesystem loading warnings
+- **Progress Messages**: Clear status updates with completion time estimates (24h format)
+- **Smart Feedback**: Emoji-based deviation messages (`:)`, `:|`, `o.O`)
 - **Configurable Defaults**: Auto-adjust OFF, user controls parameters
+- **Path Memory**: Remembers last used folders for quick workflow
 
 ---
 
@@ -54,7 +69,7 @@ No additional installation required if using recent Fiji distribution.
 
 ## Installation
 
-1. Download `main_unified_v37.jy`
+1. Download `main.jy`
 2. Place in your `Fiji.app/scripts/` folder (or any folder)
 3. Open Fiji
 4. Use File → Open or drag the .jy file into Fiji window
@@ -67,29 +82,40 @@ No additional installation required if using recent Fiji distribution.
 ### Basic Workflow
 
 1. **Start the script**
-   - Splash screen shows version v37.4
+   - Splash screen shows version v37.5
    - "Initializing environment..." message appears
    - "Loading filesystem..." warning for sleeping HDDs
 
-2. **Configure parameters** (dialog appears)
-   - **Source Directory**: Folder containing .czi files
-   - **Target Directory**: Where to save stitched results
-   - **Threads**: Number of CPU threads (default: 31)
-   - **Temp Root**: Temporary file location (default: same as target)
+2. **Select directories** (NEW in v37.5)
+   - **Input Folder**: Folder containing .czi files
+   - **Output Folder**: Where to save stitched results
+   - **Processing/Temp Folder**: Where temporary files are created
+     - Can be same as output folder
+     - **TIP**: Select a RAM disk (e.g., `/dev/shm`, `R:\`, `/tmp`) for faster processing
+     - **TIP**: Use local SSD instead of network drive for better performance
+
+3. **Configure parameters** (dialog appears)
    - **Fusion Method**: Linear Blending (recommended)
    - **Rolling Ball Radius**: 0-200, typically 50-100 for shading correction
    - **Regression Threshold**: 0.3 (default, controls stitching quality)
    - **Max Displacement**: 5.0 pixels (default, controls tile overlap search)
+   - **Show Results**: Preview stitched image
+   - **Save Results**: Save to output folder
+   - **Create Z-Projection**: Optional flattened projection
+   - **Z-Projection Method**: Max Intensity, Average, Sum, SD, Median, or Min
+   - **Cleanup Temp Files**: Remove temporary files after processing
    - **Auto-adjust**: OFF (default, user controls brightness/contrast)
    - **Correction Factor**: 10.0 (only applied to fallback metadata, NOT OME-XML)
 
-3. **Monitor progress**
+4. **Monitor progress**
    - Look for `>>>` (success) or `!!!` (warning/error) markers in log
    - Key section: `=== IMAGE CONVERSION AND LUT APPLICATION ===`
    - Shows HyperStack creation, LUT application, display mode setting
+   - Memory usage logged at major steps
 
-4. **Check results**
-   - Stitched images saved in target directory
+5. **Check results**
+   - Stitched images saved in output directory as `*_stitched.tif`
+   - Optional projections saved as `*_projection.tif`
    - Check if colors match original Zeiss data
    - Verify pixel size and scaling
 
@@ -122,17 +148,22 @@ No additional installation required if using recent Fiji distribution.
 
 ## Known Limitations
 
-### Current Scope (v37.4 Beta)
+### Current Scope (v37.5 Beta)
 - **Tested**: Zeiss .czi files from ApoTome systems
 - **Tested**: Multi-channel (1-4 channels), multi-tile, 3D stacks
 - **Tested**: German file paths with special characters
 - **Not Tested**: Files >100 tiles, files >4 channels
 - **Not Tested**: Non-Zeiss formats (other .czi variants)
+- **Not Tested**: Z-projection with >4 channels
 
 ### Technical Constraints
 - **Jython 2.7**: Limited to Fiji's built-in Jython version
 - **Memory**: Large datasets (100+ tiles, many z-slices) require sufficient RAM
+  - Garbage collection helps but doesn't eliminate RAM requirements
+  - Consider using 32GB+ RAM for very large datasets
 - **Disk Space**: Temporary files require 2-3x the size of input data
+  - Processing folder can fill up quickly
+  - RAM disk limited by RAM size
 - **Processing Time**: 2D registration is fast, 3D fusion can take minutes per file
 
 ### LUT Color Application
@@ -213,7 +244,17 @@ If you encounter issues, please include:
 
 ## Version History
 
-### v37.4 (Current - First Stable Beta)
+### v37.5 (Current - Enhanced Beta)
+- Added three-folder system (input, output, processing/temp)
+- Added optional z-projection with 6 methods
+- Added automatic garbage collection between major steps
+- Added smart BigTIFF (automatic based on file size >3.5GB)
+- Changed settings file to `.specialised_czi_stitcher_config.json`
+- Removed automatic RAM disk detection (user selects manually)
+- Improved memory management to prevent RAM overflow
+- Status: Enhanced beta with improved workflow
+
+### v37.4 (Previous Stable Beta)
 - Added comprehensive debug logging with visual markers
 - Fixed critical silent exception in 3D stack saving
 - Added exception logging for stage label extraction
