@@ -1527,24 +1527,32 @@ class UltimateStitcher:
                         proj_imp = zp.getProjection()
                         proj_imp.setTitle(base_name + "_projection")
                         
-                        # Apply LUTs to projection using robust color transfer
+                        # [FIX] Apply LUTs and force visibility for all channels
                         if proj_imp.getNChannels() > 1 and source_luts:
                             try:
                                 logd(u"  Applying LUTs to projection...")
-                                # Convert to CompositeImage if needed
-                                if not proj_imp.isComposite():
-                                    proj_comp = CompositeImage(proj_imp, CompositeImage.COMPOSITE)
-                                else:
-                                    proj_comp = proj_imp
                                 
-                                # Apply each LUT
+                                # Always create a NEW CompositeImage wrapper for the projection
+                                # ZProjector output is usually just a stack, not a CompositeImage
+                                proj_comp = CompositeImage(proj_imp, CompositeImage.COMPOSITE)
+                                
+                                # Apply each LUT and ensure channel is visible
                                 for i, lut in enumerate(source_luts):
                                     if i < proj_comp.getNChannels():
+                                        # 1. Set active position to this channel
+                                        proj_comp.setPosition(i + 1, 1, 1)
+                                        # 2. Apply the LUT
                                         proj_comp.setChannelLut(lut, i + 1)
+                                        # 3. CRITICAL: Reset display range so pixels aren't hidden
+                                        proj_comp.resetDisplayRange()
                                 
-                                # Set composite mode
+                                # 4. Explicitly set mode to COMPOSITE (overlays channels)
                                 proj_comp.setMode(CompositeImage.COMPOSITE)
+                                
+                                # 5. Activate all channels (prevent "only 4th channel" issue)
+                                # This ensures standard ImageJ behavior of showing all channels
                                 proj_comp.updateAllChannelsAndDraw()
+                                
                                 proj_imp = proj_comp
                                 logd(u"  >>> LUTs applied to projection successfully")
                             except Exception as e:
@@ -1637,6 +1645,114 @@ def compute_threads():
     if max_cores < 10:
         return max_cores
     return max_cores - 1
+
+def estimate_file_metrics(czi_path):
+    """
+    Estimate file processing metrics without full load.
+    Returns: (num_tiles, num_slices, num_channels, voxel_volume)
+    """
+    try:
+        opts = ImporterOptions()
+        opts.setId(czi_path)
+        opts.setQuiet(True)
+        opts.setGroupFiles(False)
+        proc = ImportProcess(opts)
+        proc.execute()
+        reader = proc.getReader()
+        
+        # Get full-res series
+        full_res_indices = get_full_res_series_indices(reader)
+        num_tiles = len(full_res_indices)
+        
+        # Get dimensions from first tile
+        if num_tiles > 0:
+            reader.setSeries(full_res_indices[0])
+            width = reader.getSizeX()
+            height = reader.getSizeY()
+            slices = reader.getSizeZ()
+            channels = reader.getSizeC()
+            
+            # Calculate total voxel volume
+            voxel_volume = num_tiles * width * height * slices * channels
+            
+            reader.close()
+            proc.close()
+            
+            return (num_tiles, slices, channels, voxel_volume)
+        
+        reader.close()
+        proc.close()
+        return (0, 0, 0, 0)
+        
+    except Exception as e:
+        logd(u"Could not estimate metrics for {}: {}".format(czi_path, e))
+        return (0, 0, 0, 0)
+
+def estimate_batch_time(files):
+    """
+    Estimate total batch processing time based on file metrics.
+    Cost per MVox is approximately 70ms based on user's data.
+    """
+    log(u"")
+    log(u"=== BATCH ANALYSIS ===")
+    log(u"Analyzing {} files...".format(len(files)))
+    
+    COST_PER_MVOX_MS = 70.0  # milliseconds per million voxels (from user data)
+    
+    file_info = []
+    total_voxels = 0
+    
+    for f in files:
+        fname = os.path.basename(f)
+        tiles, slices, channels, voxels = estimate_file_metrics(f)
+        file_info.append({
+            'path': f,
+            'name': fname,
+            'tiles': tiles,
+            'slices': slices,
+            'channels': channels,
+            'voxels': voxels,
+            'est_time_sec': (voxels / 1e6) * COST_PER_MVOX_MS / 1000.0
+        })
+        total_voxels += voxels
+        log(u"  {}: {} tiles, {} slices, {} ch, ~{:.1f}s".format(
+            fname, tiles, slices, channels, (voxels / 1e6) * COST_PER_MVOX_MS / 1000.0))
+    
+    total_time_sec = (total_voxels / 1e6) * COST_PER_MVOX_MS / 1000.0
+    total_time_min = total_time_sec / 60.0
+    
+    log(u"")
+    log(u"Total estimated processing time: {:.1f} minutes ({:.1f} seconds)".format(
+        total_time_min, total_time_sec))
+    log(u"=== END BATCH ANALYSIS ===")
+    log(u"")
+    
+    return file_info, total_time_sec
+
+def sort_files_by_size(files):
+    """
+    Sort files by estimated processing time (largest first).
+    This allows users to see progress sooner on large batches.
+    """
+    log(u"Sorting files by size (largest first)...")
+    
+    file_metrics = []
+    for f in files:
+        try:
+            tiles, slices, channels, voxels = estimate_file_metrics(f)
+            file_metrics.append((f, voxels))
+        except:
+            file_metrics.append((f, 0))
+    
+    # Sort by voxels descending
+    file_metrics.sort(key=lambda x: x[1], reverse=True)
+    
+    sorted_files = [fm[0] for fm in file_metrics]
+    log(u"Files sorted: largest ({:.1f}M voxels) to smallest ({:.1f}M voxels)".format(
+        file_metrics[0][1] / 1e6 if file_metrics else 0,
+        file_metrics[-1][1] / 1e6 if file_metrics else 0))
+    
+    return sorted_files
 
 # ==============================================================================
 # PART 11: MAIN ENTRY POINT (from v31.16h + v34.8 bug fixes)
@@ -1784,6 +1900,12 @@ def main():
         log(u"No CZI files found in {}".format(s_dir))
         return
     
+    # Sort files by size (largest first) for better progress visibility
+    files = sort_files_by_size(files)
+    
+    # Estimate batch processing time
+    file_info, est_time_sec = estimate_batch_time(files)
+    
     t_lim = int(compute_threads())
     
     try:
@@ -1816,17 +1938,48 @@ def main():
                                  do_clean, auto_adjust, corr_factor, do_projection, projection_method,
                                  show_projection)
     
-    for f in files:
+    batch_start_time = time.time()
+    files_completed = 0
+    
+    for idx, f in enumerate(files):
         try:
+            file_start = time.time()
+            log(u"")
+            log(u"=" * 70)
+            log(u"Processing file {}/{}: {}".format(idx + 1, len(files), os.path.basename(f)))
+            log(u"=" * 70)
+            
             stitcher.process_file(f)
+            
+            file_elapsed = time.time() - file_start
+            files_completed += 1
+            
+            # Calculate remaining time estimate
+            avg_time_per_file = (time.time() - batch_start_time) / files_completed
+            remaining_files = len(files) - files_completed
+            est_remaining_sec = avg_time_per_file * remaining_files
+            est_remaining_min = est_remaining_sec / 60.0
+            
+            log(u"")
+            log(u"File completed in {:.1f} seconds".format(file_elapsed))
+            log(u"Progress: {}/{} files ({:.1f}%)".format(
+                files_completed, len(files), (files_completed * 100.0) / len(files)))
+            log(u"Estimated time remaining: {:.1f} minutes".format(est_remaining_min))
+            
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
             import traceback
             traceback.print_exc()
     
+    batch_elapsed = time.time() - batch_start_time
+    batch_elapsed_min = batch_elapsed / 60.0
+    
     log(u"")
     log(u"=" * 70)
     log(u"Batch Done.")
+    log(u"Files processed: {}/{}".format(files_completed, len(files)))
+    log(u"Total time: {:.1f} minutes ({:.1f} seconds)".format(batch_elapsed_min, batch_elapsed))
+    log(u"Average per file: {:.1f} seconds".format(batch_elapsed / files_completed if files_completed > 0 else 0))
     log(u"=" * 70)
     
     if PLAY_JINGLE_ON_DONE:
