@@ -1956,120 +1956,120 @@ def main():
     while True:
         # Parameter dialog with path fields
         gd = GenericDialog("Specialised CZI Stitcher - Parameters v37.5")
-    gd.addMessage("=== Directory Paths ===")
-    gd.addStringField("Input Folder (CZI files):", _last_in, 50)
-    gd.addToSameRow()
-    gd.addMessage("[Browse...]")
-    gd.addStringField("Output Folder (Results):", _last_out, 50)
-    gd.addToSameRow()
-    gd.addMessage("[Browse...]")
-    gd.addStringField("Processing Folder (Temp):", _last_proc, 50)
-    gd.addToSameRow()
-    gd.addMessage("[Browse...]")
-    
-    gd.addMessage("=== Stitching Parameters ===")
-    gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
-    gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
-    gd.addNumericField("Regression Threshold", 0.30, 2)
-    gd.addNumericField("Max Displacement (px)", 5.0, 1)
-    
-    gd.addMessage("=== Output Options (at least one must be enabled) ===")
-    gd.addCheckbox("Save Stitched Stack", True)
-    gd.addCheckbox("Show Stitched Stack", True)
-    gd.addCheckbox("Save Z-Projection", False)
-    gd.addCheckbox("Show Z-Projection", False)
-    gd.addChoice("Z-Projection Method", ["Max Intensity", "Average Intensity", "Sum Slices", "Standard Deviation", "Median", "Min Intensity"], "Max Intensity")
-    
-    gd.addMessage("=== Processing Options ===")
-    gd.addCheckbox("Verbose/Debug Logging", True)
-    gd.addCheckbox("Cleanup Temp Files", True)
-    gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
-    gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
-    gd.showDialog()
-    
-    if gd.wasCanceled():
-        log("User cancelled parameter dialog. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    # Get directory paths
-    in_path = gd.getNextString().strip()
-    out_path = gd.getNextString().strip()
-    proc_path = gd.getNextString().strip()
-    
-    # Validate paths
-    if not in_path or not os.path.isdir(in_path):
-        log(u"Error: Input folder '{}' does not exist or is invalid.".format(in_path))
-        raise SystemExit("Invalid input folder")
-    if not out_path or not os.path.isdir(out_path):
-        log(u"Error: Output folder '{}' does not exist or is invalid.".format(out_path))
-        raise SystemExit("Invalid output folder")
-    if not proc_path or not os.path.isdir(proc_path):
-        log(u"Error: Processing folder '{}' does not exist or is invalid.".format(proc_path))
-        raise SystemExit("Invalid processing folder")
-    
-    # Save config
-    _config["last_input_dir"] = in_path
-    _config["last_output_dir"] = out_path
-    _config["last_processing_dir"] = proc_path
-    _save_config(_config)
-    
-    input_dir_raw = File(unicode(in_path))
-    output_dir_raw = File(unicode(out_path))
-    processing_dir_raw = File(unicode(proc_path))
-    
-    # Get parameters
-    fusion_method = gd.getNextChoice()
-    rb_radius = int(gd.getNextNumber())
-    reg_thresh = float(gd.getNextNumber())
-    disp_thresh = float(gd.getNextNumber())
-    
-    # Output options
-    save_stack = (int(gd.getNextBoolean()) == 1)
-    show_stack = (int(gd.getNextBoolean()) == 1)
-    save_projection = (int(gd.getNextBoolean()) == 1)
-    show_projection = (int(gd.getNextBoolean()) == 1)
-    projection_method = gd.getNextChoice()
-    
-    # Processing options
-    verbose_mode = (int(gd.getNextBoolean()) == 1)
-    do_clean = (int(gd.getNextBoolean()) == 1)
-    auto_adjust = (int(gd.getNextBoolean()) == 1)
-    corr_factor = float(gd.getNextNumber())
-    
-    # Set global VERBOSE flag
-    global VERBOSE
-    VERBOSE = verbose_mode
-    
-    # Validate output options
-    do_projection = save_projection or show_projection
-    has_any_output = save_stack or show_stack or save_projection or show_projection
-    
-    # Show popup and return to parameters if illegal settings detected
-    if not has_any_output:
-        from ij.gui import MessageDialog
-        MessageDialog(None, "Illegal Settings", 
-                     "At least one output option must be enabled:\n" +
-                     "- Save Stitched Stack\n" +
-                     "- Show Stitched Stack\n" +
-                     "- Save Z-Projection\n" +
-                     "- Show Z-Projection\n\n" +
-                     "Please select at least one option.").show()
-        log(u"Error: No output options selected. Returning to parameters.")
-        continue  # Return to parameter dialog
-    
-    # CRITICAL: If projection is requested, save_stack MUST be enabled
-    if do_projection and not save_stack:
-        from ij.gui import MessageDialog
-        MessageDialog(None, "Illegal Settings", 
-                     "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
-                     "Projections are created from saved *_stitched.tif files\n" +
-                     "after stitching completes.\n\n" +
-                     "Please enable 'Save Stitched Stack' to proceed.").show()
-        log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
-        continue  # Return to parameter dialog
-    
-    # If we reach here, settings are valid - break out of loop
-    break
+        gd.addMessage("=== Directory Paths ===")
+        gd.addStringField("Input Folder (CZI files):", _last_in, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        gd.addStringField("Output Folder (Results):", _last_out, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        gd.addStringField("Processing Folder (Temp):", _last_proc, 50)
+        gd.addToSameRow()
+        gd.addMessage("[Browse...]")
+        
+        gd.addMessage("=== Stitching Parameters ===")
+        gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
+        gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
+        gd.addNumericField("Regression Threshold", 0.30, 2)
+        gd.addNumericField("Max Displacement (px)", 5.0, 1)
+        
+        gd.addMessage("=== Output Options (at least one must be enabled) ===")
+        gd.addCheckbox("Save Stitched Stack", True)
+        gd.addCheckbox("Show Stitched Stack", True)
+        gd.addCheckbox("Save Z-Projection", False)
+        gd.addCheckbox("Show Z-Projection", False)
+        gd.addChoice("Z-Projection Method", ["Max Intensity", "Average Intensity", "Sum Slices", "Standard Deviation", "Median", "Min Intensity"], "Max Intensity")
+        
+        gd.addMessage("=== Processing Options ===")
+        gd.addCheckbox("Verbose/Debug Logging", True)
+        gd.addCheckbox("Cleanup Temp Files", True)
+        gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
+        gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
+        gd.showDialog()
+        
+        if gd.wasCanceled():
+            log("User cancelled parameter dialog. Exiting.")
+            raise SystemExit("Cancelled by user")
+        
+        # Get directory paths
+        in_path = gd.getNextString().strip()
+        out_path = gd.getNextString().strip()
+        proc_path = gd.getNextString().strip()
+        
+        # Validate paths
+        if not in_path or not os.path.isdir(in_path):
+            log(u"Error: Input folder '{}' does not exist or is invalid.".format(in_path))
+            raise SystemExit("Invalid input folder")
+        if not out_path or not os.path.isdir(out_path):
+            log(u"Error: Output folder '{}' does not exist or is invalid.".format(out_path))
+            raise SystemExit("Invalid output folder")
+        if not proc_path or not os.path.isdir(proc_path):
+            log(u"Error: Processing folder '{}' does not exist or is invalid.".format(proc_path))
+            raise SystemExit("Invalid processing folder")
+        
+        # Save config
+        _config["last_input_dir"] = in_path
+        _config["last_output_dir"] = out_path
+        _config["last_processing_dir"] = proc_path
+        _save_config(_config)
+        
+        input_dir_raw = File(unicode(in_path))
+        output_dir_raw = File(unicode(out_path))
+        processing_dir_raw = File(unicode(proc_path))
+        
+        # Get parameters
+        fusion_method = gd.getNextChoice()
+        rb_radius = int(gd.getNextNumber())
+        reg_thresh = float(gd.getNextNumber())
+        disp_thresh = float(gd.getNextNumber())
+        
+        # Output options
+        save_stack = (int(gd.getNextBoolean()) == 1)
+        show_stack = (int(gd.getNextBoolean()) == 1)
+        save_projection = (int(gd.getNextBoolean()) == 1)
+        show_projection = (int(gd.getNextBoolean()) == 1)
+        projection_method = gd.getNextChoice()
+        
+        # Processing options
+        verbose_mode = (int(gd.getNextBoolean()) == 1)
+        do_clean = (int(gd.getNextBoolean()) == 1)
+        auto_adjust = (int(gd.getNextBoolean()) == 1)
+        corr_factor = float(gd.getNextNumber())
+        
+        # Set global VERBOSE flag
+        global VERBOSE
+        VERBOSE = verbose_mode
+        
+        # Validate output options
+        do_projection = save_projection or show_projection
+        has_any_output = save_stack or show_stack or save_projection or show_projection
+        
+        # Show popup and return to parameters if illegal settings detected
+        if not has_any_output:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "At least one output option must be enabled:\n" +
+                         "- Save Stitched Stack\n" +
+                         "- Show Stitched Stack\n" +
+                         "- Save Z-Projection\n" +
+                         "- Show Z-Projection\n\n" +
+                         "Please select at least one option.").show()
+            log(u"Error: No output options selected. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # CRITICAL: If projection is requested, save_stack MUST be enabled
+        if do_projection and not save_stack:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
+                         "Projections are created from saved *_stitched.tif files\n" +
+                         "after stitching completes.\n\n" +
+                         "Please enable 'Save Stitched Stack' to proceed.").show()
+            log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # If we reach here, settings are valid - break out of loop
+        break
     
     thread_count_slider = compute_threads()
     
