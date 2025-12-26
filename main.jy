@@ -1508,12 +1508,6 @@ class UltimateStitcher:
                 if self.do_projection and imp.getNSlices() > 1:
                     log(u"Creating Z-projection with method: {}".format(self.projection_method))
                     try:
-                        # Store original LUTs before projection
-                        source_luts = None
-                        if imp.isComposite():
-                            source_luts = imp.getLuts()
-                            logd(u"  Retrieved {} LUTs from source image".format(len(source_luts) if source_luts else 0))
-                        
                         zp = ZProjector(imp)
                         # Map method name to ZProjector constant
                         method_map = {
@@ -1532,48 +1526,33 @@ class UltimateStitcher:
                         logd(u"  Projection created: {} channels, {}x{} pixels".format(
                             proj_imp.getNChannels(), proj_imp.getWidth(), proj_imp.getHeight()))
                         
-                        # [FIX] Apply LUTs and force visibility for all channels
-                        if proj_imp.getNChannels() > 1 and source_luts:
+                        # Apply colors from metadata (same as main stitched image)
+                        if proj_imp.getNChannels() > 1:
                             try:
-                                logd(u"  Applying LUTs to projection...")
+                                logd(u"  Applying LUTs from metadata to projection...")
                                 
-                                # Always create a NEW CompositeImage wrapper for the projection
-                                # ZProjector output is usually just a stack, not a CompositeImage
-                                proj_comp = CompositeImage(proj_imp, CompositeImage.COMPOSITE)
+                                # Use the same function that applies metadata colors to the main image
+                                proj_with_luts = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta)
                                 
-                                logd(u"  CompositeImage created, applying {} LUTs".format(len(source_luts)))
-                                
-                                # Apply each LUT and ensure channel is visible
-                                for i, lut in enumerate(source_luts):
-                                    if i < proj_comp.getNChannels():
-                                        # 1. Set active position to this channel
-                                        proj_comp.setPosition(i + 1, 1, 1)
-                                        # 2. Apply the LUT
-                                        proj_comp.setChannelLut(lut, i + 1)
-                                        # 3. CRITICAL: Reset display range so pixels aren't hidden
-                                        proj_comp.resetDisplayRange()
-                                        logd(u"    Channel {} LUT applied and display range reset".format(i + 1))
-                                
-                                # 4. Explicitly set mode to COMPOSITE (overlays channels)
-                                proj_comp.setMode(CompositeImage.COMPOSITE)
-                                logd(u"  Composite mode set")
-                                
-                                # 5. Activate all channels (prevent "only 4th channel" issue)
-                                # This ensures standard ImageJ behavior of showing all channels
-                                proj_comp.updateAllChannelsAndDraw()
-                                logd(u"  All channels updated and drawn")
-                                
-                                proj_imp = proj_comp
-                                log(u"  >>> LUTs applied to projection successfully")
+                                if proj_with_luts is not None:
+                                    proj_imp = proj_with_luts
+                                    log(u"  >>> Metadata colors applied to projection successfully")
+                                    
+                                    # Set composite mode
+                                    if proj_imp.isComposite():
+                                        proj_imp.setDisplayMode(IJ.COMPOSITE)
+                                        proj_imp.updateAndDraw()
+                                        logd(u"  Projection set to COMPOSITE mode")
+                                else:
+                                    log(u"  !!! Metadata color application returned None, using default colors")
+                                    
                             except Exception as e:
-                                log(u"Could not apply LUTs to projection: {}".format(e))
+                                log(u"Could not apply metadata colors to projection: {}".format(e))
                                 import traceback
                                 for line in traceback.format_exc().split('\n'):
                                     logd(u"    {}".format(line))
-                        elif proj_imp.getNChannels() == 1:
-                            logd(u"  Single channel projection, no LUT transfer needed")
                         else:
-                            logd(u"  No source LUTs available for transfer")
+                            logd(u"  Single channel projection, no color mapping needed")
                         
                         # Save projection if requested
                         if self.do_save or (self.do_projection and not self.show_projection):
