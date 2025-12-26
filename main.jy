@@ -2187,6 +2187,31 @@ def main():
     log(u"Average per file: {:.1f} seconds".format(batch_elapsed / files_completed if files_completed > 0 else 0))
     log(u"=" * 70)
     
+    # Update performance scale factor based on actual performance
+    if est_time_sec > 0 and files_completed > 0:
+        old_scale = _config.get("performance_scale", 1.0)
+        actual_time = batch_elapsed
+        deviation_pct = ((actual_time - est_time_sec) / est_time_sec) * 100.0
+        
+        # Check for major deviation (2x or more off)
+        if abs(deviation_pct) > 100.0:
+            # Set directly to match last performance
+            new_scale = old_scale * (actual_time / est_time_sec)
+            _config["performance_scale"] = new_scale
+            log(u"")
+            log(u"o_O man I was way off - setting scale to match last performance")
+            log(u"Performance scale factor: {:.2f} -> {:.2f}".format(old_scale, new_scale))
+        else:
+            # Normal learning with exponential moving average (70% old, 30% new)
+            new_scale = old_scale * (actual_time / est_time_sec)
+            final_scale = 0.7 * old_scale + 0.3 * new_scale
+            _config["performance_scale"] = final_scale
+            log(u"")
+            log(u"Updated performance scale factor: {:.2f} -> {:.2f} (learning enabled)".format(
+                old_scale, final_scale))
+        
+        _save_config(_config)
+    
     # Run projection batch if requested
     if do_projection:
         log(u"")
