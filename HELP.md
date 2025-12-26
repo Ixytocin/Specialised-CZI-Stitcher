@@ -1,11 +1,11 @@
-# Specialised CZI Stitcher v37.4 - User Guide
+# Specialised CZI Stitcher v37.5 - User Guide
 
 ## Quick Start
 
 1. Open Fiji
-2. Load `main_unified_v37.jy` script
+2. Load `main.jy` script
 3. Click Run
-4. Select source and target directories
+4. Select input, output, and processing directories
 5. Adjust parameters if needed (defaults usually work)
 6. Click OK
 7. Monitor log window for progress
@@ -14,7 +14,9 @@
 
 ## Parameter Explanations
 
-### Source Directory
+### Directory Selection (NEW in v37.5)
+
+#### Input Folder
 **What it is**: Folder containing your .czi files
 
 **Tips**:
@@ -22,34 +24,27 @@
 - Will process all .czi files in this folder
 - Path can contain spaces and German characters (ä, ö, ü, ß)
 
-### Target Directory
+#### Output Folder
 **What it is**: Where stitched images will be saved
 
 **Tips**:
-- Can be same as source (creates new files, doesn't overwrite)
+- Can be same as input (creates new files, doesn't overwrite)
 - Must have write permissions
-- Needs enough free space (2-3x input file size)
+- Needs enough free space for stitched results
 
-### Threads
-**What it is**: Number of CPU threads for parallel processing
-
-**Recommended**: Your CPU core count minus 1 (leaves one core for system)
-
-**Range**: 1-64
-
-**Impact**: More threads = faster processing (up to a point)
-
-### Temp Root
+#### Processing/Temp Folder (NEW in v37.5)
 **What it is**: Where temporary files are stored during processing
 
-**Default**: Same as target directory
+**Default**: Can be same as output folder
 
 **Why change**:
-- Use RAM disk for speed (/dev/shm on Linux)
-- Use local SSD instead of network drive
-- Separate slow/fast storage
+- **Use RAM disk for speed**: `/dev/shm` (Linux), `R:\` (Windows), `/tmp` (macOS)
+- **Use local SSD**: Much faster than network drives
+- **Separate storage**: Keep temp files off slow drives
 
 **Note**: Needs 2-3x space of largest .czi file
+
+**Performance Tip**: Using a RAM disk can speed up processing by 2-5x!
 
 ### Fusion Method
 **What it is**: How overlapping regions are blended
@@ -103,16 +98,73 @@
 - Tiles severely misaligned: Increase to 10 or 20
 - Perfect stage positioning: Decrease to 2 (faster)
 
-### Auto-adjust
-**What it is**: Automatically adjust brightness/contrast after stitching
 
-**Default**: OFF (v37.1 onwards)
+### Show Results (Preview)
+**What it is**: Display stitched image in Fiji after processing
 
-**Why OFF**: Preserves original intensity values for quantification
+**Default**: Checked (ON)
 
-**Turn ON if**: You only care about visualization, not measurements
+**Turn OFF if**: Batch processing many files (saves memory)
 
-### Correction Factor
+### Save Results
+**What it is**: Save stitched images to output folder
+
+**Default**: Checked (ON)
+
+**File Format**: Automatically chooses standard TIFF or BigTIFF based on size
+- Files <3.5GB: Standard TIFF (faster, more compatible)
+- Files >3.5GB: BigTIFF (handles large files)
+
+**Turn OFF if**: Only want to preview without saving
+
+### Create Z-Projection (NEW in v37.5)
+**What it is**: Optionally create flattened 2D projection from 3D stack
+
+**Default**: Unchecked (OFF)
+
+**Turn ON if**: You want a 2D overview image in addition to 3D stack
+
+**Output**: Saved as `*_projection.tif` in output folder
+
+**Note**: Only created if stack has multiple z-slices
+
+### Z-Projection Method (NEW in v37.5)
+**What it is**: How to combine z-slices into single 2D image
+
+**Options**:
+- **Max Intensity** (default): Brightest pixel at each position
+- **Average Intensity**: Mean intensity across slices
+- **Sum Slices**: Total intensity (sum) across slices
+- **Standard Deviation**: Variability across slices
+- **Median**: Median intensity across slices
+- **Min Intensity**: Dimmest pixel at each position
+
+**Recommendation**: Use Max Intensity for most fluorescence microscopy
+
+**When to use others**:
+- Average: For quantification with less noise
+- Sum: For total signal intensity
+- SD: To visualize where signal varies across z
+- Median: For robust average with outlier rejection
+- Min: Rarely used (background levels)
+
+### Cleanup Temp Files
+**What it is**: Delete temporary files after processing completes
+
+**Default**: Checked (ON)
+
+**Turn OFF if**: Want to inspect intermediate files for debugging
+
+### Auto-adjust stitching thresholds
+**What it is**: Automatically calculate regression and displacement thresholds from metadata
+
+**Default**: OFF
+
+**Turn ON if**: You have varying tile overlaps and want automatic parameter tuning
+
+**Recommendation**: Leave OFF and use manual parameters for consistent results
+
+### Pixel Size Correction Factor
 **What it is**: Multiplier for pixel size from fallback metadata sources
 
 **Default**: 10.0
@@ -416,17 +468,25 @@ Finished fusion (33493 ms)
 
 ## Version Info
 
-**Current Version**: v37.4 (First Stable Beta)
+**Current Version**: v37.5 (Enhanced Beta)
 
 **Release Date**: December 2025
 
 **Status**: Beta - suitable for testing and evaluation
+
+**What's New in v37.5**:
+- Three-folder system for better organization
+- Optional z-projection with 6 methods
+- Automatic garbage collection for memory management
+- Smart BigTIFF selection based on file size
+- RAM disk support via manual folder selection
 
 **Known Limitations**:
 - Not tested with > 100 tiles
 - Not tested with > 4 channels
 - Not tested with non-Zeiss .czi files
 - LUT color application works but needs user validation
+- Z-projection not tested with >4 channels
 
 **Recommended Use**:
 - Research microscopy labs
@@ -441,4 +501,4 @@ Finished fusion (33493 ms)
 
 ---
 
-**Remember**: v37.4 is a BETA. Test thoroughly before production use!
+**Remember**: v37.5 is a BETA. Test thoroughly before production use!

@@ -1,7 +1,7 @@
 # Implementation Summary - Unified CZI Stitcher v37.0
 
 ## Overview
-Created a unified main script (`main_unified_v37.jy`) that combines ONLY proven working components from multiple versions to prevent complexity-induced regression.
+Created a unified main script (`main.jy`) that combines ONLY proven working components from multiple versions to prevent complexity-induced regression.
 
 ## Problem Statement Addressed
 > "Work on a new main script that checks on all the other versions of the stitching and build a version where Stitching and LUT retention actually works. The project gets stuck in error chasing once a certain complexity is reached."
@@ -156,7 +156,7 @@ colors = parse_channel_colors_from_ome_xml(ome_xml)
 
 ## Files Created
 
-### main_unified_v37.jy (1,400+ lines)
+### main.jy (1,700+ lines)
 **Sections:**
 1. Utility functions with unicode safety
 2. Metadata extraction (pixel size, stage positions)
@@ -222,7 +222,7 @@ Complete summary of implementation approach and decisions.
 - Non-coplanar samples
 
 ### What Needs Testing
-- [ ] Run main_unified_v37.jy in Fiji
+- [ ] Run main.jy in Fiji
 - [ ] Verify colors match ZEN/Bio-Formats
 - [ ] Check 3D stitching preserves all slices
 - [ ] Test with user's actual CZI files
@@ -268,7 +268,7 @@ German microscopy labs need µ, ä, ö, ü, ß support in ALL string operations.
 
 4. **Final Integration**
    - Merge proven additions only
-   - Keep main_unified_v37.jy as reference
+   - Keep main.jy as reference
    - Consider version naming
 
 ## Version History

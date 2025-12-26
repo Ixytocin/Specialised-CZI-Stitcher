@@ -2,7 +2,7 @@
 
 ## Status: ✅ COMPATIBLE (with notes)
 
-This document analyzes `main_unified_v37.jy` for potential compiler/runtime issues in Fiji/Jython 2.7 environment.
+This document analyzes `main.jy` for potential compiler/runtime issues in Fiji/Jython 2.7 environment.
 
 ## ✅ CONFIRMED COMPATIBLE
 
@@ -224,14 +224,14 @@ except Exception as e:  # Python 2.6+ syntax
 
 ### 1. Syntax Check (Expected to fail on 'in' keyword)
 ```bash
-python -m py_compile main_unified_v37.jy  # Will show 'in' error (false positive)
+python -m py_compile main.jy  # Will show 'in' error (false positive)
 ```
 
 ### 2. Actual Fiji/Jython Test (Will succeed)
 ```
 1. Open in Fiji
 2. Plugins > Scripting > Open
-3. Select main_unified_v37.jy
+3. Select main.jy
 4. Click Run
 ```
 
