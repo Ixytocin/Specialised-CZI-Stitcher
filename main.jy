@@ -1858,6 +1858,22 @@ def process_projection_batch(output_dir, projection_method, do_show, do_save):
             proj_filename = u"{}_{}z_{}.tif".format(base_name, num_slices, method_short)
             proj_imp.setTitle(proj_filename.replace(".tif", ""))
             
+            # Auto brightness/contrast adjustment
+            # Apply to each channel to handle varying intensity ranges (especially for Min/Sum methods)
+            try:
+                if proj_imp.isComposite():
+                    log(u"  Applying auto brightness/contrast...")
+                    for c in range(1, proj_imp.getNChannels() + 1):
+                        proj_imp.setC(c)
+                        IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    proj_imp.setC(1)  # Reset to first channel
+                    log(u"  Auto B&C applied to all channels")
+                else:
+                    IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    log(u"  Auto B&C applied")
+            except Exception as e:
+                logd(u"  Auto B&C failed: {}".format(e))
+            
             # Save if requested
             if do_save:
                 proj_out = os.path.join(output_dir, proj_filename)
@@ -1936,8 +1952,10 @@ def main():
     if not os.path.isdir(_last_proc):
         _last_proc = _last_out
     
-    # Parameter dialog with path fields
-    gd = GenericDialog("Specialised CZI Stitcher - Parameters v37.5")
+    # Parameter dialog loop - allows returning to dialog if illegal settings detected
+    while True:
+        # Parameter dialog with path fields
+        gd = GenericDialog("Specialised CZI Stitcher - Parameters v37.5")
     gd.addMessage("=== Directory Paths ===")
     gd.addStringField("Input Folder (CZI files):", _last_in, 50)
     gd.addToSameRow()
@@ -1998,35 +2016,54 @@ def main():
     output_dir_raw = File(unicode(out_path))
     processing_dir_raw = File(unicode(proc_path))
     
-    # Get parameters
-    fusion_method = gd.getNextChoice()
-    rb_radius = int(gd.getNextNumber())
-    reg_thresh = float(gd.getNextNumber())
-    disp_thresh = float(gd.getNextNumber())
-    
-    # Output options
-    save_stack = (int(gd.getNextBoolean()) == 1)
-    show_stack = (int(gd.getNextBoolean()) == 1)
-    save_projection = (int(gd.getNextBoolean()) == 1)
-    show_projection = (int(gd.getNextBoolean()) == 1)
-    projection_method = gd.getNextChoice()
-    
-    # Validate at least one output option is enabled
-    do_projection = save_projection or show_projection
-    
-    # CRITICAL: If projection is requested, save_stack MUST be enabled
-    if do_projection and not save_stack:
-        log(u"Error: To create projections, 'Save Stitched Stack' must be enabled.")
-        log(u"Projections are created from saved *_stitched.tif files after stitching completes.")
-        raise SystemExit("Save Stitched Stack required for projections")
-    
-    if not save_stack and not show_stack and not save_projection and not show_projection:
-        log(u"Error: At least one output option (save or show) must be enabled.")
-        raise SystemExit("No output options selected")
-    
-    # Processing options
-    do_clean = (int(gd.getNextBoolean()) == 1)
-    auto_adjust = (int(gd.getNextBoolean()) == 1)
+        # Get parameters
+        fusion_method = gd.getNextChoice()
+        rb_radius = int(gd.getNextNumber())
+        reg_thresh = float(gd.getNextNumber())
+        disp_thresh = float(gd.getNextNumber())
+        
+        # Output options
+        save_stack = (int(gd.getNextBoolean()) == 1)
+        show_stack = (int(gd.getNextBoolean()) == 1)
+        save_projection = (int(gd.getNextBoolean()) == 1)
+        show_projection = (int(gd.getNextBoolean()) == 1)
+        projection_method = gd.getNextChoice()
+        
+        # Processing options
+        do_clean = (int(gd.getNextBoolean()) == 1)
+        auto_adjust = (int(gd.getNextBoolean()) == 1)
+        corr_factor = float(gd.getNextNumber())
+        
+        # Validate output options
+        do_projection = save_projection or show_projection
+        has_any_output = save_stack or show_stack or save_projection or show_projection
+        
+        # Show popup and return to parameters if illegal settings detected
+        if not has_any_output:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "At least one output option must be enabled:\n" +
+                         "- Save Stitched Stack\n" +
+                         "- Show Stitched Stack\n" +
+                         "- Save Z-Projection\n" +
+                         "- Show Z-Projection\n\n" +
+                         "Please select at least one option.").show()
+            log(u"Error: No output options selected. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # CRITICAL: If projection is requested, save_stack MUST be enabled
+        if do_projection and not save_stack:
+            from ij.gui import MessageDialog
+            MessageDialog(None, "Illegal Settings", 
+                         "To create projections, 'Save Stitched Stack' must be enabled.\n\n" +
+                         "Projections are created from saved *_stitched.tif files\n" +
+                         "after stitching completes.\n\n" +
+                         "Please enable 'Save Stitched Stack' to proceed.").show()
+            log(u"Error: Save Stitched Stack required for projections. Returning to parameters.")
+            continue  # Return to parameter dialog
+        
+        # If we reach here, settings are valid - break out of loop
+        break
     try:
         corr_factor = float(gd.getNextNumber())
     except:
@@ -2112,8 +2149,24 @@ def main():
             log(u"File completed in {:.1f} seconds".format(file_elapsed))
             log(u"Progress: {}/{} files ({:.1f}%)".format(
                 files_completed, len(files), (files_completed * 100.0) / len(files)))
-            log(u"Estimated time remaining: {:.1f} minutes".format(est_remaining_min))
-            log(u"Estimated completion time: {} (24h format)".format(completion_str))
+            
+            # Special message when 100% complete
+            if files_completed >= len(files) and est_time_sec > 0:
+                # Calculate deviation from original estimate
+                actual_time = time.time() - batch_start_time
+                deviation_pct = ((actual_time - est_time_sec) / est_time_sec) * 100.0
+                
+                if abs(deviation_pct) <= 5.0:
+                    log(u"Estimate deviation: {:.1f}% :) made it in time".format(deviation_pct))
+                elif deviation_pct > 10.0:
+                    log(u"Estimate deviation: +{:.1f}% :| sorry for the delay".format(deviation_pct))
+                elif deviation_pct < -10.0:
+                    log(u"Estimate deviation: {:.1f}% o.O that was kinda fast".format(deviation_pct))
+                else:
+                    log(u"Estimate deviation: {:.1f}%".format(deviation_pct))
+            else:
+                log(u"Estimated time remaining: {:.1f} minutes".format(est_remaining_min))
+                log(u"Estimated completion time: {} (24h format)".format(completion_str))
             
         except Exception as e:
             log(u"Processing file {} failed: {}".format(f, e))
