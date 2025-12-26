@@ -993,7 +993,8 @@ class UltimateStitcher:
     """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
     
     def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
-                 do_show, do_save, do_clean, auto_adjust, corr_factor, do_projection, projection_method):
+                 do_show, do_save, do_clean, auto_adjust, corr_factor, do_projection, projection_method,
+                 show_projection):
         self.src = src
         self.dst = dst
         self.t_limit = t_limit
@@ -1009,6 +1010,7 @@ class UltimateStitcher:
         self.corr_factor = corr_factor
         self.do_projection = do_projection
         self.projection_method = projection_method
+        self.show_projection = show_projection
 
     def process_file(self, czi_path):
         """Process single CZI file with proven 2D->3D stitching workflow"""
@@ -1505,6 +1507,11 @@ class UltimateStitcher:
                 if self.do_projection and imp.getNSlices() > 1:
                     log(u"Creating Z-projection with method: {}".format(self.projection_method))
                     try:
+                        # Store original LUTs before projection
+                        source_luts = None
+                        if imp.isComposite():
+                            source_luts = imp.getLuts()
+                        
                         zp = ZProjector(imp)
                         # Map method name to ZProjector constant
                         method_map = {
@@ -1518,26 +1525,48 @@ class UltimateStitcher:
                         zp.setMethod(method_map.get(self.projection_method, ZProjector.MAX_METHOD))
                         zp.doProjection()
                         proj_imp = zp.getProjection()
+                        proj_imp.setTitle(base_name + "_projection")
                         
-                        # Apply same LUTs to projection if multi-channel
-                        if proj_imp.getNChannels() > 1 and imp.isComposite():
+                        # Apply LUTs to projection using robust color transfer
+                        if proj_imp.getNChannels() > 1 and source_luts:
                             try:
-                                proj_imp = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta)
-                                if proj_imp.isComposite():
-                                    proj_imp.setDisplayMode(IJ.COMPOSITE)
-                                    proj_imp.updateAndDraw()
+                                logd(u"  Applying LUTs to projection...")
+                                # Convert to CompositeImage if needed
+                                if not proj_imp.isComposite():
+                                    proj_comp = CompositeImage(proj_imp, CompositeImage.COMPOSITE)
+                                else:
+                                    proj_comp = proj_imp
+                                
+                                # Apply each LUT
+                                for i, lut in enumerate(source_luts):
+                                    if i < proj_comp.getNChannels():
+                                        proj_comp.setChannelLut(lut, i + 1)
+                                
+                                # Set composite mode
+                                proj_comp.setMode(CompositeImage.COMPOSITE)
+                                proj_comp.updateAllChannelsAndDraw()
+                                proj_imp = proj_comp
+                                logd(u"  >>> LUTs applied to projection successfully")
                             except Exception as e:
                                 logv(u"Could not apply LUTs to projection: {}".format(e))
                         
-                        proj_out = os.path.join(self.dst, base_name + u"_projection.tif")
-                        try:
-                            IJ.saveAs(proj_imp, "Tiff", proj_out)
-                            log(u"Saved Z-projection: {}".format(proj_out))
-                        except Exception as e:
-                            log(u"Saving Z-projection failed: {}".format(e))
+                        # Save projection if requested
+                        if self.do_save or (self.do_projection and not self.show_projection):
+                            proj_out = os.path.join(self.dst, base_name + u"_projection.tif")
+                            try:
+                                IJ.saveAs(proj_imp, "Tiff", proj_out)
+                                log(u"Saved Z-projection: {}".format(proj_out))
+                            except Exception as e:
+                                log(u"Saving Z-projection failed: {}".format(e))
                         
-                        if not self.do_show:
+                        # Show projection if requested
+                        if self.show_projection:
+                            proj_imp.show()
+                            log(u"Displaying Z-projection")
+                        elif not self.do_save:
+                            # Close if neither showing nor saving
                             proj_imp.close()
+                            
                     except Exception as e:
                         log(u"Z-projection creation failed: {}".format(e))
                         import traceback
@@ -1653,43 +1682,32 @@ def main():
     if not os.path.isdir(_last_proc):
         _last_proc = _last_out
     
-    # Select directories
-    in_path = pick_directory_with_jfilechooser("Select Input Folder (CZI Files)", _last_in)
-    if not in_path: 
-        log("No input folder selected. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    out_path = pick_directory_with_jfilechooser("Select Output Folder (Stitched Results)", _last_out)
-    if not out_path: 
-        log("No output folder selected. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    proc_path = pick_directory_with_jfilechooser("Select Processing/Temp Folder (use RAM disk for speed)", _last_proc)
-    if not proc_path:
-        log("No processing folder selected. Exiting.")
-        raise SystemExit("Cancelled by user")
-    
-    _config["last_input_dir"] = in_path
-    _config["last_output_dir"] = out_path
-    _config["last_processing_dir"] = proc_path
-    _save_config(_config)
-    
-    input_dir_raw = File(unicode(in_path))
-    output_dir_raw = File(unicode(out_path))
-    processing_dir_raw = File(unicode(proc_path))
-    
-    # Parameter dialog
+    # Parameter dialog with path fields
     gd = GenericDialog("Specialised CZI Stitcher - Parameters v37.5")
+    gd.addMessage("=== Directory Paths ===")
+    gd.addStringField("Input Folder (CZI files):", _last_in, 50)
+    gd.addToSameRow()
+    gd.addMessage("[Browse...]")
+    gd.addStringField("Output Folder (Results):", _last_out, 50)
+    gd.addToSameRow()
+    gd.addMessage("[Browse...]")
+    gd.addStringField("Processing Folder (Temp):", _last_proc, 50)
+    gd.addToSameRow()
+    gd.addMessage("[Browse...]")
+    
     gd.addMessage("=== Stitching Parameters ===")
     gd.addChoice("Fusion Method", ["Linear Blending", "Max. Intensity", "Average", "Median"], "Linear Blending")
     gd.addNumericField("Rolling Ball Radius (0 = Off)", 50, 0)
     gd.addNumericField("Regression Threshold", 0.30, 2)
     gd.addNumericField("Max Displacement (px)", 5.0, 1)
-    gd.addMessage("=== Output Options ===")
-    gd.addCheckbox("Show Results (Preview)", True)
-    gd.addCheckbox("Save Results", True)
-    gd.addCheckbox("Create Z-Projection", False)
+    
+    gd.addMessage("=== Output Options (at least one must be enabled) ===")
+    gd.addCheckbox("Save Stitched Stack", True)
+    gd.addCheckbox("Show Stitched Stack", True)
+    gd.addCheckbox("Save Z-Projection", False)
+    gd.addCheckbox("Show Z-Projection", False)
     gd.addChoice("Z-Projection Method", ["Max Intensity", "Average Intensity", "Sum Slices", "Standard Deviation", "Median", "Min Intensity"], "Max Intensity")
+    
     gd.addMessage("=== Processing Options ===")
     gd.addCheckbox("Cleanup Temp Files", True)
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
@@ -1700,15 +1718,52 @@ def main():
         log("User cancelled parameter dialog. Exiting.")
         raise SystemExit("Cancelled by user")
     
+    # Get directory paths
+    in_path = gd.getNextString().strip()
+    out_path = gd.getNextString().strip()
+    proc_path = gd.getNextString().strip()
+    
+    # Validate paths
+    if not in_path or not os.path.isdir(in_path):
+        log(u"Error: Input folder '{}' does not exist or is invalid.".format(in_path))
+        raise SystemExit("Invalid input folder")
+    if not out_path or not os.path.isdir(out_path):
+        log(u"Error: Output folder '{}' does not exist or is invalid.".format(out_path))
+        raise SystemExit("Invalid output folder")
+    if not proc_path or not os.path.isdir(proc_path):
+        log(u"Error: Processing folder '{}' does not exist or is invalid.".format(proc_path))
+        raise SystemExit("Invalid processing folder")
+    
+    # Save config
+    _config["last_input_dir"] = in_path
+    _config["last_output_dir"] = out_path
+    _config["last_processing_dir"] = proc_path
+    _save_config(_config)
+    
+    input_dir_raw = File(unicode(in_path))
+    output_dir_raw = File(unicode(out_path))
+    processing_dir_raw = File(unicode(proc_path))
+    
     # Get parameters
     fusion_method = gd.getNextChoice()
     rb_radius = int(gd.getNextNumber())
     reg_thresh = float(gd.getNextNumber())
     disp_thresh = float(gd.getNextNumber())
-    do_show = (int(gd.getNextBoolean()) == 1)
-    do_save = (int(gd.getNextBoolean()) == 1)
-    do_projection = (int(gd.getNextBoolean()) == 1)
+    
+    # Output options
+    save_stack = (int(gd.getNextBoolean()) == 1)
+    show_stack = (int(gd.getNextBoolean()) == 1)
+    save_projection = (int(gd.getNextBoolean()) == 1)
+    show_projection = (int(gd.getNextBoolean()) == 1)
     projection_method = gd.getNextChoice()
+    
+    # Validate at least one output option is enabled
+    do_projection = save_projection or show_projection
+    if not save_stack and not show_stack and not save_projection and not show_projection:
+        log(u"Error: At least one output option (save or show) must be enabled.")
+        raise SystemExit("No output options selected")
+    
+    # Processing options
     do_clean = (int(gd.getNextBoolean()) == 1)
     auto_adjust = (int(gd.getNextBoolean()) == 1)
     try:
@@ -1750,12 +1805,16 @@ def main():
     log(u"  Max Displacement: {}".format(disp_thresh))
     log(u"  Auto-adjust: {}".format(auto_adjust))
     log(u"  Correction Factor: {}".format(corr_factor))
-    log(u"  Z-Projection: {}".format("Enabled ({})".format(projection_method) if do_projection else "Disabled"))
+    log(u"  Save Stack: {} | Show Stack: {}".format(save_stack, show_stack))
+    log(u"  Save Projection: {} | Show Projection: {}".format(save_projection, show_projection))
+    if do_projection:
+        log(u"  Z-Projection Method: {}".format(projection_method))
     log(u"")
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, fusion_method, rb_radius, 
-                                 reg_thresh, disp_thresh, do_show, do_save, 
-                                 do_clean, auto_adjust, corr_factor, do_projection, projection_method)
+                                 reg_thresh, disp_thresh, show_stack, save_stack, 
+                                 do_clean, auto_adjust, corr_factor, do_projection, projection_method,
+                                 show_projection)
     
     for f in files:
         try:
