@@ -148,7 +148,48 @@
 - Median: For robust average with outlier rejection
 - Min: Rarely used (background levels)
 
-### Cleanup Temp Files
+### Output Options (NEW in v37.5)
+
+**What they are**: Control what outputs are created
+
+**Options**:
+- **Save Stitched Stack**: Save the 3D stitched result to file
+- **Show Stitched Stack**: Display the 3D stitched result in Fiji
+- **Save Z-Projection**: Save a 2D flattened projection to file
+- **Show Z-Projection**: Display the 2D projection in Fiji
+
+**Requirements**:
+- At least one option must be enabled
+- To create projections, "Save Stitched Stack" MUST be enabled
+- Projections are created from saved files in a separate batch after stitching
+
+**Validation**:
+- If no options selected → popup dialog with error, returns to parameters
+- If projection enabled without save stack → popup dialog with error, returns to parameters
+
+### Z-Projection Method (NEW in v37.5)
+
+**What it is**: How z-slices are flattened into 2D projection
+
+**Options**:
+- **Max Intensity**: Brightest pixel at each position (default, best for most imaging)
+- **Average Intensity**: Mean pixel value (smoother, reduces noise)
+- **Sum Slices**: Adds all pixel values (increases signal but also noise)
+- **Standard Deviation**: Shows variation across z-stack
+- **Median**: Middle value (good for removing outliers)
+- **Min Intensity**: Darkest pixel (rarely used)
+
+**When projections are created**:
+- AFTER all stitching completes
+- Processes only `*_stitched.tif` files from output folder
+- Uses robust channel-splitting method for color preservation
+- Auto brightness/contrast adjustment applied for optimal visibility
+
+**Output filename format**:
+- `basename_<num>z_<method>.tif`
+- Example: `Sample01_15z_Max.tif` (15 z-slices, Max Intensity projection)
+
+**Recommendation**: Use Max Intensity for fluorescence microscopy
 **What it is**: Delete temporary files after processing completes
 
 **Default**: Checked (ON)

@@ -1981,6 +1981,7 @@ def main():
     gd.addChoice("Z-Projection Method", ["Max Intensity", "Average Intensity", "Sum Slices", "Standard Deviation", "Median", "Min Intensity"], "Max Intensity")
     
     gd.addMessage("=== Processing Options ===")
+    gd.addCheckbox("Verbose/Debug Logging", True)
     gd.addCheckbox("Cleanup Temp Files", True)
     gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
     gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
@@ -2030,9 +2031,14 @@ def main():
         projection_method = gd.getNextChoice()
         
         # Processing options
+        verbose_mode = (int(gd.getNextBoolean()) == 1)
         do_clean = (int(gd.getNextBoolean()) == 1)
         auto_adjust = (int(gd.getNextBoolean()) == 1)
         corr_factor = float(gd.getNextNumber())
+        
+        # Set global VERBOSE flag
+        global VERBOSE
+        VERBOSE = verbose_mode
         
         # Validate output options
         do_projection = save_projection or show_projection

@@ -1,6 +1,6 @@
-# Specialised CZI Stitcher v37.5 (Beta)
+# Specialised CZI Stitcher v37.5 (Stable)
 
-> **Enhanced Beta Release with Improved Path Management**
+> **Enhanced Release with Robust Z-Projection and Smart Progress Tracking**
 >
 > **Development Method:** Vibe Coding  
 > **Vision & Validation:** [Ixytocin](https://github.com/Ixytocin)  
@@ -32,10 +32,14 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 ### New in v37.5
 - **Three-Folder System**: Separate input, output, and processing/temp directories
 - **Configurable Paths**: All paths saved in unique settings file (`.specialised_czi_stitcher_config.json`)
-- **Optional Z-Projection**: Create maximum intensity or other projections automatically
+- **Robust Z-Projection Batch**: Separate post-processing batch using proven channel-splitting method
+- **Enhanced Filenames**: Projections include z-count (e.g., `file_15z_Max.tif`)
 - **Smart BigTIFF**: Automatically uses BigTIFF format only for large files (>3.5GB)
 - **Memory Management**: Garbage collection between major processing steps
-- **RAM Disk Support**: Use RAM disk for temp files by selecting it as processing folder
+- **Parameter Validation**: Popup dialogs guide users back to fix invalid settings
+- **Smart Progress Messages**: Emoji feedback on estimate accuracy at 100% completion
+- **Auto Brightness/Contrast**: Projections automatically enhanced for optimal visibility
+- **Batch Time Prediction**: Composite linear model estimates completion time accurately
 
 ### Reliability Features
 - **Comprehensive Debug Logging**: Visual markers (>>>, !!!) show success/failure at each step
@@ -46,7 +50,8 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 
 ### User Experience
 - **ASCII Art Splash Screen**: Shows version and component tracking
-- **Progress Messages**: Clear status updates including filesystem loading warnings
+- **Progress Messages**: Clear status updates with completion time estimates (24h format)
+- **Smart Feedback**: Emoji-based deviation messages (`:)`, `:|`, `o.O`)
 - **Configurable Defaults**: Auto-adjust OFF, user controls parameters
 - **Path Memory**: Remembers last used folders for quick workflow
 
