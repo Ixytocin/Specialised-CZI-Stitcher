@@ -22,7 +22,7 @@ from java.lang import Runtime, Thread, System
 from java.awt import Color
 from java.util.concurrent import Executors, Callable
 from ij import IJ, ImagePlus, WindowManager, CompositeImage
-from ij.plugin import ZProjector, HyperStackConverter
+from ij.plugin import ZProjector, HyperStackConverter, ChannelSplitter, RGBStackMerge, Duplicator
 from ij.process import LUT
 from loci.plugins import BF
 from loci.plugins.in import ImporterOptions, ImportProcess
@@ -994,8 +994,7 @@ class UltimateStitcher:
     """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
     
     def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
-                 do_show, do_save, do_clean, auto_adjust, corr_factor, do_projection, projection_method,
-                 show_projection):
+                 do_show, do_save, do_clean, auto_adjust, corr_factor):
         self.src = src
         self.dst = dst
         self.t_limit = t_limit
@@ -1009,9 +1008,6 @@ class UltimateStitcher:
         self.do_clean = do_clean
         self.auto_adjust = auto_adjust
         self.corr_factor = corr_factor
-        self.do_projection = do_projection
-        self.projection_method = projection_method
-        self.show_projection = show_projection
 
     def process_file(self, czi_path):
         """Process single CZI file with proven 2D->3D stitching workflow"""
@@ -1504,79 +1500,7 @@ class UltimateStitcher:
                     except Exception as e2:
                         log(u"Saving final stitched failed: {}".format(e2))
                 
-                # Optional Z-projection
-                if self.do_projection and imp.getNSlices() > 1:
-                    log(u"Creating Z-projection with method: {}".format(self.projection_method))
-                    try:
-                        zp = ZProjector(imp)
-                        # Map method name to ZProjector constant
-                        method_map = {
-                            "Max Intensity": ZProjector.MAX_METHOD,
-                            "Average Intensity": ZProjector.AVG_METHOD,
-                            "Sum Slices": ZProjector.SUM_METHOD,
-                            "Standard Deviation": ZProjector.SD_METHOD,
-                            "Median": ZProjector.MEDIAN_METHOD,
-                            "Min Intensity": ZProjector.MIN_METHOD
-                        }
-                        zp.setMethod(method_map.get(self.projection_method, ZProjector.MAX_METHOD))
-                        zp.doProjection()
-                        proj_imp = zp.getProjection()
-                        proj_imp.setTitle(base_name + "_projection")
-                        
-                        logd(u"  Projection created: {} channels, {}x{} pixels".format(
-                            proj_imp.getNChannels(), proj_imp.getWidth(), proj_imp.getHeight()))
-                        
-                        # Apply colors from metadata (same as main stitched image)
-                        if proj_imp.getNChannels() > 1:
-                            try:
-                                logd(u"  Applying LUTs from metadata to projection...")
-                                
-                                # Use the same function that applies metadata colors to the main image
-                                proj_with_luts = apply_channel_luts_to_image(proj_imp, ome_xml, gMeta)
-                                
-                                if proj_with_luts is not None:
-                                    proj_imp = proj_with_luts
-                                    log(u"  >>> Metadata colors applied to projection successfully")
-                                    
-                                    # Set composite mode
-                                    if proj_imp.isComposite():
-                                        proj_imp.setDisplayMode(IJ.COMPOSITE)
-                                        proj_imp.updateAndDraw()
-                                        logd(u"  Projection set to COMPOSITE mode")
-                                else:
-                                    log(u"  !!! Metadata color application returned None, using default colors")
-                                    
-                            except Exception as e:
-                                log(u"Could not apply metadata colors to projection: {}".format(e))
-                                import traceback
-                                for line in traceback.format_exc().split('\n'):
-                                    logd(u"    {}".format(line))
-                        else:
-                            logd(u"  Single channel projection, no color mapping needed")
-                        
-                        # Save projection if requested
-                        if self.do_save or (self.do_projection and not self.show_projection):
-                            proj_out = os.path.join(self.dst, base_name + u"_projection.tif")
-                            try:
-                                IJ.saveAs(proj_imp, "Tiff", proj_out)
-                                log(u"Saved Z-projection: {}".format(proj_out))
-                            except Exception as e:
-                                log(u"Saving Z-projection failed: {}".format(e))
-                        
-                        # Show projection if requested
-                        if self.show_projection:
-                            proj_imp.show()
-                            log(u"Displaying Z-projection")
-                        elif not self.do_save:
-                            # Close if neither showing nor saving
-                            proj_imp.close()
-                            
-                    except Exception as e:
-                        log(u"Z-projection creation failed: {}".format(e))
-                        import traceback
-                        for line in traceback.format_exc().split('\n'):
-                            logd(u"  {}".format(line))
-        
+                
         # Garbage collection after saving
         log_memory()
         System.gc()
@@ -1774,6 +1698,200 @@ def sort_files_by_size(files):
     
     return sorted_files
 
+def create_robust_projection(imp, projection_method, num_z_slices):
+    """
+    Create z-projection using proven channel-splitting method.
+    Based on the working pipeline from user's reference script.
+    
+    Args:
+        imp: Source ImagePlus (must be multi-slice stack)
+        projection_method: String method name
+        num_z_slices: Number of z-slices being projected
+    
+    Returns:
+        ImagePlus with projection, or None if failed
+    """
+    try:
+        logd(u"  Creating robust projection using channel-splitting method...")
+        
+        # Store original LUTs for color transfer
+        source_luts = None
+        if imp.isComposite():
+            source_luts = imp.getLuts()
+            logd(u"  Retrieved {} LUTs from source".format(len(source_luts) if source_luts else 0))
+        
+        # Create safe duplicate to work on
+        dup = Duplicator().run(imp)
+        
+        # SPLIT CHANNELS (CRITICAL STABILITY STEP)
+        # Processing single channels prevents composite-mode crashes
+        channels = ChannelSplitter.split(dup)
+        dup.close()  # Free memory
+        
+        logd(u"  Split into {} channels".format(len(channels)))
+        
+        # Map method name to ZProjector constant
+        method_map = {
+            "Max Intensity": ZProjector.MAX_METHOD,
+            "Average Intensity": ZProjector.AVG_METHOD,
+            "Sum Slices": ZProjector.SUM_METHOD,
+            "Standard Deviation": ZProjector.SD_METHOD,
+            "Median": ZProjector.MEDIAN_METHOD,
+            "Min Intensity": ZProjector.MIN_METHOD
+        }
+        method_id = method_map.get(projection_method, ZProjector.MAX_METHOD)
+        
+        # Project each channel individually
+        projected_channels = []
+        for i, c_imp in enumerate(channels):
+            zp = ZProjector(c_imp)
+            zp.setMethod(method_id)
+            zp.setStartSlice(1)
+            zp.setStopSlice(c_imp.getNSlices())
+            zp.doProjection()
+            projected_channels.append(zp.getProjection())
+            logd(u"    Channel {} projected".format(i + 1))
+        
+        # MERGE CHANNELS back to Composite
+        # This restores the multi-channel structure
+        merged_proj = RGBStackMerge.mergeChannels(projected_channels, False)
+        
+        # Cleanup split channels to free RAM
+        for c_imp in channels:
+            c_imp.close()
+        System.gc()
+        
+        logd(u"  Channels merged, {} channels in result".format(merged_proj.getNChannels()))
+        
+        # Apply original LUTs if available
+        if source_luts and merged_proj.getNChannels() > 1:
+            # Convert to CompositeImage to apply LUTs
+            proj_comp = CompositeImage(merged_proj, CompositeImage.COMPOSITE)
+            
+            # Apply each LUT
+            for i, lut in enumerate(source_luts):
+                if i < proj_comp.getNChannels():
+                    proj_comp.setChannelLut(lut, i + 1)
+            
+            # Set COMPOSITE mode
+            proj_comp.setMode(CompositeImage.COMPOSITE)
+            proj_comp.updateAllChannelsAndDraw()
+            
+            logd(u"  >>> LUTs applied successfully")
+            return proj_comp
+        else:
+            logd(u"  Returning merged projection without LUT transfer")
+            return merged_proj
+            
+    except Exception as e:
+        log(u"Robust projection failed: {}".format(e))
+        import traceback
+        for line in traceback.format_exc().split('\n'):
+            logd(u"  {}".format(line))
+        return None
+
+def process_projection_batch(output_dir, projection_method, do_show, do_save):
+    """
+    Process all *_stitched.tif files in output directory to create projections.
+    Runs as separate batch after stitching is complete.
+    
+    Args:
+        output_dir: Directory containing *_stitched.tif files
+        projection_method: String method name for projection
+        do_show: Whether to display projections
+        do_save: Whether to save projections
+    """
+    log(u"")
+    log(u"=" * 70)
+    log(u"=== STARTING Z-PROJECTION BATCH ===")
+    log(u"=" * 70)
+    log(u"Method: {}".format(projection_method))
+    log(u"")
+    
+    # Find all *_stitched.tif files
+    stitched_files = []
+    for f in os.listdir(output_dir):
+        if f.endswith("_stitched.tif") or f.endswith("_stitched.tiff"):
+            stitched_files.append(os.path.join(output_dir, f))
+    
+    if not stitched_files:
+        log(u"No *_stitched.tif files found in output directory")
+        log(u"Skipping projection batch")
+        return
+    
+    log(u"Found {} stitched file(s) to process".format(len(stitched_files)))
+    
+    proj_count = 0
+    for idx, stitched_path in enumerate(stitched_files):
+        try:
+            fname = os.path.basename(stitched_path)
+            base_name = fname.replace("_stitched.tif", "").replace("_stitched.tiff", "")
+            
+            log(u"")
+            log(u"[{}/{}] Processing: {}".format(idx + 1, len(stitched_files), fname))
+            
+            # Load stitched file
+            imp = IJ.openImage(stitched_path)
+            if imp is None:
+                log(u"  Failed to load image, skipping")
+                continue
+            
+            num_slices = imp.getNSlices()
+            if num_slices <= 1:
+                log(u"  Only {} slice(s), skipping projection".format(num_slices))
+                imp.close()
+                continue
+            
+            log(u"  Loaded: {} slices, {} channels".format(num_slices, imp.getNChannels()))
+            
+            # Create projection using robust method
+            proj_imp = create_robust_projection(imp, projection_method, num_slices)
+            
+            if proj_imp is None:
+                log(u"  Projection creation failed, skipping")
+                imp.close()
+                continue
+            
+            # Create filename with z-count and method
+            # Format: basename_<num>z_<method>.tif
+            method_short = projection_method.replace(" Intensity", "").replace(" Slices", "").replace(" ", "")
+            proj_filename = u"{}_{}z_{}.tif".format(base_name, num_slices, method_short)
+            proj_imp.setTitle(proj_filename.replace(".tif", ""))
+            
+            # Save if requested
+            if do_save:
+                proj_out = os.path.join(output_dir, proj_filename)
+                try:
+                    IJ.saveAs(proj_imp, "Tiff", proj_out)
+                    log(u"  Saved: {}".format(proj_filename))
+                    proj_count += 1
+                except Exception as e:
+                    log(u"  Save failed: {}".format(e))
+            
+            # Show if requested
+            if do_show:
+                proj_imp.show()
+                log(u"  Displayed projection")
+            elif not do_save:
+                proj_imp.close()
+            
+            # Close source image
+            imp.close()
+            
+            # Garbage collection
+            System.gc()
+            
+        except Exception as e:
+            log(u"  Processing failed: {}".format(e))
+            import traceback
+            traceback.print_exc()
+    
+    log(u"")
+    log(u"=" * 70)
+    log(u"Projection batch complete: {} projection(s) created".format(proj_count))
+    log(u"=" * 70)
+    log(u"")
+
 # ==============================================================================
 # PART 11: MAIN ENTRY POINT (from v31.16h + v34.8 bug fixes)
 # ==============================================================================
@@ -1895,6 +2013,13 @@ def main():
     
     # Validate at least one output option is enabled
     do_projection = save_projection or show_projection
+    
+    # CRITICAL: If projection is requested, save_stack MUST be enabled
+    if do_projection and not save_stack:
+        log(u"Error: To create projections, 'Save Stitched Stack' must be enabled.")
+        log(u"Projections are created from saved *_stitched.tif files after stitching completes.")
+        raise SystemExit("Save Stitched Stack required for projections")
+    
     if not save_stack and not show_stack and not save_projection and not show_projection:
         log(u"Error: At least one output option (save or show) must be enabled.")
         raise SystemExit("No output options selected")
@@ -1948,15 +2073,14 @@ def main():
     log(u"  Auto-adjust: {}".format(auto_adjust))
     log(u"  Correction Factor: {}".format(corr_factor))
     log(u"  Save Stack: {} | Show Stack: {}".format(save_stack, show_stack))
-    log(u"  Save Projection: {} | Show Projection: {}".format(save_projection, show_projection))
+    log(u"  Z-Projection: {}".format("Enabled ({})".format(projection_method) if do_projection else "Disabled"))
     if do_projection:
-        log(u"  Z-Projection Method: {}".format(projection_method))
+        log(u"    Save Projection: {} | Show Projection: {}".format(save_projection, show_projection))
     log(u"")
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, fusion_method, rb_radius, 
                                  reg_thresh, disp_thresh, show_stack, save_stack, 
-                                 do_clean, auto_adjust, corr_factor, do_projection, projection_method,
-                                 show_projection)
+                                 do_clean, auto_adjust, corr_factor)
     
     batch_start_time = time.time()
     files_completed = 0
@@ -2001,11 +2125,17 @@ def main():
     
     log(u"")
     log(u"=" * 70)
-    log(u"Batch Done.")
+    log(u"Stitching Batch Done.")
     log(u"Files processed: {}/{}".format(files_completed, len(files)))
     log(u"Total time: {:.1f} minutes ({:.1f} seconds)".format(batch_elapsed_min, batch_elapsed))
     log(u"Average per file: {:.1f} seconds".format(batch_elapsed / files_completed if files_completed > 0 else 0))
     log(u"=" * 70)
+    
+    # Run projection batch if requested
+    if do_projection:
+        log(u"")
+        log(u"Stitching complete. Starting projection batch...")
+        process_projection_batch(t_dir, projection_method, show_projection, save_projection)
     
     if PLAY_JINGLE_ON_DONE:
         play_clear_jingle()
