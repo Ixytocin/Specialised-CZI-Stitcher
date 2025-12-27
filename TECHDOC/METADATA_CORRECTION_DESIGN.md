@@ -241,39 +241,64 @@ Per microscope coordinate convention (Down = Y+, Right = X+):
 1. **Orthogonal moves** (within rows/columns):
    - Horizontal: left/right within same row
    - Vertical: up/down within same column
+   - Speed: Normal scanning speed
+   - Backlash: Full backlash penalties on direction changes
 
-2. **Diagonal moves** (row transitions):
+2. **Short diagonal moves** (normal row transitions):
    - Combined X+Y movement at row ends
    - Example: End of row → start of next row (left+down or right+down)
-   - State machine treats as simultaneous X and Y movements
+   - Distance: ~1 tile spacing in each axis
+   - Speed: **Similar to regular R/L/down movement** (no rapids)
+   - Backlash: Full backlash penalties (same as orthogonal moves)
+   - Common in serpentine scanning patterns
 
-3. **Long jumps** (circle tracing):
-   - Large X displacement (>2x tile width)
-   - Used for rapid repositioning
-   - Different backlash behavior due to slowdown
+3. **Long diagonal moves** (large row/column jumps):
+   - Combined X+Y movement with large displacement
+   - Example: Jump to distant tile position
+   - Distance: >threshold in X or Y axis
+   - Speed: **Considerable rapids** (rapid acceleration/deceleration)
+   - Backlash: **Reduced backlash** due to rapid movement allowing settling
+   - Less common, used for repositioning
+
+4. **Long orthogonal jumps** (circle tracing):
+   - Large X displacement only (>2x tile width)
+   - Speed: **Considerable rapids** (rapid repositioning)
+   - Backlash: **Reduced backlash** due to slowdown after rapid movement
+   - Used for circle tracing patterns
 
 ### Truth Table (Empirically-Driven State Machine)
 
 Based on real stitching data, each movement state has measured offsets and backlash penalties:
 
-| State Code | Scenario | Prev X | Curr X | Prev Y | Curr Y | Applied Corrections | Empirical Offset (px) | Backlash (px) |
-|------------|----------|--------|--------|--------|--------|---------------------|----------------------|---------------|
-| `START` | **First tile** | None | Any | None | Any | `affine_transform` + `thermal_drift` | (0, 0) | None |
-| `RIGHT` | **Moving right** | Any | right | Any | Any | `affine_transform` + `offset_right` + `thermal_drift` | (+37.16, +8.15) | None if continuing |
-| `LEFT` | **Moving left** | Any | left | Any | Any | `affine_transform` + `offset_left` + `thermal_drift` | (-37.12, -8.37) | None if continuing |
-| `R_TO_L` | **Right → Left** | right | left | Any | Any | `affine_transform` + `offset_left` + `backlash_x` + `reversal` | (-37.12, -8.37) | X: 3.50, Rev: 0.70 |
-| `L_TO_R` | **Left → Right** | left | right | Any | Any | `affine_transform` + `offset_right` + `backlash_x` + `reversal` | (+37.16, +8.15) | X: 3.50, Rev: 0.70 |
-| `Y_FIRST` | **First down** | Any | Any | None | down | `affine_transform` + `first_down_offset` | (-6.10, +33.90) | None (high stiction) |
-| `Y_SUBSEQ` | **Subsequent down** | Any | Any | down | down | `affine_transform` + `subseq_down_offset` + `backlash_y` | (-20.70, +28.90) | Y: 1.20 |
-| `DIAGONAL` | **Diagonal move** | Any | Any | Any | Any | `affine_transform` + `offset_X` + `offset_Y` + `backlash` | Combined X+Y offsets | Combined penalties |
-| `LONG_R` | **Long right** | Any | right | Any | Any | `affine_transform` + `backlash_long_x_right` | TBD | Reduced |
-| `LONG_L` | **Long left** | Any | left | Any | Any | `affine_transform` + `backlash_long_x_left` | TBD | Reduced |
+| State Code | Scenario | Distance | Speed | Applied Corrections | Empirical Offset (px) | Backlash (px) |
+|------------|----------|----------|-------|---------------------|----------------------|---------------|
+| `START` | **First tile** | N/A | N/A | `affine_transform` + `thermal_drift` | (0, 0) | None |
+| `RIGHT` | **Moving right** | Short | Normal | `affine_transform` + `offset_right` + `thermal_drift` | (+37.16, +8.15) | None (continuing) |
+| `LEFT` | **Moving left** | Short | Normal | `affine_transform` + `offset_left` + `thermal_drift` | (-37.12, -8.37) | None (continuing) |
+| `R_TO_L` | **Right → Left** | Short | Normal | `affine_transform` + `offset_left` + `backlash_x` + `reversal` | (-37.12, -8.37) | X: 3.50, Rev: 0.70 |
+| `L_TO_R` | **Left → Right** | Short | Normal | `affine_transform` + `offset_right` + `backlash_x` + `reversal` | (+37.16, +8.15) | X: 3.50, Rev: 0.70 |
+| `Y_FIRST` | **First down** | Short | Normal | `affine_transform` + `first_down_offset` | (-6.10, +33.90) | None (high stiction) |
+| `Y_SUBSEQ` | **Subsequent down** | Short | Normal | `affine_transform` + `subseq_down_offset` + `backlash_y` | (-20.70, +28.90) | Y: 1.20 |
+| `DIAG_SHORT` | **Short diagonal** | Short | **Normal** | `affine_transform` + `offset_X` + `offset_Y` + `backlash_full` | Combined X+Y | **Full backlash** |
+| `LONG_R` | **Long right** | Long X | **Rapids** | `affine_transform` + `backlash_long_x_right` | TBD | **Reduced** (0.0 default) |
+| `LONG_L` | **Long left** | Long X | **Rapids** | `affine_transform` + `backlash_long_x_left` | TBD | **Reduced** (0.0 default) |
+| `LONG_Y` | **Long Y** | Long Y | **Rapids** | `affine_transform` + `backlash_long_y` | TBD | **Reduced** (0.0 default) |
+| `LONG_DIAG` | **Long diagonal** | Long X+Y | **Rapids** | `affine_transform` + `offset_X` + `offset_Y` + `backlash_long_diag` | Combined X+Y | **Reduced** (0.0 default) |
 
-**Note on DIAGONAL moves:**
-- Occur at row ends (e.g., end of right-moving row → start of left-moving row below)
-- Apply BOTH X and Y corrections simultaneously
-- Common pattern: right+down or left+down at row transitions
-- State machine processes X and Y components independently, then combines corrections
+**Key distinction - Speed and Backlash:**
+- **Short moves** (distance ~1 tile): **Normal scanning speed**, similar to regular R/L/down movement
+  - Full backlash penalties apply (backlash_x: 3.50px, backlash_y: 1.20px)
+  - No rapids involved
+  
+- **Long moves** (distance >threshold × tile size): **Considerable rapids** involved
+  - Reduced backlash penalties (default 0.0, can be tuned)
+  - Rapid acceleration/deceleration allows settling
+  - Examples: Circle tracing, repositioning to distant tiles
+
+**Move type detection:**
+- Short: `abs(delta_x) ≤ threshold_x × tile_width AND abs(delta_y) ≤ threshold_y × tile_height`
+- Long: `abs(delta_x) > threshold_x × tile_width OR abs(delta_y) > threshold_y × tile_height`
+- Default thresholds: threshold_x = 2.0, threshold_y = 2.0
 
 **Key:**
 - **affine_transform**: Apply the 2x2 matrix `[[1.0326, -0.0066], [0.0066, 1.0326]]`

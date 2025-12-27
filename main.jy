@@ -877,13 +877,18 @@ def create_default_correction_matrix(microscope_id='default'):
         'offset_right_y': 8.15,
         'offset_left_x': -37.12,   # Confidence: 98%
         'offset_left_y': -8.37,
-        # Backlash penalties (in pixels)
-        'backlash_x': 3.50,
-        'backlash_y': 1.20,
+        # Backlash penalties for normal moves (in pixels, full backlash)
+        'backlash_x': 3.50,        # Short X direction changes
+        'backlash_y': 1.20,        # Short Y direction changes
         'backlash_reversal': 0.70,  # 180° row flips
-        'backlash_long_x_left': 0.0,
-        'backlash_long_x_right': 0.0,
-        'long_move_threshold_x': 2.0,
+        # Backlash penalties for long moves (in pixels, reduced - rapids allow settling)
+        'backlash_long_x_left': 0.0,    # Long X+ to X- (pure X with rapids)
+        'backlash_long_x_right': 0.0,   # Long X- to X+ (pure X with rapids)
+        'backlash_long_y': 0.0,         # Long Y moves (pure Y with rapids)
+        'backlash_long_diagonal': 0.0,  # Long diagonal (X+Y with rapids)
+        # Thresholds for detecting long moves (multiplier of tile size)
+        'long_move_threshold_x': 2.0,   # >2x tile width = long X move
+        'long_move_threshold_y': 2.0,   # >2x tile height = long Y move
         # Thermal drift
         'thermal_drift_x_cold': 0.0,
         'thermal_drift_y_cold': 0.0,
@@ -966,24 +971,55 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
     if abs(delta_y) > 0.5:
         curr_dir_y = 'down' if delta_y > 0 else None  # Up not primary
     
-    # Check for long moves
+    # Check for long moves (rapids involved)
     long_threshold_x = correction_matrix['long_move_threshold_x']
+    long_threshold_y = correction_matrix.get('long_move_threshold_y', 2.0)
     is_long_x = abs(delta_x) > long_threshold_x * tile_width_um
+    is_long_y = abs(delta_y) > long_threshold_y * tile_height_um
     
-    # Determine state
-    if is_long_x and curr_dir_x == 'right':
-        return 'LONG_R', 'long_right'
-    elif is_long_x and curr_dir_x == 'left':
-        return 'LONG_L', 'long_left'
-    elif curr_dir_y == 'down' and not movement_state['first_down_done']:
+    # Determine state - Priority order:
+    # 1. Long moves (with rapids - reduced backlash)
+    # 2. First down (special case)
+    # 3. Direction changes (full backlash)
+    # 4. Continuing moves
+    
+    # Long diagonal (both X and Y long, with rapids)
+    if is_long_x and is_long_y:
+        return 'LONG_DIAG', 'long_diagonal'
+    
+    # Long pure X moves (circle tracing, with rapids)
+    if is_long_x and not is_long_y:
+        if curr_dir_x == 'right':
+            return 'LONG_R', 'long_right'
+        elif curr_dir_x == 'left':
+            return 'LONG_L', 'long_left'
+    
+    # Long pure Y moves (with rapids)
+    if is_long_y and not is_long_x:
+        return 'LONG_Y', 'long_y'
+    
+    # Short diagonal (row transitions, normal speed - full backlash)
+    if curr_dir_x and curr_dir_y:
+        # Both X and Y movement, but short distances
+        # Treat as combined move with full backlash penalties
+        return 'DIAG_SHORT', 'diagonal'
+    
+    # First down special case (high stiction)
+    if curr_dir_y == 'down' and not movement_state['first_down_done']:
         return 'Y_FIRST', 'down'
-    elif curr_dir_y == 'down':
+    
+    # Subsequent down
+    if curr_dir_y == 'down':
         return 'Y_SUBSEQ', 'down'
-    elif movement_state['prev_dir_x'] == 'right' and curr_dir_x == 'left':
+    
+    # X direction changes (full backlash)
+    if movement_state['prev_dir_x'] == 'right' and curr_dir_x == 'left':
         return 'R_TO_L', 'left'
     elif movement_state['prev_dir_x'] == 'left' and curr_dir_x == 'right':
         return 'L_TO_R', 'right'
-    elif curr_dir_x == 'right':
+    
+    # Continuing moves
+    if curr_dir_x == 'right':
         return 'RIGHT', 'right'
     elif curr_dir_x == 'left':
         return 'LEFT', 'left'
@@ -1046,17 +1082,54 @@ def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, 
     elif state_code == 'Y_SUBSEQ':
         offset_x_um = correction_matrix['subseq_down_x_offset'] * px_um
         offset_y_um = correction_matrix['subseq_down_y_offset'] * px_um
+    elif state_code == 'DIAG_SHORT':
+        # Short diagonal: combine X and Y offsets from movement direction
+        delta_x = tile_x_um - movement_state['prev_x']
+        delta_y = tile_y_um - movement_state['prev_y']
+        if delta_x > 0:  # Moving right
+            offset_x_um = correction_matrix['offset_right_x'] * px_um
+            offset_y_um = correction_matrix['offset_right_y'] * px_um
+        else:  # Moving left
+            offset_x_um = correction_matrix['offset_left_x'] * px_um
+            offset_y_um = correction_matrix['offset_left_y'] * px_um
+        # Add Y component
+        if delta_y > 0:  # Moving down
+            offset_y_um += correction_matrix['subseq_down_y_offset'] * px_um
     
-    # 3. Backlash penalties on direction changes
+    # 3. Backlash penalties
     backlash_x_um = 0.0
     backlash_y_um = 0.0
     
+    # Full backlash for short moves (normal speed, no rapids)
     if state_code in ['R_TO_L', 'L_TO_R']:
         backlash_x_um = correction_matrix['backlash_x'] * px_um
         backlash_x_um += correction_matrix['backlash_reversal'] * px_um
     
     if state_code == 'Y_SUBSEQ' and movement_state['prev_state'] != 'Y_SUBSEQ':
         backlash_y_um = correction_matrix['backlash_y'] * px_um
+    
+    if state_code == 'DIAG_SHORT':
+        # Short diagonal: full backlash (same as regular moves, no rapids)
+        delta_x = tile_x_um - movement_state['prev_x']
+        prev_dir_x = movement_state['prev_dir_x']
+        curr_dir_x = 'right' if delta_x > 0 else 'left'
+        if prev_dir_x and prev_dir_x != curr_dir_x:
+            backlash_x_um = correction_matrix['backlash_x'] * px_um
+            backlash_x_um += correction_matrix['backlash_reversal'] * px_um
+        # Y backlash for diagonal
+        backlash_y_um = correction_matrix['backlash_y'] * px_um
+    
+    # Reduced backlash for long moves (rapids allow settling)
+    if state_code == 'LONG_R':
+        backlash_x_um = correction_matrix['backlash_long_x_right'] * px_um
+    elif state_code == 'LONG_L':
+        backlash_x_um = correction_matrix['backlash_long_x_left'] * px_um
+    elif state_code == 'LONG_Y':
+        backlash_y_um = correction_matrix.get('backlash_long_y', 0.0) * px_um
+    elif state_code == 'LONG_DIAG':
+        # Long diagonal: reduced backlash for both axes
+        backlash_x_um = correction_matrix.get('backlash_long_diagonal', 0.0) * px_um
+        backlash_y_um = correction_matrix.get('backlash_long_diagonal', 0.0) * px_um
     
     # 4. Thermal drift (exponentially decaying)
     tiles_processed = movement_state['tiles_processed']
