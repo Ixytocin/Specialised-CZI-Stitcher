@@ -44,36 +44,129 @@ The CZI Stitcher currently uses idealized stage metadata to determine initial ti
 
 ---
 
+## Coordinate System Convention
+
+**Important**: The CZI microscope coordinate system follows this convention:
+- **Down** (in visual space) = **Y increases** (positive Y direction)
+- **Right** (in visual space) = **X increases** (positive X direction)
+- **Up** movements are **NOT** defined as a primary case (only for exceptions/special cases)
+
+This differs from typical screen coordinates where Y increases downward.
+
+---
+
+## Empirical Measurements from Real System
+
+The following values have been measured from actual stitching data and provide the baseline corrections:
+
+### System Calibration
+
+| Factor | Value | Unit | Description |
+|--------|-------|------|-------------|
+| **Pixel Size** | 0.345 | μm/px | Physical sensor calibration |
+| **Scaling (X/Y)** | 1.0326 | Scalar | 3.26% under-travel across both axes |
+| **Gantry Skew** | 0.38° | Degrees | Rotational non-orthogonality |
+| **M_scale** | 1.0326 | Matrix Diagonal | Linear travel expansion factor |
+| **M_rot** | 0.0066 | Matrix Off-Diagonal | Cross-talk (skew) factor |
+
+### State-Dependent Offsets (in pixels)
+
+| State Code | X-Offset (px) | Y-Offset (px) | Context | Confidence |
+|------------|---------------|---------------|---------|------------|
+| **RIGHT** | +37.16 | +8.15 | Steady-state horizontal (→) | 98% |
+| **LEFT** | -37.12 | -8.37 | Steady-state horizontal (←) | 98% |
+| **Y_FIRST** | -6.10 | +33.90 | Initial downward drop (High Stiction) | 92% |
+| **Y_SUBSEQ** | -20.70 | +28.90 | Subsequent downward drops (Kinetic) | 88% |
+
+### Backlash Penalties
+
+| Penalty | Value | Axis | Trigger Condition |
+|---------|-------|------|-------------------|
+| **X-Backlash** | 3.50 px | X | sgn(dX_n) ≠ sgn(dX_n-1) |
+| **Y-Backlash** | 1.20 px | Y | sgn(dY_n) ≠ sgn(dY_n-1) |
+| **Reversal Turn** | ≈0.70 px | X | Secondary penalty for 180° row flips |
+
+### Correction Formula
+
+The true position is computed using matrix transformation with state-dependent offsets:
+
+$$P_{true} = \begin{bmatrix} 1.0326 & -0.0066 \\ 0.0066 & 1.0326 \end{bmatrix} \cdot \begin{bmatrix} x_{meta} \\ y_{meta} \end{bmatrix} + \sum (\text{Mask} \cdot \vec{V}_{state}) + \vec{V}_{backlash}$$
+
+Where:
+- **M_scale** (1.0326) and **M_rot** (0.0066) form the affine transformation matrix
+- **V_state** are the state-dependent offset vectors from the table above
+- **V_backlash** are the direction-change penalties
+- **Mask** selects which offsets apply based on current state
+
+---
+
 ## Data Structures
 
-### 1. Correction Matrix
+### 1. Correction Matrix (Per-Microscope)
 
-The correction matrix stores systematic error correction factors. All values are stored in micrometers (μm).
+The correction matrix stores systematic error correction factors for each microscope. All values are stored in micrometers (μm) unless otherwise noted.
 
 ```python
 correction_matrix = {
-    # Backlash corrections (applied after direction changes)
-    'backlash_x_pos_to_neg': 0.0,  # X+ → X- direction change
-    'backlash_x_neg_to_pos': 0.0,  # X- → X+ direction change
-    'backlash_y_pos_to_neg': 0.0,  # Y+ → Y- direction change (down in CZI)
-    'backlash_y_neg_to_pos': 0.0,  # Y- → Y+ direction change (up in CZI)
+    # Microscope identifier
+    'microscope_id': 'default',  # e.g., 'zeiss_axio_1', 'zeiss_axio_2'
     
-    # Scale corrections (multiplicative factors)
-    'scale_x': 1.0,  # X-axis scale correction (1.0 = no correction)
-    'scale_y': 1.0,  # Y-axis scale correction
+    # Calibration
+    'pixel_size_um': 0.345,  # Sensor calibration (μm/px)
     
-    # Skew corrections (cross-axis coupling in μm per μm)
-    'skew_xy': 0.0,  # X movement causes Y displacement
-    'skew_yx': 0.0,  # Y movement causes X displacement
+    # Thermal state (preheated vs cold run)
+    'thermal_state': 'unknown',  # 'cold', 'preheated', 'unknown'
+    'thermal_factors': {
+        'z_stack_height_um': 0.0,  # Z-stack height in μm
+        'num_channels': 1,          # Number of channels
+        'num_tiles': 0,             # Number of tiles
+        'thermal_load_factor': 0.0  # Computed: f(z_height, channels, tiles)
+    },
     
-    # Thermal drift (μm per tile, applied cumulatively)
-    'thermal_drift_x': 0.0,  # Cold startup drift in X
-    'thermal_drift_y': 0.0,  # Cold startup drift in Y
-    'thermal_decay_rate': 0.95,  # Exponential decay per tile (0.0 = instant, 1.0 = never)
+    # Affine transformation matrix (from empirical measurements)
+    # [x']   [scale_x    -skew_xy ] [x]
+    # [y'] = [skew_yx     scale_y ] [y]
+    'scale_x': 1.0326,   # 3.26% under-travel (M_scale)
+    'scale_y': 1.0326,   # Same for Y axis
+    'skew_xy': 0.0066,   # Gantry skew component (M_rot)
+    'skew_yx': 0.0066,   # Symmetric skew (0.38° rotation)
     
-    # First down special case
-    'first_down_y_offset': 0.0,  # Special offset for first Y+ → Y- transition
-    'first_down_confidence': 0.0,  # Confidence in this measurement (0-1)
+    # State-dependent offsets (in pixels, will be converted to μm)
+    # These are steady-state biases for each movement direction
+    'offset_right_x': 37.16,   # X offset when moving right (+37.16 px)
+    'offset_right_y': 8.15,    # Y offset when moving right (+8.15 px)
+    'offset_left_x': -37.12,   # X offset when moving left (-37.12 px)
+    'offset_left_y': -8.37,    # Y offset when moving left (-8.37 px)
+    
+    # Backlash corrections (applied after direction changes, in pixels)
+    # Note: Down = Y+, Right = X+ per microscope convention
+    'backlash_x': 3.50,        # X-axis backlash on direction change
+    'backlash_y': 1.20,        # Y-axis backlash on direction change
+    'backlash_reversal': 0.70, # Additional penalty for 180° row flips
+    
+    # Long-distance rapid moves (affects backlash due to slowdown)
+    'backlash_long_x_left': 0.0,   # Long X+ → X- (circle tracing)
+    'backlash_long_x_right': 0.0,  # Long X- → X+ (circle tracing)
+    'long_move_threshold_x': 2.0,  # Multiplier: distance > threshold * tile_width
+    
+    # Thermal drift (function of z-stack, channels, tiles)
+    'thermal_drift_x_cold': 0.0,      # Cold startup drift in X
+    'thermal_drift_y_cold': 0.0,      # Cold startup drift in Y
+    'thermal_drift_x_preheated': 0.0, # Preheated drift in X
+    'thermal_drift_y_preheated': 0.0, # Preheated drift in Y
+    'thermal_decay_rate': 0.95,       # Exponential decay per tile
+    
+    # First down special case (unknown backlash state)
+    # Y_FIRST: Initial downward drop (High Stiction)
+    'first_down_x_offset': -6.10,  # X offset for first down (px)
+    'first_down_y_offset': 33.90,  # Y offset for first down (px)
+    'first_down_confidence': 0.92, # Confidence: 92%
+    
+    # Subsequent down movements (Kinetic friction)
+    # Y_SUBSEQ: Subsequent downward drops
+    'subseq_down_x_offset': -20.70, # X offset for subsequent down (px)
+    'subseq_down_y_offset': 28.90,  # Y offset for subsequent down (px)
+    'subseq_down_confidence': 0.88, # Confidence: 88%
     
     # Metadata
     'last_updated': '',  # ISO 8601 timestamp
@@ -82,7 +175,20 @@ correction_matrix = {
 }
 ```
 
-### 2. Movement State
+### 2. Microscope Configuration
+
+Support for multiple microscopes with independent correction matrices.
+
+```python
+microscope_configs = {
+    'default': correction_matrix,  # Default/unknown microscope
+    'zeiss_axio_1': correction_matrix.copy(),
+    'zeiss_axio_2': correction_matrix.copy(),
+    # ... additional microscopes
+}
+```
+
+### 3. Movement State
 
 Tracks the movement pattern for each tile to determine which corrections to apply.
 
@@ -90,9 +196,9 @@ Tracks the movement pattern for each tile to determine which corrections to appl
 movement_state = {
     'prev_x': None,  # Previous tile X position (μm)
     'prev_y': None,  # Previous tile Y position (μm)
-    'prev_dir_x': None,  # Previous X direction: 'pos', 'neg', or None
-    'prev_dir_y': None,  # Previous Y direction: 'pos', 'neg', or None
-    'first_y_negative_done': False,  # Has first Y+ → Y- transition occurred?
+    'prev_dir_x': None,  # Previous X direction: 'right', 'left', or None
+    'prev_dir_y': None,  # Previous Y direction: 'down', or None (up not primary)
+    'first_down_done': False,  # Has first down movement (Y increase) occurred?
     'tiles_processed': 0,  # Number of tiles processed (for thermal drift)
 }
 ```
@@ -101,59 +207,219 @@ movement_state = {
 
 ## Truth Table for Correction Application
 
-The system uses a truth table to determine which corrections to apply based on movement patterns.
+The system uses a matrix-based state machine to determine which corrections to apply.
 
 ### Movement Classification
 
-For each tile, classify movement relative to previous tile:
+Per microscope coordinate convention (Down = Y+, Right = X+):
 
 - **X Direction:**
-  - `'pos'`: Moving in positive X (right)
-  - `'neg'`: Moving in negative X (left)  
+  - `'right'`: Moving in positive X (X increases)
+  - `'left'`: Moving in negative X (X decreases)  
   - `None`: No X movement or first tile
 
 - **Y Direction:**
-  - `'pos'`: Moving in positive Y (up in CZI coordinate system)
-  - `'neg'`: Moving in negative Y (down in CZI coordinate system)
+  - `'down'`: Moving in positive Y (Y increases, visual down)
   - `None`: No Y movement or first tile
+  - **Note:** Up movements (Y decreases) are NOT primary cases
 
 - **Distance:**
   - `'short'`: Normal tile spacing (~1 tile width/height)
-  - `'long'`: Large jump (>2x normal spacing)
+  - `'long_right'`: Long X+ jump (>threshold, circle tracing)
+  - `'long_left'`: Long X- jump (>threshold, circle tracing)
 
-### Truth Table
+### Grid Traversal Properties
 
-| Scenario | Prev X | Curr X | Prev Y | Curr Y | Applied Corrections |
-|----------|--------|--------|--------|--------|---------------------|
-| **First tile** | None | Any | None | Any | `scale`, `skew`, `thermal_drift` (start) |
-| **Continue right** | pos | pos | Any | Any | `scale`, `skew`, `thermal_drift` (decay) |
-| **Continue left** | neg | neg | Any | Any | `scale`, `skew`, `thermal_drift` (decay) |
-| **Continue down** | Any | Any | neg | neg | `scale`, `skew`, `thermal_drift` (decay) |
-| **Continue up** | Any | Any | pos | pos | `scale`, `skew`, `thermal_drift` (decay) |
-| **Right → Left** | pos | neg | Any | Any | `scale`, `skew`, `backlash_x_pos_to_neg`, `thermal_drift` |
-| **Left → Right** | neg | pos | Any | Any | `scale`, `skew`, `backlash_x_neg_to_pos`, `thermal_drift` |
-| **Down → Up** | Any | Any | neg | pos | `scale`, `skew`, `backlash_y_pos_to_neg`, `thermal_drift` |
-| **Up → Down (first)** | Any | Any | pos/None | neg | `scale`, `skew`, `first_down_y_offset`, `thermal_drift` |
-| **Up → Down (subsequent)** | Any | Any | pos | neg | `scale`, `skew`, `backlash_y_pos_to_neg`, `thermal_drift` |
-| **Long jump** | Any | Any | Any | Any | `scale`, `skew`, NO backlash, `thermal_drift` |
+- Grid is **closed without holes** (contiguous tiles)
+- Grid can be **traversed without diagonal moves** (only orthogonal)
+- Only **discontinuous move** is the long X jump for circle tracing
+- **Idle time does NOT affect backlash** (mechanical property, not time-dependent)
+
+### Truth Table (Empirically-Driven State Machine)
+
+Based on real stitching data, each movement state has measured offsets and backlash penalties:
+
+| State Code | Scenario | Prev X | Curr X | Prev Y | Curr Y | Applied Corrections | Empirical Offset (px) | Backlash (px) |
+|------------|----------|--------|--------|--------|--------|---------------------|----------------------|---------------|
+| `START` | **First tile** | None | Any | None | Any | `affine_transform` + `thermal_drift` | (0, 0) | None |
+| `RIGHT` | **Moving right** | Any | right | Any | Any | `affine_transform` + `offset_right` + `thermal_drift` | (+37.16, +8.15) | None if continuing |
+| `LEFT` | **Moving left** | Any | left | Any | Any | `affine_transform` + `offset_left` + `thermal_drift` | (-37.12, -8.37) | None if continuing |
+| `R_TO_L` | **Right → Left** | right | left | Any | Any | `affine_transform` + `offset_left` + `backlash_x` + `reversal` | (-37.12, -8.37) | X: 3.50, Rev: 0.70 |
+| `L_TO_R` | **Left → Right** | left | right | Any | Any | `affine_transform` + `offset_right` + `backlash_x` + `reversal` | (+37.16, +8.15) | X: 3.50, Rev: 0.70 |
+| `Y_FIRST` | **First down** | Any | Any | None | down | `affine_transform` + `first_down_offset` | (-6.10, +33.90) | None (high stiction) |
+| `Y_SUBSEQ` | **Subsequent down** | Any | Any | down | down | `affine_transform` + `subseq_down_offset` + `backlash_y` | (-20.70, +28.90) | Y: 1.20 |
+| `LONG_R` | **Long right** | Any | right | Any | Any | `affine_transform` + `backlash_long_x_right` | TBD | Reduced |
+| `LONG_L` | **Long left** | Any | left | Any | Any | `affine_transform` + `backlash_long_x_left` | TBD | Reduced |
+
+**Key:**
+- **affine_transform**: Apply the 2x2 matrix `[[1.0326, -0.0066], [0.0066, 1.0326]]`
+- **offset_X**: State-dependent steady-state bias (converted from pixels to μm)
+- **backlash_X**: Direction-change penalty
+- **reversal**: Additional 180° flip penalty (row changes)
+- **thermal_drift**: Exponentially decaying drift based on cold/preheated state
+
+### Correction Application Formula
+
+```python
+def apply_corrections(x_meta, y_meta, state_code, prev_state, correction_matrix):
+    """
+    Apply empirical corrections to metadata position.
+    
+    P_true = M_affine · P_meta + V_state + V_backlash + V_thermal
+    """
+    px_um = correction_matrix['pixel_size_um']  # 0.345 μm/px
+    
+    # 1. Affine transformation (scale + skew)
+    scale_x = correction_matrix['scale_x']  # 1.0326
+    scale_y = correction_matrix['scale_y']  # 1.0326
+    skew_xy = correction_matrix['skew_xy']  # -0.0066 (note: negative for Y from X)
+    skew_yx = correction_matrix['skew_yx']  # 0.0066
+    
+    x_scaled = scale_x * x_meta - skew_xy * y_meta
+    y_scaled = skew_yx * x_meta + scale_y * y_meta
+    
+    # 2. State-dependent offset (convert px to μm)
+    offset_x_um = 0.0
+    offset_y_um = 0.0
+    
+    if state_code == 'RIGHT':
+        offset_x_um = correction_matrix['offset_right_x'] * px_um  # +37.16 px
+        offset_y_um = correction_matrix['offset_right_y'] * px_um  # +8.15 px
+    elif state_code == 'LEFT':
+        offset_x_um = correction_matrix['offset_left_x'] * px_um   # -37.12 px
+        offset_y_um = correction_matrix['offset_left_y'] * px_um   # -8.37 px
+    elif state_code == 'Y_FIRST':
+        offset_x_um = correction_matrix['first_down_x_offset'] * px_um  # -6.10 px
+        offset_y_um = correction_matrix['first_down_y_offset'] * px_um  # +33.90 px
+    elif state_code == 'Y_SUBSEQ':
+        offset_x_um = correction_matrix['subseq_down_x_offset'] * px_um  # -20.70 px
+        offset_y_um = correction_matrix['subseq_down_y_offset'] * px_um  # +28.90 px
+    
+    # 3. Backlash penalties on direction changes
+    backlash_x_um = 0.0
+    backlash_y_um = 0.0
+    
+    if state_code in ['R_TO_L', 'L_TO_R']:
+        backlash_x_um = correction_matrix['backlash_x'] * px_um  # 3.50 px
+        # Additional reversal penalty for row flips
+        backlash_x_um += correction_matrix['backlash_reversal'] * px_um  # 0.70 px
+    
+    if state_code == 'Y_SUBSEQ' and prev_state != 'Y_SUBSEQ':
+        # Y backlash only on direction change
+        backlash_y_um = correction_matrix['backlash_y'] * px_um  # 1.20 px
+    
+    # 4. Thermal drift (exponentially decaying)
+    thermal_x, thermal_y = calculate_thermal_drift(correction_matrix)
+    
+    # Final position
+    x_corrected = x_scaled + offset_x_um + backlash_x_um + thermal_x
+    y_corrected = y_scaled + offset_y_um + backlash_y_um + thermal_y
+    
+    return x_corrected, y_corrected
+```
+
+### State Machine Debug Output
+
+The system outputs a visual grid representation and state sequence for debugging:
+
+```python
+# Example debug output for 10-tile grid in 4x5 bounding box:
+log(u"=== GRID LAYOUT ===")
+log(u"0x00")  # Tile 0 at (0,0), tile 1 at (1,0)
+log(u"xxxx")  # Tiles 2-5 filling row
+log(u"00xx")  # Tiles 6-7 at start, 8-9 at end
+log(u"00xx")  # Similar pattern
+log(u"000x")  # Partial row
+
+log(u"=== STATE SEQUENCE ===")
+log(u"start, down, long_right, left, left, left, down, right, long, down, left, down, right")
+```
 
 ### Special Cases
 
-1. **First Down (Up → Down transition when `first_y_negative_done == False`)**
-   - **Problem:** Backlash state is unknown for the first down movement
-   - **Solution:** Use `first_down_y_offset` learned from previous stitching sessions
-   - **Why:** We can't determine if the stage was previously moving up or down before the scan started
-   - **Learning:** Extract from first Y-direction neighbor pairs in stitching results
+1. **First Down (Unknown backlash state)**
+   - **Problem:** Backlash state is unknown for first Y+ movement
+   - **Solution:** Use `first_down_y_offset` learned from previous sessions
+   - **Why:** Can't determine prior stage direction before scan started
+   - **Learning:** Extract from first Y-direction neighbor pairs with confidence weighting
 
-2. **Long Jumps (Distance > 2x normal spacing)**
-   - **No backlash correction** (stage has time to settle)
-   - **Only apply scale and skew corrections**
+2. **Long X Moves (Circle tracing with rapids)**
+   - **Phenomenon:** Distance-based slowdown affects backlash differently
+   - **Detection:** `distance > long_move_threshold_x * tile_width`
+   - **Correction:** Use `backlash_long_x_left` or `backlash_long_x_right`
+   - **Note:** Only discontinuous move in typical grid traversal
+
+---
+
+## Thermal Load Calculation
+
+Thermal drift is a function of z-stack height, number of channels, and number of tiles.
+
+```python
+def calculate_thermal_load_factor(z_stack_height_um, num_channels, num_tiles):
+    """
+    Calculate thermal load factor based on acquisition parameters.
+    
+    Thermal load increases with:
+    - Z-stack height (more stage movement, more heat)
+    - Number of channels (more LED/laser activation, more heat)
+    - Number of tiles (longer acquisition time, more cumulative heat)
+    
+    Args:
+        z_stack_height_um: Total Z-stack height in micrometers
+        num_channels: Number of imaging channels
+        num_tiles: Total number of tiles in scan
+    
+    Returns:
+        thermal_load_factor: Scalar value (0.0 = minimal, 1.0+ = high thermal load)
+    """
+    # Normalize factors (adjust coefficients based on empirical data)
+    z_factor = z_stack_height_um / 100.0  # Normalize to ~100μm baseline
+    ch_factor = num_channels / 3.0        # Normalize to 3-channel baseline
+    tile_factor = num_tiles / 50.0        # Normalize to 50-tile baseline
+    
+    # Combined thermal load (weighted sum)
+    # Adjust weights based on actual thermal behavior
+    thermal_load = 0.4 * z_factor + 0.3 * ch_factor + 0.3 * tile_factor
+    
+    return thermal_load
+
+def select_thermal_drift(correction_matrix, thermal_load_factor):
+    """
+    Select appropriate thermal drift correction based on system state.
+    
+    Args:
+        correction_matrix: Correction matrix with thermal parameters
+        thermal_load_factor: Computed thermal load (from calculate_thermal_load_factor)
+    
+    Returns:
+        (thermal_drift_x, thermal_drift_y): Selected drift corrections in μm
+    """
+    thermal_state = correction_matrix['thermal_state']
+    
+    if thermal_state == 'cold':
+        # Cold run: full thermal drift
+        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
+    elif thermal_state == 'preheated':
+        # Preheated: reduced thermal drift
+        drift_x = correction_matrix['thermal_drift_x_preheated'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_preheated'] * thermal_load_factor
+    else:
+        # Unknown: assume cold (conservative)
+        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
+    
+    return drift_x, drift_y
+```
 
 ---
 
 ## Jython-Compatible Matrix Operations
 
 Since we cannot use NumPy (not available in Jython), we implement pure Python matrix operations.
+
+**Design Note:** While if-then loops are avoided where possible for performance, the actual performance impact for <1000 tiles is negligible. The matrix-based approach is preferred for conceptual clarity and maintainability.
 
 ### Required Operations
 
