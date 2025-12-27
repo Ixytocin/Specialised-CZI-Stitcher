@@ -1283,8 +1283,8 @@ class UltimateStitcher:
                 # Continue with uncorrected positions
         
         # Use first tile as reference (all positions relative to tile 0)
-        ref_x = fx[0] if fx else 0.0
-        ref_y = fy[0] if fy else 0.0
+        ref_x = fx[0] if len(fx) > 0 else 0.0
+        ref_y = fy[0] if len(fy) > 0 else 0.0
         for t in tiles:
             t['x'] = (t['x_s'] - ref_x) / px_um_eff
             t['y'] = (t['y_s'] - ref_y) / px_um_eff
