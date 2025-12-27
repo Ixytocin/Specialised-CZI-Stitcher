@@ -1196,6 +1196,92 @@ class UltimateStitcher:
             if LOG_TILE_POS:
                 log(u"Series {} -> raw pos ({}, {}) via {}".format(s, x_s, y_s, m))
 
+        # Apply metadata corrections if enabled
+        if METADATA_CORRECTION_AVAILABLE and self.correction_matrix and self.correction_matrix.get('enabled', False):
+            try:
+                logd(u"")
+                logd(u"=== APPLYING METADATA CORRECTIONS ===")
+                logd(u"  Microscope: {}".format(self.correction_matrix.get('microscope_id', 'default')))
+                logd(u"  Thermal state: {}".format(self.correction_matrix.get('thermal_state', 'unknown')))
+                
+                # Visualize grid layout and detect states
+                try:
+                    grid_viz = visualize_grid_layout(tiles, px_um_eff)
+                    if grid_viz:
+                        logd(u"")
+                        logd(u"  Grid Layout:")
+                        for line in grid_viz.split('\n'):
+                            if line.strip():
+                                logd(u"    {}".format(line))
+                except Exception as e:
+                    logd(u"  Grid visualization failed: {}".format(e))
+                
+                # Apply corrections to each tile
+                movement_state = create_movement_state()
+                corrected_tiles = []
+                state_sequence = []
+                
+                for idx, t in enumerate(tiles):
+                    # Get tile dimensions (use reader to get actual dimensions)
+                    try:
+                        reader.setSeries(t['i'])
+                        tile_width_px = reader.getSizeX()
+                        tile_height_px = reader.getSizeY()
+                        num_channels = reader.getSizeC()
+                        num_z = reader.getSizeZ()
+                    except:
+                        tile_width_px = 1216  # Default fallback
+                        tile_height_px = 1028
+                        num_channels = 1
+                        num_z = 1
+                    
+                    # Apply corrections
+                    corrected = apply_metadata_corrections(
+                        t['x_s'], t['y_s'], 
+                        tiles, idx,
+                        self.correction_matrix,
+                        movement_state,
+                        px_um_eff,
+                        tile_width_px, tile_height_px,
+                        num_channels, num_z
+                    )
+                    
+                    # Update tile with corrected position
+                    t['x_s_orig'] = t['x_s']
+                    t['y_s_orig'] = t['y_s']
+                    t['x_s'] = corrected['x_um']
+                    t['y_s'] = corrected['y_um']
+                    t['correction_applied'] = True
+                    t['movement_state'] = corrected['state']
+                    
+                    state_sequence.append(corrected['state'])
+                    corrected_tiles.append(t)
+                    
+                    if LOG_TILE_POS:
+                        dx = t['x_s'] - t['x_s_orig']
+                        dy = t['y_s'] - t['y_s_orig']
+                        log(u"Tile {}: ({:.2f}, {:.2f}) -> ({:.2f}, {:.2f}) [delta: ({:.2f}, {:.2f}) um] state: {}".format(
+                            idx, t['x_s_orig'], t['y_s_orig'], t['x_s'], t['y_s'], dx, dy, corrected['state']))
+                
+                # Log state sequence
+                logd(u"")
+                logd(u"  State Sequence: {}".format(", ".join(state_sequence)))
+                logd(u"  Corrections applied to {} tiles".format(len(corrected_tiles)))
+                logd(u"")
+                
+                # Update fx, fy with corrected positions
+                fx = [t['x_s'] for t in tiles]
+                fy = [t['y_s'] for t in tiles]
+                
+            except Exception as e:
+                log(u"WARNING: Metadata correction failed: {}".format(e))
+                if DEBUG_STITCHING:
+                    import traceback
+                    logd(u"  Traceback:")
+                    for line in traceback.format_exc().split('\n'):
+                        logd(u"    {}".format(line))
+                # Continue with uncorrected positions
+        
         min_x = min(fx) if fx else 0.0
         min_y = min(fy) if fy else 0.0
         for t in tiles:
