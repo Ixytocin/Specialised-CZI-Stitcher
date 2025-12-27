@@ -1,0 +1,2053 @@
+[CZI-Stitcher] 
+      +---+---+---+
+      | C | Z | I  |    CZI-STITCHER v37.5
+      +---+---+---+     ======================
+      | S | t  | i  |   > Workflow: v31.16h
+      +---+---+---+     > UTF-8:    v34.8
+      | t  | c | h |    > LUTs:     v36.5
+      +---+---+---+     > Paths:    v37.5
+
+      [Target] Zeiss Zen/CZI Analysis
+      [Status] Initializing environment...
+    
+[CZI-Stitcher] [DEBUG] Loading config from: C:\Users\Marti\.specialised_czi_stitcher_config.json
+[CZI-Stitcher] [DEBUG] Config loaded: {u'last_processing_dir': u'M:\\Neuer Ordner', u'last_input_dir': u'M:\\Neuer Ordner', u'last_output_dir': u'M:\\Neuer Ordner'}
+[CZI-Stitcher] 
+[CZI-Stitcher] Loading filesystem... This might take a while with sleeping HDDs.
+[CZI-Stitcher] 
+[CZI-Stitcher] [DEBUG] Saving config: {u'last_processing_dir': u'M:\\Neuer Ordner', u'last_input_dir': u'M:\\Neuer Ordner', u'last_output_dir': u'M:\\Neuer Ordner'}
+[CZI-Stitcher] [DEBUG] Config saved successfully
+[CZI-Stitcher] Input: M:\Neuer Ordner
+[CZI-Stitcher] Output: M:\Neuer Ordner
+[CZI-Stitcher] Processing/Temp: M:\Neuer Ordner
+[CZI-Stitcher] Threads: 31
+[CZI-Stitcher] 
+[CZI-Stitcher] Parameters:
+[CZI-Stitcher]   Fusion: Linear Blending
+[CZI-Stitcher]   Rolling Ball Radius: 50
+[CZI-Stitcher]   Regression Threshold: 0.3
+[CZI-Stitcher]   Max Displacement: 5.0
+[CZI-Stitcher]   Auto-adjust: 0
+[CZI-Stitcher]   Correction Factor: 10.0
+[CZI-Stitcher]   Save Stack: 1 | Show Stack: 1
+[CZI-Stitcher]   Save Projection: 1 | Show Projection: 1
+[CZI-Stitcher]   Z-Projection Method: Max Intensity
+[CZI-Stitcher] 
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-01(1)-ApoTome RAW Convert-02 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 539868 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (21840.815, 43008.86) via StageLabel-order-map
+[CZI-Stitcher] Series 1 -> raw pos (22218.362, 43008.86) via StageLabel-order-map
+[CZI-Stitcher] Series 2 -> raw pos (22595.944, 43008.86) via StageLabel-order-map
+[CZI-Stitcher] Series 3 -> raw pos (22595.944, 43328.06) via StageLabel-order-map
+[CZI-Stitcher] Series 4 -> raw pos (22218.362, 43328.06) via StageLabel-order-map
+[CZI-Stitcher] Series 5 -> raw pos (21840.815, 43328.06) via StageLabel-order-map
+[CZI-Stitcher] Series 6 -> raw pos (21463.233, 43328.06) via StageLabel-order-map
+[CZI-Stitcher] Series 7 -> raw pos (21085.651, 43647.242) via StageLabel-order-map
+[CZI-Stitcher] Series 8 -> raw pos (21463.233, 43647.242) via StageLabel-order-map
+[CZI-Stitcher] Series 9 -> raw pos (21840.815, 43647.242) via StageLabel-order-map
+[CZI-Stitcher] Series 10 -> raw pos (22218.362, 43647.242) via StageLabel-order-map
+[CZI-Stitcher] Series 11 -> raw pos (22595.944, 43647.242) via StageLabel-order-map
+[CZI-Stitcher] Series 12 -> raw pos (22595.944, 43966.441) via StageLabel-order-map
+[CZI-Stitcher] Series 13 -> raw pos (22218.362, 43966.441) via StageLabel-order-map
+[CZI-Stitcher] Series 14 -> raw pos (21840.815, 43966.441) via StageLabel-order-map
+[CZI-Stitcher] Series 15 -> raw pos (21463.233, 43966.441) via StageLabel-order-map
+[CZI-Stitcher] Series 16 -> raw pos (21085.651, 43966.441) via StageLabel-order-map
+[CZI-Stitcher] Series 17 -> raw pos (21085.651, 44285.641) via StageLabel-order-map
+[CZI-Stitcher] Series 18 -> raw pos (21463.233, 44285.641) via StageLabel-order-map
+[CZI-Stitcher] Series 19 -> raw pos (21840.815, 44285.641) via StageLabel-order-map
+[CZI-Stitcher] Series 20 -> raw pos (22218.362, 44285.641) via StageLabel-order-map
+[CZI-Stitcher] Series 21 -> raw pos (22595.944, 44285.641) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 22 | px-range x=[0.0,4377.7] y=[0.0,3700.8]
+[CZI-Stitcher] [MEMORY] Used: 33277.8MB / Total: 60551.9MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 32086.3MB / Total: 60551.9MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S008_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S007_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S011_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S009_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S006_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S017_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S010_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S012_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S013_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S014_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S019_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S004_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S020_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S016_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S015_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S001_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S005_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S021_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S003_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S002_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S018_3D.tif
+[CZI-Stitcher] 
+[CZI-Stitcher] === CREATING TILE CONFIGURATION ===
+[CZI-Stitcher]   2D Configuration (for registration): M:\Neuer Ordner\temp_1766759421\TileConfiguration.txt
+[CZI-Stitcher]   Number of tiles: 22
+[CZI-Stitcher] [DEBUG]     Tile: S000_MIP.tif at (2188.9, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S001_MIP.tif at (3283.2, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S002_MIP.tif at (4377.7, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S003_MIP.tif at (4377.7, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S004_MIP.tif at (3283.2, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S005_MIP.tif at (2188.9, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S006_MIP.tif at (1094.4, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S007_MIP.tif at (0.0, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S008_MIP.tif at (1094.4, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S009_MIP.tif at (2188.9, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S010_MIP.tif at (3283.2, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S011_MIP.tif at (4377.7, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S012_MIP.tif at (4377.7, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S013_MIP.tif at (3283.2, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S014_MIP.tif at (2188.9, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S015_MIP.tif at (1094.4, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S016_MIP.tif at (0.0, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S017_MIP.tif at (0.0, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S018_MIP.tif at (1094.4, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S019_MIP.tif at (2188.9, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S020_MIP.tif at (3283.2, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S021_MIP.tif at (4377.7, 3700.8) px
+[CZI-Stitcher]   2D TileConfiguration written
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 1: 2D REGISTRATION ===
+[CZI-Stitcher]   Stitching 2D MIPs to compute tile positions...
+[CZI-Stitcher]   Fusion method: Linear Blending
+[CZI-Stitcher]   Regression threshold: 0.3
+[CZI-Stitcher]   Max displacement: 5.0
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759421\S000_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S001_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S002_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S003_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S004_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S005_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S006_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S007_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S008_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S009_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S010_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S011_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S012_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S013_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S014_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S015_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S016_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (59 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S017_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (106 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S018_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (58 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S019_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S020_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S021_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (66 ms)
+S000_MIP.tif[1] <- S001_MIP.tif[1]: (1129.7847, 7.5142856) correlation (R)=0.93986106 (58 ms)
+S000_MIP.tif[1] <- S004_MIP.tif[1]: (1124.9883, 968.3817) correlation (R)=0.43278483 (33 ms)
+S000_MIP.tif[1] <- S005_MIP.tif[1]: (-5.867332, 958.0249) correlation (R)=0.7804905 (55 ms)
+S000_MIP.tif[1] <- S006_MIP.tif[1]: (-1138.6478, 950.48047) correlation (R)=0.73660254 (31 ms)
+S001_MIP.tif[1] <- S002_MIP.tif[1]: (1130.8275, 8.016318) correlation (R)=0.7252357 (56 ms)
+S001_MIP.tif[1] <- S003_MIP.tif[1]: (1125.1396, 967.1336) correlation (R)=0.54584575 (33 ms)
+S001_MIP.tif[1] <- S004_MIP.tif[1]: (-6.407122, 959.35406) correlation (R)=0.7825718 (57 ms)
+S001_MIP.tif[1] <- S005_MIP.tif[1]: (-1010.13367, 1009.8331) correlation (R)=0.7011336 (33 ms)
+S002_MIP.tif[1] <- S003_MIP.tif[1]: (-5.9710813, 958.5338) correlation (R)=0.8183333 (57 ms)
+S002_MIP.tif[1] <- S004_MIP.tif[1]: (-1137.7496, 952.1105) correlation (R)=0.4705969 (32 ms)
+S003_MIP.tif[1] <- S004_MIP.tif[1]: (-1131.2574, -6.9322724) correlation (R)=0.39981258 (58 ms)
+S003_MIP.tif[1] <- S010_MIP.tif[1]: (-1137.2307, 947.1977) correlation (R)=0.36656544 (32 ms)
+S003_MIP.tif[1] <- S011_MIP.tif[1]: (-5.986419, 955.27277) correlation (R)=0.96007663 (57 ms)
+S004_MIP.tif[1] <- S005_MIP.tif[1]: (-1129.5, -9.47875) correlation (R)=0.8103285 (56 ms)
+S004_MIP.tif[1] <- S009_MIP.tif[1]: (-1135.8164, 946.0852) correlation (R)=0.55202323 (33 ms)
+S004_MIP.tif[1] <- S010_MIP.tif[1]: (-5.816445, 953.54517) correlation (R)=0.48327544 (55 ms)
+S004_MIP.tif[1] <- S011_MIP.tif[1]: (988.981, 852.0083) correlation (R)=0.3087895 (35 ms)
+S005_MIP.tif[1] <- S006_MIP.tif[1]: (-1131.694, -8.184714) correlation (R)=0.7195626 (57 ms)
+S005_MIP.tif[1] <- S008_MIP.tif[1]: (-1139.669, 947.58905) correlation (R)=0.2514224 (33 ms)
+S005_MIP.tif[1] <- S009_MIP.tif[1]: (-6.0456276, 955.37494) correlation (R)=0.4402742 (55 ms)
+S005_MIP.tif[1] <- S010_MIP.tif[1]: (1124.761, 963.13904) correlation (R)=0.4036212 (34 ms)
+S006_MIP.tif[1] <- S007_MIP.tif[1]: (-1139.9902, 948.11365) correlation (R)=0.53881985 (34 ms)
+S006_MIP.tif[1] <- S008_MIP.tif[1]: (-6.1310863, 955.3287) correlation (R)=0.48132873 (55 ms)
+S006_MIP.tif[1] <- S009_MIP.tif[1]: (1125.8988, 964.2626) correlation (R)=0.31560048 (64 ms)
+S007_MIP.tif[1] <- S008_MIP.tif[1]: (1133.9247, 7.707991) correlation (R)=0.65559226 (56 ms)
+S007_MIP.tif[1] <- S015_MIP.tif[1]: (992.9665, 829.9332) correlation (R)=0.25652322 (33 ms)
+S007_MIP.tif[1] <- S016_MIP.tif[1]: (-6.08721, 955.3626) correlation (R)=0.6286836 (57 ms)
+S008_MIP.tif[1] <- S009_MIP.tif[1]: (1132.0145, 8.20107) correlation (R)=0.43397838 (56 ms)
+S008_MIP.tif[1] <- S014_MIP.tif[1]: (1125.2496, 965.2994) correlation (R)=0.31899267 (32 ms)
+S008_MIP.tif[1] <- S015_MIP.tif[1]: (-6.029494, 957.00104) correlation (R)=0.510184 (57 ms)
+S008_MIP.tif[1] <- S016_MIP.tif[1]: (-996.85315, 828.14935) correlation (R)=0.20792261 (32 ms)
+S009_MIP.tif[1] <- S010_MIP.tif[1]: (1129.6124, 7.569111) correlation (R)=0.38231102 (61 ms)
+S009_MIP.tif[1] <- S013_MIP.tif[1]: (1187.9491, 894.9412) correlation (R)=0.15515326 (34 ms)
+S009_MIP.tif[1] <- S014_MIP.tif[1]: (-6.3060384, 956.7422) correlation (R)=0.40997612 (56 ms)
+S009_MIP.tif[1] <- S015_MIP.tif[1]: (-1138.9578, 948.83014) correlation (R)=0.32535708 (32 ms)
+S010_MIP.tif[1] <- S011_MIP.tif[1]: (1130.9049, 8.48557) correlation (R)=0.86224765 (58 ms)
+S010_MIP.tif[1] <- S012_MIP.tif[1]: (1124.761, 964.9359) correlation (R)=0.8323335 (32 ms)
+S010_MIP.tif[1] <- S013_MIP.tif[1]: (-6.402566, 957.08405) correlation (R)=0.8861601 (58 ms)
+S010_MIP.tif[1] <- S014_MIP.tif[1]: (-1206.1246, 924.142) correlation (R)=0.045880213 (33 ms)
+S011_MIP.tif[1] <- S012_MIP.tif[1]: (-6.148169, 956.02655) correlation (R)=0.913371 (55 ms)
+S011_MIP.tif[1] <- S013_MIP.tif[1]: (-1137.4622, 948.9118) correlation (R)=0.8535845 (34 ms)
+S012_MIP.tif[1] <- S013_MIP.tif[1]: (-1130.8052, -7.6544175) correlation (R)=0.8692623 (56 ms)
+S012_MIP.tif[1] <- S020_MIP.tif[1]: (-1137.827, 948.07184) correlation (R)=0.52366865 (36 ms)
+S012_MIP.tif[1] <- S021_MIP.tif[1]: (-6.443613, 955.2384) correlation (R)=0.50812936 (87 ms)
+S013_MIP.tif[1] <- S014_MIP.tif[1]: (-1129.2999, -8.252672) correlation (R)=0.8258833 (57 ms)
+S013_MIP.tif[1] <- S019_MIP.tif[1]: (-1135.0989, 946.6623) correlation (R)=0.35485688 (34 ms)
+S013_MIP.tif[1] <- S020_MIP.tif[1]: (-5.9390264, 954.9965) correlation (R)=0.615949 (54 ms)
+S013_MIP.tif[1] <- S021_MIP.tif[1]: (1125.1443, 963.0711) correlation (R)=0.3064988 (34 ms)
+S014_MIP.tif[1] <- S015_MIP.tif[1]: (-1131.5997, -7.936206) correlation (R)=0.7720703 (56 ms)
+S014_MIP.tif[1] <- S018_MIP.tif[1]: (-1137.6671, 946.6858) correlation (R)=0.3971773 (34 ms)
+S014_MIP.tif[1] <- S019_MIP.tif[1]: (-5.5, 954.5278) correlation (R)=0.4540732 (58 ms)
+S014_MIP.tif[1] <- S020_MIP.tif[1]: (1133.9115, 957.9151) correlation (R)=0.15602429 (33 ms)
+S015_MIP.tif[1] <- S016_MIP.tif[1]: (-1133.9578, -9.060456) correlation (R)=0.8792485 (56 ms)
+S015_MIP.tif[1] <- S017_MIP.tif[1]: (-1140.4622, 947.2711) correlation (R)=0.8063035 (34 ms)
+S015_MIP.tif[1] <- S018_MIP.tif[1]: (-5.8120375, 955.03613) correlation (R)=0.5652177 (55 ms)
+S015_MIP.tif[1] <- S019_MIP.tif[1]: (1126.8904, 962.8676) correlation (R)=0.28731203 (34 ms)
+S016_MIP.tif[1] <- S017_MIP.tif[1]: (-6.3806987, 956.3252) correlation (R)=0.92380196 (56 ms)
+S016_MIP.tif[1] <- S018_MIP.tif[1]: (1128.4143, 964.1544) correlation (R)=0.8023314 (62 ms)
+S017_MIP.tif[1] <- S018_MIP.tif[1]: (1134.6968, 7.939761) correlation (R)=0.667405 (56 ms)
+S018_MIP.tif[1] <- S019_MIP.tif[1]: (1132.1996, 7.5977483) correlation (R)=0.643105 (59 ms)
+S019_MIP.tif[1] <- S020_MIP.tif[1]: (1128.8153, 8.5853195) correlation (R)=0.679054 (56 ms)
+S020_MIP.tif[1] <- S021_MIP.tif[1]: (1130.8413, 8.066731) correlation (R)=0.575737 (55 ms)
+Identified link between S004_MIP.tif[1] and S011_MIP.tif[1] (R=0.3087895) to be bad. Reoptimizing.
+Identified link between S001_MIP.tif[1] and S005_MIP.tif[1] (R=0.7011336) to be bad. Reoptimizing.
+Finished registration process (3142 ms).
+S000_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) 0.4698496326750715
+S001_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1130.0298818476113], [0.0, 1.0, 7.840611845994689]]) 0.18209156594104975
+S002_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2261.0849839875605], [0.0, 1.0, 15.91139641672003]]) 0.0980355579576962
+S003_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2255.057186797489], [0.0, 1.0, 974.6379323233207]]) 0.05952056579041062
+S004_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1123.7847060261004], [0.0, 1.0, 967.7706756914756]]) 0.3352143102884991
+S005_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -6.054240239900025], [0.0, 1.0, 958.2766695460189]]) 0.16208034835597987
+S006_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1138.0553896276065], [0.0, 1.0, 950.1564092870915]]) 0.2026850049914662
+S007_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2277.9945202448994], [0.0, 1.0, 1898.0978291931883]]) 0.02592553007734582
+S008_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1143.9802569813376], [0.0, 1.0, 1905.623034894981]]) 0.07006506306096937
+S009_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -11.875986931871267], [0.0, 1.0, 1913.893232619289]]) 0.1342888143061191
+S010_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1117.968248607596], [0.0, 1.0, 1921.493451938194]]) 0.09212025211312581
+S011_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2248.910678843381], [0.0, 1.0, 1929.9873418981047]]) 0.030578521509506663
+S012_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2242.6566562269236], [0.0, 1.0, 2886.242997879634]]) 0.13480585796674957
+S013_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1111.419619545865], [0.0, 1.0, 2878.748596573396]]) 0.09876123696465773
+S014_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -18.22562825798883], [0.0, 1.0, 2870.665966276341]]) 0.10451796019147433
+S015_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1150.0921700703125], [0.0, 1.0, 2862.62088073266]]) 0.06931661895797032
+S016_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2284.131353943085], [0.0, 1.0, 2853.5034340346706]]) 0.006620411408280077
+S017_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2290.5291173415676], [0.0, 1.0, 3809.8154031936133]]) 0.005799854270693369
+S018_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1155.8255083020608], [0.0, 1.0, 3817.644317229205]]) 0.018959901071214872
+S019_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -23.643466837169427], [0.0, 1.0, 3825.279661581256]]) 0.007838663150916645
+S020_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1105.2288621612927], [0.0, 1.0, 3833.8894626286487]]) 0.1133901512676386
+S021_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2236.2312308073897], [0.0, 1.0, 3841.7525873777104]]) 0.08029624991523755
+Writing registered TileConfiguration: M:\Neuer Ordner\temp_1766759421\TileConfiguration.registered.txt
+Fuse & Display ...
+Finished fusion (2356 ms)
+Finished ... (6963 ms)
+[CZI-Stitcher]   2D registration completed in 7.1 seconds
+[CZI-Stitcher] [MEMORY] Used: 13514.2MB / Total: 60551.9MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 2D registration
+[CZI-Stitcher] [MEMORY] Used: 130.1MB / Total: 60551.9MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 2: TRANSFER TO 3D ===
+[CZI-Stitcher]   Creating 3D configuration from 2D registration results...
+[CZI-Stitcher] [DEBUG]     3D Tile: S000_3D.tif at (0.0, 0.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S001_3D.tif at (1130.0, 7.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S002_3D.tif at (2261.1, 15.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S003_3D.tif at (2255.1, 974.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S004_3D.tif at (1123.8, 967.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S005_3D.tif at (-6.1, 958.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S006_3D.tif at (-1138.1, 950.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S007_3D.tif at (-2278.0, 1898.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S008_3D.tif at (-1144.0, 1905.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S009_3D.tif at (-11.9, 1913.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S010_3D.tif at (1118.0, 1921.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S011_3D.tif at (2248.9, 1930.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S012_3D.tif at (2242.7, 2886.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S013_3D.tif at (1111.4, 2878.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S014_3D.tif at (-18.2, 2870.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S015_3D.tif at (-1150.1, 2862.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S016_3D.tif at (-2284.1, 2853.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S017_3D.tif at (-2290.5, 3809.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S018_3D.tif at (-1155.8, 3817.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S019_3D.tif at (-23.6, 3825.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S020_3D.tif at (1105.2, 3833.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S021_3D.tif at (2236.2, 3841.8, 0.0)
+[CZI-Stitcher]   Wrote 22 tiles to 3D configuration
+[CZI-Stitcher]   3D config file: M:\Neuer Ordner\temp_1766759421\TileConfiguration_3D.txt
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 3: 3D FUSION ===
+[CZI-Stitcher]   Fusing 3D stacks using computed positions...
+[CZI-Stitcher]   This preserves all z-slices from each tile
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759421\S000_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2310 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S001_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2385 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S002_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2261 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S003_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2425 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S004_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2368 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S005_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2394 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S006_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2324 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S007_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2469 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S008_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2537 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S009_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2431 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S010_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2546 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S011_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2404 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S012_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2552 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S013_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2430 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S014_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2567 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S015_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2520 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S016_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2453 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S017_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2502 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S018_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2376 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S019_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2469 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S020_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2468 ms)
+Loading: M:\Neuer Ordner\temp_1766759421\S021_3D.tif ... 
+1216x1028x23px, channels=4, timepoints=1 (2690 ms)
+S000_3D.tif: [1,3](0.0,0.0,0.0) 1.7976931348623157E308
+S001_3D.tif: [1,3](1130.0299072265625,7.840611934661865,0.0) 1.7976931348623157E308
+S002_3D.tif: [1,3](2261.0849609375,15.911396026611328,0.0) 1.7976931348623157E308
+S003_3D.tif: [1,3](2255.05712890625,974.637939453125,0.0) 1.7976931348623157E308
+S004_3D.tif: [1,3](1123.78466796875,967.7706909179688,0.0) 1.7976931348623157E308
+S005_3D.tif: [1,3](-6.0542402267456055,958.2766723632812,0.0) 1.7976931348623157E308
+S006_3D.tif: [1,3](-1138.055419921875,950.1564331054688,0.0) 1.7976931348623157E308
+S007_3D.tif: [1,3](-2277.99462890625,1898.0977783203125,0.0) 1.7976931348623157E308
+S008_3D.tif: [1,3](-1143.980224609375,1905.623046875,0.0) 1.7976931348623157E308
+S009_3D.tif: [1,3](-11.87598705291748,1913.8931884765625,0.0) 1.7976931348623157E308
+S010_3D.tif: [1,3](1117.96826171875,1921.493408203125,0.0) 1.7976931348623157E308
+S011_3D.tif: [1,3](2248.91064453125,1929.9873046875,0.0) 1.7976931348623157E308
+S012_3D.tif: [1,3](2242.65673828125,2886.242919921875,0.0) 1.7976931348623157E308
+S013_3D.tif: [1,3](1111.419677734375,2878.74853515625,0.0) 1.7976931348623157E308
+S014_3D.tif: [1,3](-18.225627899169922,2870.666015625,0.0) 1.7976931348623157E308
+S015_3D.tif: [1,3](-1150.0921630859375,2862.620849609375,0.0) 1.7976931348623157E308
+S016_3D.tif: [1,3](-2284.13134765625,2853.50341796875,0.0) 1.7976931348623157E308
+S017_3D.tif: [1,3](-2290.529052734375,3809.8154296875,0.0) 1.7976931348623157E308
+S018_3D.tif: [1,3](-1155.8255615234375,3817.644287109375,0.0) 1.7976931348623157E308
+S019_3D.tif: [1,3](-23.64346694946289,3825.279541015625,0.0) 1.7976931348623157E308
+S020_3D.tif: [1,3](1105.2288818359375,3833.889404296875,0.0) 1.7976931348623157E308
+S021_3D.tif: [1,3](2236.231201171875,3841.752685546875,0.0) 1.7976931348623157E308
+Fuse & Display ...
+Finished fusion (113189 ms)
+Finished ... (167158 ms)
+[CZI-Stitcher]   3D fusion completed in 168.6 seconds
+[CZI-Stitcher]   Total stitching time: 175.7 seconds
+[CZI-Stitcher] [MEMORY] Used: 20803.2MB / Total: 60551.9MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 3D fusion
+[CZI-Stitcher] [MEMORY] Used: 5495.0MB / Total: 56496.9MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION AND LUT APPLICATION ===
+[CZI-Stitcher] [DEBUG]   Initial image state:
+[CZI-Stitcher] [DEBUG]     - Stack size: 96
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Type: 1
+[CZI-Stitcher] [DEBUG]   Expected: 4 channels, 23 slices (total: 92)
+[CZI-Stitcher] [DEBUG]   Stack size mismatch, skipping HyperStack conversion
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Applying channel LUTs...
+[CZI-Stitcher] [DEBUG]   Image before LUT application:
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Channels: 4
+[CZI-Stitcher] [DEBUG] === APPLYING CHANNEL LUTS ===
+[CZI-Stitcher] [DEBUG]   Image: 4 channels, 24 slices, stack size=96
+[CZI-Stitcher] [DEBUG] === PARSING CHANNEL COLORS FROM OME-XML ===
+[CZI-Stitcher] [DEBUG]   OME-XML length: 539868 characters
+[CZI-Stitcher] [DEBUG]   Found <Image> tag, searching within first image only
+[CZI-Stitcher] [DEBUG]   Channel 0 raw color value: 7798783
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 7798783
+[CZI-Stitcher] [DEBUG]   Channel 1 raw color value: 16724991
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 16724991
+[CZI-Stitcher] [DEBUG]   Channel 2 raw color value: -16771841
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -16771841
+[CZI-Stitcher] [DEBUG]   Channel 3 raw color value: -5439233
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -5439233
+[CZI-Stitcher] [DEBUG]   Total colors found: 4
+[CZI-Stitcher] [DEBUG] === CHANNEL COLOR PARSING COMPLETE ===
+[CZI-Stitcher] [DEBUG]   Using OME-XML colors (preferred)
+[CZI-Stitcher] LUT Debug: OME colors=[7798783, 16724991, -16771841, -5439233], GM colors=[4278220543L, 4278255411L, 4294901780L, 4294946048L, 4294946048L], chosen=[7798783, 16724991, -16771841, -5439233]
+[CZI-Stitcher] [DEBUG]   Building LUTs from colors...
+[CZI-Stitcher] [DEBUG]   Colors are integers (RGBA format expected)
+[CZI-Stitcher] [DEBUG]   Channel 0: raw int = 7798783
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x0076FFFF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=118, B=255, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 1: raw int = 16724991
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x00FF33FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=255, B=51, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 2: raw int = -16771841
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFF0014FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=0, B=20, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 3: raw int = -5439233
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFFAD00FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=173, B=0, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] LUT Debug: built 4 LUTs from 4 colors
+[CZI-Stitcher] [DEBUG]   Attempting to apply 4 LUTs to image...
+[CZI-Stitcher] [DEBUG]   Image is ALREADY a CompositeImage. Using existing instance.
+[CZI-Stitcher] [DEBUG]   CompositeImage mode set to COMPOSITE
+[CZI-Stitcher] [DEBUG]   CompositeImage has 4 channels
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 1
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 2
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 3
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 4
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Calling updateAllChannelsAndDraw on CompositeImage
+[CZI-Stitcher] [DEBUG]   Returning CompositeImage (SUCCESS)
+[CZI-Stitcher] [DEBUG] === LUT APPLICATION COMPLETE (CompositeImage) ===
+[CZI-Stitcher] [DEBUG]   LUT application SUCCESS - checking result...
+[CZI-Stitcher] [DEBUG]     - Returned image is composite: 1
+[CZI-Stitcher] [DEBUG]     - Returned image channels: 4
+[CZI-Stitcher]   >>> LUTs applied successfully, CompositeImage created and assigned
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Setting display mode...
+[CZI-Stitcher] [DEBUG]   Image IS CompositeImage - setting COMPOSITE display mode
+[CZI-Stitcher]   >>> Display mode set to COMPOSITE, image updated
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION COMPLETE ===
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] File size ~5.02GB, using BigTIFF format
+[CZI-Stitcher] Saved stitched (BigTIFF): M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-01(1)-ApoTome RAW Convert-02_stitched.tif
+[CZI-Stitcher] Creating Z-projection with method: Max Intensity
+[CZI-Stitcher] Saved Z-projection: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-01(1)-ApoTome RAW Convert-02_projection.tif
+[CZI-Stitcher] Displaying Z-projection
+[CZI-Stitcher] [MEMORY] Used: 5687.3MB / Total: 56496.9MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after saving
+[CZI-Stitcher] [MEMORY] Used: 5596.3MB / Total: 42008.4MB / Max: 439820.7MB
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-02(1)-ApoTome RAW Convert-03 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 26411 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (20303.099, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 1 | px-range x=[0.0,0.0] y=[0.0,0.0]
+[CZI-Stitcher] [MEMORY] Used: 5657.0MB / Total: 42008.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 5590.3MB / Total: 20255.4MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] Only 1 tile(s) for 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-02(1)-ApoTome RAW Convert-03 - skip stitching.
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-03(1)-ApoTome RAW Convert-04 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 291252 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (20303.099, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Series 1 -> raw pos (20680.646, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Series 2 -> raw pos (21058.228, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Series 3 -> raw pos (21435.775, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Series 4 -> raw pos (21813.357, 40970.925) via StageLabel-order-map
+[CZI-Stitcher] Series 5 -> raw pos (21813.357, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 6 -> raw pos (21435.775, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 7 -> raw pos (21058.228, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 8 -> raw pos (20680.646, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 9 -> raw pos (20303.099, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 10 -> raw pos (19925.517, 41290.124) via StageLabel-order-map
+[CZI-Stitcher] Series 11 -> raw pos (19925.517, 41609.306) via StageLabel-order-map
+[CZI-Stitcher] Series 12 -> raw pos (20303.099, 41609.306) via StageLabel-order-map
+[CZI-Stitcher] Series 13 -> raw pos (20680.646, 41609.306) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 14 | px-range x=[0.0,5472.0] y=[0.0,1850.4]
+[CZI-Stitcher] [MEMORY] Used: 6335.4MB / Total: 20255.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 5593.9MB / Total: 20255.4MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S002_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S013_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S008_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S010_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S007_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S001_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S003_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S006_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S009_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S004_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S012_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S011_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S005_3D.tif
+[CZI-Stitcher] 
+[CZI-Stitcher] === CREATING TILE CONFIGURATION ===
+[CZI-Stitcher]   2D Configuration (for registration): M:\Neuer Ordner\temp_1766759684\TileConfiguration.txt
+[CZI-Stitcher]   Number of tiles: 14
+[CZI-Stitcher] [DEBUG]     Tile: S000_MIP.tif at (1094.4, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S001_MIP.tif at (2188.8, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S002_MIP.tif at (3283.2, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S003_MIP.tif at (4377.6, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S004_MIP.tif at (5472.0, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S005_MIP.tif at (5472.0, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S006_MIP.tif at (4377.6, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S007_MIP.tif at (3283.2, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S008_MIP.tif at (2188.8, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S009_MIP.tif at (1094.4, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S010_MIP.tif at (0.0, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S011_MIP.tif at (0.0, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S012_MIP.tif at (1094.4, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S013_MIP.tif at (2188.8, 1850.4) px
+[CZI-Stitcher]   2D TileConfiguration written
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 1: 2D REGISTRATION ===
+[CZI-Stitcher]   Stitching 2D MIPs to compute tile positions...
+[CZI-Stitcher]   Fusion method: Linear Blending
+[CZI-Stitcher]   Regression threshold: 0.3
+[CZI-Stitcher]   Max displacement: 5.0
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759684\S000_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S001_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S002_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S003_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S004_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S005_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S006_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S007_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S008_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S009_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S010_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S011_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S012_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S013_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+S000_MIP.tif[1] <- S001_MIP.tif[1]: (1131.4419, 7.8325033) correlation (R)=0.67750716 (58 ms)
+S000_MIP.tif[1] <- S008_MIP.tif[1]: (1124.1908, 961.4089) correlation (R)=0.40089265 (33 ms)
+S000_MIP.tif[1] <- S009_MIP.tif[1]: (-6.1571856, 954.05615) correlation (R)=0.6373988 (59 ms)
+S000_MIP.tif[1] <- S010_MIP.tif[1]: (-1138.5508, 945.6649) correlation (R)=0.31381813 (46 ms)
+S001_MIP.tif[1] <- S002_MIP.tif[1]: (1133.2018, 8.868231) correlation (R)=0.855495 (55 ms)
+S001_MIP.tif[1] <- S007_MIP.tif[1]: (1126.1022, 962.12976) correlation (R)=0.9512625 (37 ms)
+S001_MIP.tif[1] <- S008_MIP.tif[1]: (-7.0012918, 954.2292) correlation (R)=0.90138614 (54 ms)
+S001_MIP.tif[1] <- S009_MIP.tif[1]: (-992.9258, 931.03406) correlation (R)=0.51870203 (31 ms)
+S002_MIP.tif[1] <- S003_MIP.tif[1]: (1133.0791, 8.139142) correlation (R)=0.96178395 (58 ms)
+S002_MIP.tif[1] <- S006_MIP.tif[1]: (1126.9576, 961.7261) correlation (R)=0.37234285 (35 ms)
+S002_MIP.tif[1] <- S007_MIP.tif[1]: (-7.140779, 953.2439) correlation (R)=0.7976849 (56 ms)
+S002_MIP.tif[1] <- S008_MIP.tif[1]: (-1140.6075, 945.8726) correlation (R)=0.9456459 (35 ms)
+S003_MIP.tif[1] <- S004_MIP.tif[1]: (1131.1804, 7.8199124) correlation (R)=0.97085005 (57 ms)
+S003_MIP.tif[1] <- S005_MIP.tif[1]: (1125.6619, 961.433) correlation (R)=0.88966644 (34 ms)
+S003_MIP.tif[1] <- S006_MIP.tif[1]: (-6.1351533, 953.1617) correlation (R)=0.8486132 (56 ms)
+S003_MIP.tif[1] <- S007_MIP.tif[1]: (-1141.5768, 944.93835) correlation (R)=0.25679734 (34 ms)
+S004_MIP.tif[1] <- S005_MIP.tif[1]: (-5.8801603, 953.5921) correlation (R)=0.95749843 (56 ms)
+S004_MIP.tif[1] <- S006_MIP.tif[1]: (-1137.8729, 945.7892) correlation (R)=0.96170825 (35 ms)
+S005_MIP.tif[1] <- S006_MIP.tif[1]: (-1131.8391, -8.154529) correlation (R)=0.7744722 (56 ms)
+S006_MIP.tif[1] <- S007_MIP.tif[1]: (-1134.1067, -8.2145815) correlation (R)=0.56169397 (56 ms)
+S007_MIP.tif[1] <- S008_MIP.tif[1]: (-1133.0887, -7.7885003) correlation (R)=0.7886909 (56 ms)
+S007_MIP.tif[1] <- S013_MIP.tif[1]: (-1138.9106, 950.24634) correlation (R)=0.4814644 (34 ms)
+S008_MIP.tif[1] <- S009_MIP.tif[1]: (-1130.1847, -7.9465995) correlation (R)=0.80958736 (69 ms)
+S008_MIP.tif[1] <- S012_MIP.tif[1]: (-1136.8721, 949.7392) correlation (R)=0.37357783 (35 ms)
+S008_MIP.tif[1] <- S013_MIP.tif[1]: (-5.0392094, 957.37006) correlation (R)=0.44835794 (55 ms)
+S009_MIP.tif[1] <- S010_MIP.tif[1]: (-1131.7299, -8.861574) correlation (R)=0.7157876 (57 ms)
+S009_MIP.tif[1] <- S011_MIP.tif[1]: (-1138.2236, 948.8676) correlation (R)=0.6704955 (34 ms)
+S009_MIP.tif[1] <- S012_MIP.tif[1]: (-6.1425757, 956.72845) correlation (R)=0.922341 (54 ms)
+S009_MIP.tif[1] <- S013_MIP.tif[1]: (1124.8833, 965.8631) correlation (R)=0.5153658 (32 ms)
+S010_MIP.tif[1] <- S011_MIP.tif[1]: (-6.5576553, 957.6881) correlation (R)=0.6445033 (57 ms)
+S010_MIP.tif[1] <- S012_MIP.tif[1]: (1125.71, 965.7265) correlation (R)=0.42083132 (34 ms)
+S011_MIP.tif[1] <- S012_MIP.tif[1]: (1131.8671, 8.005233) correlation (R)=0.91417396 (60 ms)
+S012_MIP.tif[1] <- S013_MIP.tif[1]: (1131.7296, 8.819681) correlation (R)=0.6010172 (58 ms)
+Identified link between S001_MIP.tif[1] and S009_MIP.tif[1] (R=0.51870203) to be bad. Reoptimizing.
+Finished registration process (1629 ms).
+S000_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) 0.11963383476380945
+S001_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1131.3426317964904], [0.0, 1.0, 7.60485930033049]]) 0.036381870696767606
+S002_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2264.649160448064], [0.0, 1.0, 16.2981314574398]]) 0.034926597153953194
+S003_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 3397.786350511446], [0.0, 1.0, 24.504343928900607]]) 0.03254738706531411
+S004_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 4529.20464535779], [0.0, 1.0, 32.23998955065999]]) 0.04664413923745713
+S005_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 4523.376672570406], [0.0, 1.0, 985.9205325470177]]) 0.008171770825243401
+S006_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 3391.5198975714693], [0.0, 1.0, 977.8560524849682]]) 0.03666095400231668
+S007_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2257.4550646980256], [0.0, 1.0, 969.6448455708505]]) 0.03202091227956708
+S008_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1124.1564900534815], [0.0, 1.0, 961.9237356648315]]) 0.12580608895632134
+S009_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -6.240732039825474], [0.0, 1.0, 954.1249510532596]]) 0.04972827505769467
+S010_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1138.1229663981715], [0.0, 1.0, 945.3589327186708]]) 0.06679513480633097
+S011_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1144.5246969971008], [0.0, 1.0, 1903.0287951412108]]) 0.010461264336645399
+S012_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -12.591953068253588], [0.0, 1.0, 1911.047735147094]]) 0.08927020166223859
+S013_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1118.868912059246], [0.0, 1.0, 1919.7777009743395]]) 0.1402585171906063
+Writing registered TileConfiguration: M:\Neuer Ordner\temp_1766759684\TileConfiguration.registered.txt
+Fuse & Display ...
+Finished fusion (1209 ms)
+Finished ... (3741 ms)
+[CZI-Stitcher]   2D registration completed in 3.9 seconds
+[CZI-Stitcher] [MEMORY] Used: 10679.5MB / Total: 20255.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 2D registration
+[CZI-Stitcher] [MEMORY] Used: 5566.6MB / Total: 20255.4MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 2: TRANSFER TO 3D ===
+[CZI-Stitcher]   Creating 3D configuration from 2D registration results...
+[CZI-Stitcher] [DEBUG]     3D Tile: S000_3D.tif at (0.0, 0.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S001_3D.tif at (1131.3, 7.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S002_3D.tif at (2264.6, 16.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S003_3D.tif at (3397.8, 24.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S004_3D.tif at (4529.2, 32.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S005_3D.tif at (4523.4, 985.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S006_3D.tif at (3391.5, 977.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S007_3D.tif at (2257.5, 969.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S008_3D.tif at (1124.2, 961.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S009_3D.tif at (-6.2, 954.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S010_3D.tif at (-1138.1, 945.4, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S011_3D.tif at (-1144.5, 1903.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S012_3D.tif at (-12.6, 1911.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S013_3D.tif at (1118.9, 1919.8, 0.0)
+[CZI-Stitcher]   Wrote 14 tiles to 3D configuration
+[CZI-Stitcher]   3D config file: M:\Neuer Ordner\temp_1766759684\TileConfiguration_3D.txt
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 3: 3D FUSION ===
+[CZI-Stitcher]   Fusing 3D stacks using computed positions...
+[CZI-Stitcher]   This preserves all z-slices from each tile
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759684\S000_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2064 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S001_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2061 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S002_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2127 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S003_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2146 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S004_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2160 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S005_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2129 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S006_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2149 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S007_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2088 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S008_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2134 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S009_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2091 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S010_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2076 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S011_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2025 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S012_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2088 ms)
+Loading: M:\Neuer Ordner\temp_1766759684\S013_3D.tif ... 
+1216x1028x19px, channels=4, timepoints=1 (2089 ms)
+S000_3D.tif: [1,3](0.0,0.0,0.0) 1.7976931348623157E308
+S001_3D.tif: [1,3](1131.3426513671875,7.604858875274658,0.0) 1.7976931348623157E308
+S002_3D.tif: [1,3](2264.649169921875,16.298131942749023,0.0) 1.7976931348623157E308
+S003_3D.tif: [1,3](3397.786376953125,24.504344940185547,0.0) 1.7976931348623157E308
+S004_3D.tif: [1,3](4529.20458984375,32.239990234375,0.0) 1.7976931348623157E308
+S005_3D.tif: [1,3](4523.37646484375,985.9205322265625,0.0) 1.7976931348623157E308
+S006_3D.tif: [1,3](3391.52001953125,977.8560791015625,0.0) 1.7976931348623157E308
+S007_3D.tif: [1,3](2257.455078125,969.6448364257812,0.0) 1.7976931348623157E308
+S008_3D.tif: [1,3](1124.156494140625,961.9237060546875,0.0) 1.7976931348623157E308
+S009_3D.tif: [1,3](-6.240732192993164,954.1249389648438,0.0) 1.7976931348623157E308
+S010_3D.tif: [1,3](-1138.1229248046875,945.3589477539062,0.0) 1.7976931348623157E308
+S011_3D.tif: [1,3](-1144.524658203125,1903.02880859375,0.0) 1.7976931348623157E308
+S012_3D.tif: [1,3](-12.59195327758789,1911.0477294921875,0.0) 1.7976931348623157E308
+S013_3D.tif: [1,3](1118.868896484375,1919.7777099609375,0.0) 1.7976931348623157E308
+Fuse & Display ...
+Finished fusion (60909 ms)
+Finished ... (90386 ms)
+[CZI-Stitcher]   3D fusion completed in 91.5 seconds
+[CZI-Stitcher]   Total stitching time: 95.3 seconds
+[CZI-Stitcher] [MEMORY] Used: 14678.3MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 3D fusion
+[CZI-Stitcher] [MEMORY] Used: 8832.7MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION AND LUT APPLICATION ===
+[CZI-Stitcher] [DEBUG]   Initial image state:
+[CZI-Stitcher] [DEBUG]     - Stack size: 80
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Type: 1
+[CZI-Stitcher] [DEBUG]   Expected: 4 channels, 19 slices (total: 76)
+[CZI-Stitcher] [DEBUG]   Stack size mismatch, skipping HyperStack conversion
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Applying channel LUTs...
+[CZI-Stitcher] [DEBUG]   Image before LUT application:
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Channels: 4
+[CZI-Stitcher] [DEBUG] === APPLYING CHANNEL LUTS ===
+[CZI-Stitcher] [DEBUG]   Image: 4 channels, 20 slices, stack size=80
+[CZI-Stitcher] [DEBUG] === PARSING CHANNEL COLORS FROM OME-XML ===
+[CZI-Stitcher] [DEBUG]   OME-XML length: 291252 characters
+[CZI-Stitcher] [DEBUG]   Found <Image> tag, searching within first image only
+[CZI-Stitcher] [DEBUG]   Channel 0 raw color value: 7798783
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 7798783
+[CZI-Stitcher] [DEBUG]   Channel 1 raw color value: 16724991
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 16724991
+[CZI-Stitcher] [DEBUG]   Channel 2 raw color value: -16771841
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -16771841
+[CZI-Stitcher] [DEBUG]   Channel 3 raw color value: -5439233
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -5439233
+[CZI-Stitcher] [DEBUG]   Total colors found: 4
+[CZI-Stitcher] [DEBUG] === CHANNEL COLOR PARSING COMPLETE ===
+[CZI-Stitcher] [DEBUG]   Using OME-XML colors (preferred)
+[CZI-Stitcher] LUT Debug: OME colors=[7798783, 16724991, -16771841, -5439233], GM colors=[4278220543L, 4278255411L, 4294901780L, 4294946048L, 4294946048L], chosen=[7798783, 16724991, -16771841, -5439233]
+[CZI-Stitcher] [DEBUG]   Building LUTs from colors...
+[CZI-Stitcher] [DEBUG]   Colors are integers (RGBA format expected)
+[CZI-Stitcher] [DEBUG]   Channel 0: raw int = 7798783
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x0076FFFF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=118, B=255, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 1: raw int = 16724991
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x00FF33FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=255, B=51, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 2: raw int = -16771841
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFF0014FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=0, B=20, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 3: raw int = -5439233
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFFAD00FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=173, B=0, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] LUT Debug: built 4 LUTs from 4 colors
+[CZI-Stitcher] [DEBUG]   Attempting to apply 4 LUTs to image...
+[CZI-Stitcher] [DEBUG]   Image is ALREADY a CompositeImage. Using existing instance.
+[CZI-Stitcher] [DEBUG]   CompositeImage mode set to COMPOSITE
+[CZI-Stitcher] [DEBUG]   CompositeImage has 4 channels
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 1
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 2
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 3
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 4
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Calling updateAllChannelsAndDraw on CompositeImage
+[CZI-Stitcher] [DEBUG]   Returning CompositeImage (SUCCESS)
+[CZI-Stitcher] [DEBUG] === LUT APPLICATION COMPLETE (CompositeImage) ===
+[CZI-Stitcher] [DEBUG]   LUT application SUCCESS - checking result...
+[CZI-Stitcher] [DEBUG]     - Returned image is composite: 1
+[CZI-Stitcher] [DEBUG]     - Returned image channels: 4
+[CZI-Stitcher]   >>> LUTs applied successfully, CompositeImage created and assigned
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Setting display mode...
+[CZI-Stitcher] [DEBUG]   Image IS CompositeImage - setting COMPOSITE display mode
+[CZI-Stitcher]   >>> Display mode set to COMPOSITE, image updated
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION COMPLETE ===
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] File size ~3.03GB, using standard TIFF format
+[CZI-Stitcher] Saved stitched: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-03(1)-ApoTome RAW Convert-04_stitched.tif
+[CZI-Stitcher] Creating Z-projection with method: Max Intensity
+[CZI-Stitcher] Saved Z-projection: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-03(1)-ApoTome RAW Convert-04_projection.tif
+[CZI-Stitcher] Displaying Z-projection
+[CZI-Stitcher] [MEMORY] Used: 9069.2MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after saving
+[CZI-Stitcher] [MEMORY] Used: 8891.0MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-04(1)-ApoTome RAW Convert-05 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 399301 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (22045.225, 50710.431) via StageLabel-order-map
+[CZI-Stitcher] Series 1 -> raw pos (22422.807, 50710.431) via StageLabel-order-map
+[CZI-Stitcher] Series 2 -> raw pos (22422.807, 51029.613) via StageLabel-order-map
+[CZI-Stitcher] Series 3 -> raw pos (22045.225, 51029.613) via StageLabel-order-map
+[CZI-Stitcher] Series 4 -> raw pos (22045.225, 51348.813) via StageLabel-order-map
+[CZI-Stitcher] Series 5 -> raw pos (22422.807, 51348.813) via StageLabel-order-map
+[CZI-Stitcher] Series 6 -> raw pos (22422.807, 51668.012) via StageLabel-order-map
+[CZI-Stitcher] Series 7 -> raw pos (22045.225, 51668.012) via StageLabel-order-map
+[CZI-Stitcher] Series 8 -> raw pos (22045.225, 51987.194) via StageLabel-order-map
+[CZI-Stitcher] Series 9 -> raw pos (22422.807, 51987.194) via StageLabel-order-map
+[CZI-Stitcher] Series 10 -> raw pos (22422.807, 52306.393) via StageLabel-order-map
+[CZI-Stitcher] Series 11 -> raw pos (22045.225, 52306.393) via StageLabel-order-map
+[CZI-Stitcher] Series 12 -> raw pos (22045.225, 52625.593) via StageLabel-order-map
+[CZI-Stitcher] Series 13 -> raw pos (22422.807, 52625.593) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 14 | px-range x=[0.0,1094.4] y=[0.0,5551.2]
+[CZI-Stitcher] [MEMORY] Used: 9151.9MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 8892.5MB / Total: 24413.0MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S005_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S011_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S004_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S010_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S008_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S009_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S012_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S001_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S003_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S002_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S013_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S007_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S006_3D.tif
+[CZI-Stitcher] 
+[CZI-Stitcher] === CREATING TILE CONFIGURATION ===
+[CZI-Stitcher]   2D Configuration (for registration): M:\Neuer Ordner\temp_1766759813\TileConfiguration.txt
+[CZI-Stitcher]   Number of tiles: 14
+[CZI-Stitcher] [DEBUG]     Tile: S000_MIP.tif at (0.0, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S001_MIP.tif at (1094.4, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S002_MIP.tif at (1094.4, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S003_MIP.tif at (0.0, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S004_MIP.tif at (0.0, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S005_MIP.tif at (1094.4, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S006_MIP.tif at (1094.4, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S007_MIP.tif at (0.0, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S008_MIP.tif at (0.0, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S009_MIP.tif at (1094.4, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S010_MIP.tif at (1094.4, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S011_MIP.tif at (0.0, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S012_MIP.tif at (0.0, 5551.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S013_MIP.tif at (1094.4, 5551.2) px
+[CZI-Stitcher]   2D TileConfiguration written
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 1: 2D REGISTRATION ===
+[CZI-Stitcher]   Stitching 2D MIPs to compute tile positions...
+[CZI-Stitcher]   Fusion method: Linear Blending
+[CZI-Stitcher]   Regression threshold: 0.3
+[CZI-Stitcher]   Max displacement: 5.0
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759813\S000_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S001_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S002_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S003_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S004_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (107 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S005_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S006_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S007_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S008_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S009_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (59 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S010_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S011_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (73 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S012_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (59 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S013_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+S000_MIP.tif[1] <- S001_MIP.tif[1]: (1132.5674, 7.80449) correlation (R)=0.8318475 (57 ms)
+S000_MIP.tif[1] <- S002_MIP.tif[1]: (1126.8793, 961.84393) correlation (R)=0.87725973 (33 ms)
+S000_MIP.tif[1] <- S003_MIP.tif[1]: (-5.7868757, 953.2348) correlation (R)=0.95929706 (60 ms)
+S001_MIP.tif[1] <- S002_MIP.tif[1]: (-6.1512766, 953.8778) correlation (R)=0.8983 (58 ms)
+S001_MIP.tif[1] <- S003_MIP.tif[1]: (-1138.6913, 945.95575) correlation (R)=0.8957002 (33 ms)
+S002_MIP.tif[1] <- S003_MIP.tif[1]: (-1132.0184, -8.104617) correlation (R)=0.98031086 (56 ms)
+S002_MIP.tif[1] <- S004_MIP.tif[1]: (-1093.9445, 921.95544) correlation (R)=0.56378394 (34 ms)
+S002_MIP.tif[1] <- S005_MIP.tif[1]: (-6.5, 959.5) correlation (R)=0.93139005 (55 ms)
+S003_MIP.tif[1] <- S004_MIP.tif[1]: (-6.397118, 959.0917) correlation (R)=0.7756521 (53 ms)
+S003_MIP.tif[1] <- S005_MIP.tif[1]: (1096.7345, 967.2447) correlation (R)=0.33914885 (33 ms)
+S004_MIP.tif[1] <- S005_MIP.tif[1]: (1131.9512, 8.522046) correlation (R)=0.96515167 (56 ms)
+S004_MIP.tif[1] <- S006_MIP.tif[1]: (1126.042, 964.8905) correlation (R)=0.82093 (38 ms)
+S004_MIP.tif[1] <- S007_MIP.tif[1]: (-6.13216, 956.3336) correlation (R)=0.8075289 (57 ms)
+S005_MIP.tif[1] <- S006_MIP.tif[1]: (-6.196132, 956.0145) correlation (R)=0.554643 (58 ms)
+S005_MIP.tif[1] <- S007_MIP.tif[1]: (-1002.0283, 873.24005) correlation (R)=0.39264682 (34 ms)
+S006_MIP.tif[1] <- S007_MIP.tif[1]: (-1131.9553, -8.064077) correlation (R)=0.94106096 (57 ms)
+S006_MIP.tif[1] <- S008_MIP.tif[1]: (-1138.9895, 948.67615) correlation (R)=0.51643044 (34 ms)
+S006_MIP.tif[1] <- S009_MIP.tif[1]: (-6.338657, 956.86365) correlation (R)=0.796666 (55 ms)
+S007_MIP.tif[1] <- S008_MIP.tif[1]: (-6.2796535, 956.7314) correlation (R)=0.6306024 (55 ms)
+S007_MIP.tif[1] <- S009_MIP.tif[1]: (1125.7012, 965.1464) correlation (R)=0.47803715 (34 ms)
+S008_MIP.tif[1] <- S009_MIP.tif[1]: (1132.0096, 8.110433) correlation (R)=0.673856 (56 ms)
+S008_MIP.tif[1] <- S010_MIP.tif[1]: (1126.0947, 968.16534) correlation (R)=0.3346285 (33 ms)
+S008_MIP.tif[1] <- S011_MIP.tif[1]: (-6.6210866, 958.7372) correlation (R)=0.79536974 (55 ms)
+S009_MIP.tif[1] <- S010_MIP.tif[1]: (-6.528969, 959.01514) correlation (R)=0.51610863 (55 ms)
+S009_MIP.tif[1] <- S011_MIP.tif[1]: (-1009.94086, 827.80115) correlation (R)=0.25602323 (34 ms)
+S010_MIP.tif[1] <- S011_MIP.tif[1]: (-1132.308, -8.425454) correlation (R)=0.34021693 (56 ms)
+S010_MIP.tif[1] <- S012_MIP.tif[1]: (-1139.7915, 946.3259) correlation (R)=0.37946784 (34 ms)
+S010_MIP.tif[1] <- S013_MIP.tif[1]: (-6.341574, 954.21277) correlation (R)=0.48563963 (55 ms)
+S011_MIP.tif[1] <- S012_MIP.tif[1]: (-6.0150366, 954.1782) correlation (R)=0.72400814 (55 ms)
+S011_MIP.tif[1] <- S013_MIP.tif[1]: (1199.0574, 1002.04736) correlation (R)=0.1285745 (33 ms)
+S012_MIP.tif[1] <- S013_MIP.tif[1]: (1131.9274, 8.082215) correlation (R)=0.45651647 (74 ms)
+Identified link between S005_MIP.tif[1] and S007_MIP.tif[1] (R=0.39264682) to be bad. Reoptimizing.
+Finished registration process (1614 ms).
+S000_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) 11.21304281924449
+S001_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1132.684348577259], [0.0, 1.0, 7.741621204320928]]) 11.527516206068265
+S002_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1122.8389094139125], [0.0, 1.0, 963.2520192828583]]) 208.97707971707808
+S003_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2.193424374164806], [0.0, 1.0, 952.0016544106244]]) 96.53244185079802
+S004_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2.250321712797074], [0.0, 1.0, 1904.4884859881095]]) 236.9618571848765
+S005_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1120.4697853974374], [0.0, 1.0, 1917.2927518658207]]) 144.3209697356858
+S006_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1121.001894742833], [0.0, 1.0, 2870.3968033246597]]) 10.58225669110414
+S007_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -10.167599104167778], [0.0, 1.0, 2861.786433330518]]) 1.6480580061427916
+S008_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -17.164069291555677], [0.0, 1.0, 3818.8133688306602]]) 0.35534615884295934
+S009_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1115.0106113148636], [0.0, 1.0, 3827.0965546646726]]) 0.13972576452382982
+S010_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1108.7489356402975], [0.0, 1.0, 4786.235877337191]]) 0.3273376478053297
+S011_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -23.882130003440693], [0.0, 1.0, 4777.782496700888]]) 0.09500179013688845
+S012_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -30.15552754158199], [0.0, 1.0, 5732.202402048346]]) 0.3144038955944899
+S013_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1102.0994257263023], [0.0, 1.0, 5740.36916708988]]) 0.10759511445281378
+Writing registered TileConfiguration: M:\Neuer Ordner\temp_1766759813\TileConfiguration.registered.txt
+Fuse & Display ...
+Finished fusion (1140 ms)
+Finished ... (3693 ms)
+[CZI-Stitcher]   2D registration completed in 3.8 seconds
+[CZI-Stitcher] [MEMORY] Used: 15328.7MB / Total: 26648.6MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 2D registration
+[CZI-Stitcher] [MEMORY] Used: 8885.6MB / Total: 26648.6MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 2: TRANSFER TO 3D ===
+[CZI-Stitcher]   Creating 3D configuration from 2D registration results...
+[CZI-Stitcher] [DEBUG]     3D Tile: S000_3D.tif at (0.0, 0.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S001_3D.tif at (1132.7, 7.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S002_3D.tif at (1122.8, 963.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S003_3D.tif at (-2.2, 952.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S004_3D.tif at (-2.3, 1904.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S005_3D.tif at (1120.5, 1917.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S006_3D.tif at (1121.0, 2870.4, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S007_3D.tif at (-10.2, 2861.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S008_3D.tif at (-17.2, 3818.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S009_3D.tif at (1115.0, 3827.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S010_3D.tif at (1108.7, 4786.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S011_3D.tif at (-23.9, 4777.8, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S012_3D.tif at (-30.2, 5732.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S013_3D.tif at (1102.1, 5740.4, 0.0)
+[CZI-Stitcher]   Wrote 14 tiles to 3D configuration
+[CZI-Stitcher]   3D config file: M:\Neuer Ordner\temp_1766759813\TileConfiguration_3D.txt
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 3: 3D FUSION ===
+[CZI-Stitcher]   Fusing 3D stacks using computed positions...
+[CZI-Stitcher]   This preserves all z-slices from each tile
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759813\S000_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2948 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S001_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2922 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S002_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2905 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S003_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2858 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S004_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2848 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S005_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2855 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S006_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2901 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S007_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2888 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S008_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2864 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S009_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2865 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S010_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2873 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S011_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2805 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S012_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2904 ms)
+Loading: M:\Neuer Ordner\temp_1766759813\S013_3D.tif ... 
+1216x1028x27px, channels=4, timepoints=1 (2787 ms)
+S000_3D.tif: [1,3](0.0,0.0,0.0) 1.7976931348623157E308
+S001_3D.tif: [1,3](1132.684326171875,7.741621017456055,0.0) 1.7976931348623157E308
+S002_3D.tif: [1,3](1122.8388671875,963.2520141601562,0.0) 1.7976931348623157E308
+S003_3D.tif: [1,3](-2.1934239864349365,952.0016479492188,0.0) 1.7976931348623157E308
+S004_3D.tif: [1,3](-2.250322103500366,1904.488525390625,0.0) 1.7976931348623157E308
+S005_3D.tif: [1,3](1120.4697265625,1917.292724609375,0.0) 1.7976931348623157E308
+S006_3D.tif: [1,3](1121.001953125,2870.396728515625,0.0) 1.7976931348623157E308
+S007_3D.tif: [1,3](-10.167598724365234,2861.786376953125,0.0) 1.7976931348623157E308
+S008_3D.tif: [1,3](-17.1640682220459,3818.8134765625,0.0) 1.7976931348623157E308
+S009_3D.tif: [1,3](1115.0106201171875,3827.096435546875,0.0) 1.7976931348623157E308
+S010_3D.tif: [1,3](1108.7489013671875,4786.23583984375,0.0) 1.7976931348623157E308
+S011_3D.tif: [1,3](-23.882129669189453,4777.78271484375,0.0) 1.7976931348623157E308
+S012_3D.tif: [1,3](-30.155527114868164,5732.20263671875,0.0) 1.7976931348623157E308
+S013_3D.tif: [1,3](1102.099365234375,5740.369140625,0.0) 1.7976931348623157E308
+Fuse & Display ...
+Finished fusion (79242 ms)
+Finished ... (119511 ms)
+[CZI-Stitcher]   3D fusion completed in 120.4 seconds
+[CZI-Stitcher]   Total stitching time: 124.2 seconds
+[CZI-Stitcher] [MEMORY] Used: 18607.6MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 3D fusion
+[CZI-Stitcher] [MEMORY] Used: 12457.5MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION AND LUT APPLICATION ===
+[CZI-Stitcher] [DEBUG]   Initial image state:
+[CZI-Stitcher] [DEBUG]     - Stack size: 112
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Type: 1
+[CZI-Stitcher] [DEBUG]   Expected: 4 channels, 27 slices (total: 108)
+[CZI-Stitcher] [DEBUG]   Stack size mismatch, skipping HyperStack conversion
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Applying channel LUTs...
+[CZI-Stitcher] [DEBUG]   Image before LUT application:
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Channels: 4
+[CZI-Stitcher] [DEBUG] === APPLYING CHANNEL LUTS ===
+[CZI-Stitcher] [DEBUG]   Image: 4 channels, 28 slices, stack size=112
+[CZI-Stitcher] [DEBUG] === PARSING CHANNEL COLORS FROM OME-XML ===
+[CZI-Stitcher] [DEBUG]   OME-XML length: 399301 characters
+[CZI-Stitcher] [DEBUG]   Found <Image> tag, searching within first image only
+[CZI-Stitcher] [DEBUG]   Channel 0 raw color value: 7798783
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 7798783
+[CZI-Stitcher] [DEBUG]   Channel 1 raw color value: 16724991
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 16724991
+[CZI-Stitcher] [DEBUG]   Channel 2 raw color value: -16771841
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -16771841
+[CZI-Stitcher] [DEBUG]   Channel 3 raw color value: -5439233
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -5439233
+[CZI-Stitcher] [DEBUG]   Total colors found: 4
+[CZI-Stitcher] [DEBUG] === CHANNEL COLOR PARSING COMPLETE ===
+[CZI-Stitcher] [DEBUG]   Using OME-XML colors (preferred)
+[CZI-Stitcher] LUT Debug: OME colors=[7798783, 16724991, -16771841, -5439233], GM colors=[4278220543L, 4278255411L, 4294901780L, 4294946048L, 4294946048L], chosen=[7798783, 16724991, -16771841, -5439233]
+[CZI-Stitcher] [DEBUG]   Building LUTs from colors...
+[CZI-Stitcher] [DEBUG]   Colors are integers (RGBA format expected)
+[CZI-Stitcher] [DEBUG]   Channel 0: raw int = 7798783
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x0076FFFF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=118, B=255, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 1: raw int = 16724991
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x00FF33FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=255, B=51, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 2: raw int = -16771841
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFF0014FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=0, B=20, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 3: raw int = -5439233
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFFAD00FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=173, B=0, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] LUT Debug: built 4 LUTs from 4 colors
+[CZI-Stitcher] [DEBUG]   Attempting to apply 4 LUTs to image...
+[CZI-Stitcher] [DEBUG]   Image is ALREADY a CompositeImage. Using existing instance.
+[CZI-Stitcher] [DEBUG]   CompositeImage mode set to COMPOSITE
+[CZI-Stitcher] [DEBUG]   CompositeImage has 4 channels
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 1
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 2
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 3
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 4
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Calling updateAllChannelsAndDraw on CompositeImage
+[CZI-Stitcher] [DEBUG]   Returning CompositeImage (SUCCESS)
+[CZI-Stitcher] [DEBUG] === LUT APPLICATION COMPLETE (CompositeImage) ===
+[CZI-Stitcher] [DEBUG]   LUT application SUCCESS - checking result...
+[CZI-Stitcher] [DEBUG]     - Returned image is composite: 1
+[CZI-Stitcher] [DEBUG]     - Returned image channels: 4
+[CZI-Stitcher]   >>> LUTs applied successfully, CompositeImage created and assigned
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Setting display mode...
+[CZI-Stitcher] [DEBUG]   Image IS CompositeImage - setting COMPOSITE display mode
+[CZI-Stitcher]   >>> Display mode set to COMPOSITE, image updated
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION COMPLETE ===
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] File size ~3.36GB, using standard TIFF format
+[CZI-Stitcher] Saved stitched: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-04(1)-ApoTome RAW Convert-05_stitched.tif
+[CZI-Stitcher] Creating Z-projection with method: Max Intensity
+[CZI-Stitcher] Saved Z-projection: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-04(1)-ApoTome RAW Convert-05_projection.tif
+[CZI-Stitcher] Displaying Z-projection
+[CZI-Stitcher] [MEMORY] Used: 12679.5MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after saving
+[CZI-Stitcher] [MEMORY] Used: 12513.3MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-05(1)-ApoTome RAW Convert-06 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 415182 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (28286.681, 33487.242) via StageLabel-order-map
+[CZI-Stitcher] Series 1 -> raw pos (28664.263, 33487.242) via StageLabel-order-map
+[CZI-Stitcher] Series 2 -> raw pos (28664.263, 33806.441) via StageLabel-order-map
+[CZI-Stitcher] Series 3 -> raw pos (28286.681, 33806.441) via StageLabel-order-map
+[CZI-Stitcher] Series 4 -> raw pos (27909.134, 33806.441) via StageLabel-order-map
+[CZI-Stitcher] Series 5 -> raw pos (27531.552, 33806.441) via StageLabel-order-map
+[CZI-Stitcher] Series 6 -> raw pos (27154.004, 34125.64) via StageLabel-order-map
+[CZI-Stitcher] Series 7 -> raw pos (27531.552, 34125.64) via StageLabel-order-map
+[CZI-Stitcher] Series 8 -> raw pos (27909.134, 34125.64) via StageLabel-order-map
+[CZI-Stitcher] Series 9 -> raw pos (28286.681, 34125.64) via StageLabel-order-map
+[CZI-Stitcher] Series 10 -> raw pos (28664.263, 34125.64) via StageLabel-order-map
+[CZI-Stitcher] Series 11 -> raw pos (27909.134, 34444.823) via StageLabel-order-map
+[CZI-Stitcher] Series 12 -> raw pos (27531.552, 34444.823) via StageLabel-order-map
+[CZI-Stitcher] Series 13 -> raw pos (27154.004, 34444.823) via StageLabel-order-map
+[CZI-Stitcher] Series 14 -> raw pos (27154.004, 34764.022) via StageLabel-order-map
+[CZI-Stitcher] Series 15 -> raw pos (27531.552, 34764.022) via StageLabel-order-map
+[CZI-Stitcher] Series 16 -> raw pos (27909.134, 34764.022) via StageLabel-order-map
+[CZI-Stitcher] Series 17 -> raw pos (27531.552, 35083.221) via StageLabel-order-map
+[CZI-Stitcher] Series 18 -> raw pos (27154.004, 35083.221) via StageLabel-order-map
+[CZI-Stitcher] Series 19 -> raw pos (27154.004, 35402.403) via StageLabel-order-map
+[CZI-Stitcher] Series 20 -> raw pos (27531.552, 35402.403) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 21 | px-range x=[0.0,4377.6] y=[0.0,5551.2]
+[CZI-Stitcher] [MEMORY] Used: 12767.6MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 12518.9MB / Total: 31079.8MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S010_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S007_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S014_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S012_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S011_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S001_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S009_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S008_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S018_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S020_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S002_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S015_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S004_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S005_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S003_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S006_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S019_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S016_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S013_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S017_3D.tif
+[CZI-Stitcher] 
+[CZI-Stitcher] === CREATING TILE CONFIGURATION ===
+[CZI-Stitcher]   2D Configuration (for registration): M:\Neuer Ordner\temp_1766759976\TileConfiguration.txt
+[CZI-Stitcher]   Number of tiles: 21
+[CZI-Stitcher] [DEBUG]     Tile: S000_MIP.tif at (3283.1, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S001_MIP.tif at (4377.6, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S002_MIP.tif at (4377.6, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S003_MIP.tif at (3283.1, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S004_MIP.tif at (2188.8, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S005_MIP.tif at (1094.3, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S006_MIP.tif at (0.0, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S007_MIP.tif at (1094.3, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S008_MIP.tif at (2188.8, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S009_MIP.tif at (3283.1, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S010_MIP.tif at (4377.6, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S011_MIP.tif at (2188.8, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S012_MIP.tif at (1094.3, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S013_MIP.tif at (0.0, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S014_MIP.tif at (0.0, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S015_MIP.tif at (1094.3, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S016_MIP.tif at (2188.8, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S017_MIP.tif at (1094.3, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S018_MIP.tif at (0.0, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S019_MIP.tif at (0.0, 5551.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S020_MIP.tif at (1094.3, 5551.2) px
+[CZI-Stitcher]   2D TileConfiguration written
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 1: 2D REGISTRATION ===
+[CZI-Stitcher]   Stitching 2D MIPs to compute tile positions...
+[CZI-Stitcher]   Fusion method: Linear Blending
+[CZI-Stitcher]   Regression threshold: 0.3
+[CZI-Stitcher]   Max displacement: 5.0
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759976\S000_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S001_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S002_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S003_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S004_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S005_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S006_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S007_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S008_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S009_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S010_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S011_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S012_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S013_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S014_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (84 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S015_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (60 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S016_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S017_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S018_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S019_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S020_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+S000_MIP.tif[1] <- S001_MIP.tif[1]: (1130.1646, 7.973072) correlation (R)=0.96259373 (57 ms)
+S000_MIP.tif[1] <- S002_MIP.tif[1]: (1124.4414, 963.5) correlation (R)=0.83842283 (32 ms)
+S000_MIP.tif[1] <- S003_MIP.tif[1]: (-6.395178, 956.1827) correlation (R)=0.85103095 (54 ms)
+S000_MIP.tif[1] <- S004_MIP.tif[1]: (-1141.2211, 947.9038) correlation (R)=0.50265574 (32 ms)
+S001_MIP.tif[1] <- S002_MIP.tif[1]: (-6.0541153, 955.5003) correlation (R)=0.96666306 (55 ms)
+S001_MIP.tif[1] <- S003_MIP.tif[1]: (-1136.8434, 948.346) correlation (R)=0.9419479 (34 ms)
+S002_MIP.tif[1] <- S003_MIP.tif[1]: (-1130.9133, -7.155208) correlation (R)=0.9088597 (57 ms)
+S002_MIP.tif[1] <- S009_MIP.tif[1]: (-1136.4536, 950.2107) correlation (R)=0.55407083 (36 ms)
+S002_MIP.tif[1] <- S010_MIP.tif[1]: (-6.006247, 958.6537) correlation (R)=0.93507344 (56 ms)
+S003_MIP.tif[1] <- S004_MIP.tif[1]: (-1134.2529, -8.991745) correlation (R)=0.5367753 (56 ms)
+S003_MIP.tif[1] <- S008_MIP.tif[1]: (-1140.1719, 949.23065) correlation (R)=0.41855648 (35 ms)
+S003_MIP.tif[1] <- S009_MIP.tif[1]: (-5.8824763, 957.0719) correlation (R)=0.8412523 (56 ms)
+S003_MIP.tif[1] <- S010_MIP.tif[1]: (1032.9296, 931.95233) correlation (R)=0.089915834 (34 ms)
+S004_MIP.tif[1] <- S005_MIP.tif[1]: (-1128.754, -8.148614) correlation (R)=0.7658943 (81 ms)
+S004_MIP.tif[1] <- S007_MIP.tif[1]: (-1134.1309, 948.9481) correlation (R)=0.5079511 (34 ms)
+S004_MIP.tif[1] <- S008_MIP.tif[1]: (-5.7547455, 958.2088) correlation (R)=0.59498423 (54 ms)
+S004_MIP.tif[1] <- S009_MIP.tif[1]: (1045.0201, 1000.9219) correlation (R)=0.097781114 (34 ms)
+S005_MIP.tif[1] <- S006_MIP.tif[1]: (-1140.0575, 951.01715) correlation (R)=0.38457477 (34 ms)
+S005_MIP.tif[1] <- S007_MIP.tif[1]: (-5.8005934, 958.249) correlation (R)=0.82905364 (54 ms)
+S005_MIP.tif[1] <- S008_MIP.tif[1]: (1069.9963, 877.0296) correlation (R)=0.13715586 (31 ms)
+S006_MIP.tif[1] <- S007_MIP.tif[1]: (1134.1702, 7.5542955) correlation (R)=0.7705695 (55 ms)
+S006_MIP.tif[1] <- S012_MIP.tif[1]: (1127.1842, 966.64343) correlation (R)=0.6469322 (33 ms)
+S006_MIP.tif[1] <- S013_MIP.tif[1]: (-6.5923324, 956.91833) correlation (R)=0.701336 (55 ms)
+S007_MIP.tif[1] <- S008_MIP.tif[1]: (1128.5, 7.9594917) correlation (R)=0.72422963 (56 ms)
+S007_MIP.tif[1] <- S011_MIP.tif[1]: (1039.9736, 824.91943) correlation (R)=0.31468043 (34 ms)
+S007_MIP.tif[1] <- S012_MIP.tif[1]: (-6.7765203, 958.7005) correlation (R)=0.675342 (74 ms)
+S007_MIP.tif[1] <- S013_MIP.tif[1]: (-1140.7728, 949.8773) correlation (R)=0.74483395 (33 ms)
+S008_MIP.tif[1] <- S009_MIP.tif[1]: (1133.9218, 8.012584) correlation (R)=0.9175028 (59 ms)
+S008_MIP.tif[1] <- S011_MIP.tif[1]: (-6.7094088, 958.7093) correlation (R)=0.7203073 (56 ms)
+S008_MIP.tif[1] <- S012_MIP.tif[1]: (-996.1272, 925.1828) correlation (R)=0.7002348 (30 ms)
+S009_MIP.tif[1] <- S010_MIP.tif[1]: (1130.9028, 8.741481) correlation (R)=0.6035741 (57 ms)
+S009_MIP.tif[1] <- S011_MIP.tif[1]: (-1141.336, 950.8357) correlation (R)=0.28136626 (31 ms)
+S011_MIP.tif[1] <- S012_MIP.tif[1]: (-1128.3918, -7.9172225) correlation (R)=0.7230827 (56 ms)
+S011_MIP.tif[1] <- S015_MIP.tif[1]: (-1135.5792, 947.5889) correlation (R)=0.39361742 (34 ms)
+S011_MIP.tif[1] <- S016_MIP.tif[1]: (-5.5340652, 955.05237) correlation (R)=0.6983653 (68 ms)
+S012_MIP.tif[1] <- S013_MIP.tif[1]: (-1133.8934, -9.090968) correlation (R)=0.66833717 (57 ms)
+S012_MIP.tif[1] <- S014_MIP.tif[1]: (-1140.4294, 947.4274) correlation (R)=0.40523174 (34 ms)
+S012_MIP.tif[1] <- S015_MIP.tif[1]: (-6.222166, 955.0383) correlation (R)=0.9324061 (59 ms)
+S012_MIP.tif[1] <- S016_MIP.tif[1]: (1123.1516, 963.0637) correlation (R)=0.40237826 (34 ms)
+S013_MIP.tif[1] <- S014_MIP.tif[1]: (-6.214677, 956.7476) correlation (R)=0.5823051 (58 ms)
+S013_MIP.tif[1] <- S015_MIP.tif[1]: (1073.9575, 1012.75684) correlation (R)=0.11233189 (34 ms)
+S014_MIP.tif[1] <- S015_MIP.tif[1]: (1133.7374, 7.9239097) correlation (R)=0.9163708 (74 ms)
+S014_MIP.tif[1] <- S017_MIP.tif[1]: (1128.6276, 966.03674) correlation (R)=0.86957574 (32 ms)
+S014_MIP.tif[1] <- S018_MIP.tif[1]: (-5.854562, 957.9359) correlation (R)=0.9330036 (57 ms)
+S015_MIP.tif[1] <- S016_MIP.tif[1]: (1129.2372, 8.007225) correlation (R)=0.6160519 (100 ms)
+S015_MIP.tif[1] <- S017_MIP.tif[1]: (-5.877119, 958.5) correlation (R)=0.8223687 (54 ms)
+S015_MIP.tif[1] <- S018_MIP.tif[1]: (-1138.6606, 949.06696) correlation (R)=0.89212817 (48 ms)
+S016_MIP.tif[1] <- S017_MIP.tif[1]: (-1135.0702, 950.4026) correlation (R)=0.38140148 (35 ms)
+S017_MIP.tif[1] <- S018_MIP.tif[1]: (-1133.8706, -8.121656) correlation (R)=0.8076043 (58 ms)
+S017_MIP.tif[1] <- S019_MIP.tif[1]: (-1015.97095, 896.9639) correlation (R)=0.33213276 (50 ms)
+S017_MIP.tif[1] <- S020_MIP.tif[1]: (-6.632706, 955.75934) correlation (R)=0.5852168 (53 ms)
+S018_MIP.tif[1] <- S019_MIP.tif[1]: (-6.7682476, 955.7201) correlation (R)=0.8890221 (56 ms)
+S018_MIP.tif[1] <- S020_MIP.tif[1]: (1127.1138, 964.12946) correlation (R)=0.46468103 (33 ms)
+S019_MIP.tif[1] <- S020_MIP.tif[1]: (1133.96, 8.090136) correlation (R)=0.79779327 (74 ms)
+Identified link between S007_MIP.tif[1] and S011_MIP.tif[1] (R=0.31468043) to be bad. Reoptimizing.
+Identified link between S017_MIP.tif[1] and S019_MIP.tif[1] (R=0.33213276) to be bad. Reoptimizing.
+Identified link between S008_MIP.tif[1] and S012_MIP.tif[1] (R=0.7002348) to be bad. Reoptimizing.
+Finished registration process (2969 ms).
+S000_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) 0.05359555841489672
+S001_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1130.2657717920663], [0.0, 1.0, 7.986234893499921]]) 0.005777982872768036
+S002_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1124.2864947921803], [0.0, 1.0, 963.4790181734925]]) 0.02620937729509685
+S003_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -6.550955825412075], [0.0, 1.0, 956.3534218993943]]) 0.024725223680085277
+S004_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1140.8941612402282], [0.0, 1.0, 947.6239118183171]]) 0.20217390720102668
+S005_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2269.4516554998936], [0.0, 1.0, 939.2022765125604]]) 0.0777387370698574
+S006_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -3409.320776436064], [0.0, 1.0, 1889.9126560502586]]) 0.0574492137738156
+S007_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2275.158025236775], [0.0, 1.0, 1897.3413997053613]]) 0.10681671214569155
+S008_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1146.5935903369345], [0.0, 1.0, 1905.5274600432817]]) 0.041600522661037774
+S009_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -12.485896841414956], [0.0, 1.0, 1913.5145991747781]]) 0.041897502677175895
+S010_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1118.3338617941217], [0.0, 1.0, 1922.1810995942692]]) 0.00808278043003945
+S011_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1153.3542152596158], [0.0, 1.0, 2864.211944432645]]) 0.07320435583113832
+S012_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2282.0037117177503], [0.0, 1.0, 2856.3031817317187]]) 0.06559081268103054
+S013_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -3415.9242221883674], [0.0, 1.0, 2847.0340086323354]]) 0.03683102501634677
+S014_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -3422.1747817918877], [0.0, 1.0, 3803.585390032641]]) 0.10162987541711235
+S015_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2288.430978891876], [0.0, 1.0, 3811.5510149682705]]) 0.25072818356729665
+S016_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1158.9574949930472], [0.0, 1.0, 3819.3708132759107]]) 0.03992512695233492
+S017_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2293.8837694384506], [0.0, 1.0, 4769.6698679931515]]) 0.1363440577943543
+S018_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -3427.631991751492], [0.0, 1.0, 4761.250343913225]]) 0.23385302477915035
+S019_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -3434.4262541923085], [0.0, 1.0, 5717.08753396645]]) 0.0160338960545403
+S020_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2300.495282926359], [0.0, 1.0, 5725.30815706807]]) 0.013921173314741294
+Writing registered TileConfiguration: M:\Neuer Ordner\temp_1766759976\TileConfiguration.registered.txt
+Fuse & Display ...
+Finished fusion (2135 ms)
+Finished ... (6509 ms)
+[CZI-Stitcher]   2D registration completed in 6.7 seconds
+[CZI-Stitcher] [MEMORY] Used: 14909.2MB / Total: 32715.7MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 2D registration
+[CZI-Stitcher] [MEMORY] Used: 12493.4MB / Total: 32715.7MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 2: TRANSFER TO 3D ===
+[CZI-Stitcher]   Creating 3D configuration from 2D registration results...
+[CZI-Stitcher] [DEBUG]     3D Tile: S000_3D.tif at (0.0, 0.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S001_3D.tif at (1130.3, 8.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S002_3D.tif at (1124.3, 963.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S003_3D.tif at (-6.6, 956.4, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S004_3D.tif at (-1140.9, 947.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S005_3D.tif at (-2269.5, 939.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S006_3D.tif at (-3409.3, 1889.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S007_3D.tif at (-2275.2, 1897.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S008_3D.tif at (-1146.6, 1905.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S009_3D.tif at (-12.5, 1913.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S010_3D.tif at (1118.3, 1922.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S011_3D.tif at (-1153.4, 2864.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S012_3D.tif at (-2282.0, 2856.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S013_3D.tif at (-3415.9, 2847.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S014_3D.tif at (-3422.2, 3803.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S015_3D.tif at (-2288.4, 3811.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S016_3D.tif at (-1159.0, 3819.4, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S017_3D.tif at (-2293.9, 4769.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S018_3D.tif at (-3427.6, 4761.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S019_3D.tif at (-3434.4, 5717.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S020_3D.tif at (-2300.5, 5725.3, 0.0)
+[CZI-Stitcher]   Wrote 21 tiles to 3D configuration
+[CZI-Stitcher]   3D config file: M:\Neuer Ordner\temp_1766759976\TileConfiguration_3D.txt
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 3: 3D FUSION ===
+[CZI-Stitcher]   Fusing 3D stacks using computed positions...
+[CZI-Stitcher]   This preserves all z-slices from each tile
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766759976\S000_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1977 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S001_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1950 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S002_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2040 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S003_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1980 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S004_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2000 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S005_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2064 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S006_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2022 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S007_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2003 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S008_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2087 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S009_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2058 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S010_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2020 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S011_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1995 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S012_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2030 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S013_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2031 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S014_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2051 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S015_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1999 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S016_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2059 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S017_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2050 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S018_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2067 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S019_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (2024 ms)
+Loading: M:\Neuer Ordner\temp_1766759976\S020_3D.tif ... 
+1216x1028x18px, channels=4, timepoints=1 (1949 ms)
+S000_3D.tif: [1,3](0.0,0.0,0.0) 1.7976931348623157E308
+S001_3D.tif: [1,3](1130.2657470703125,7.98623514175415,0.0) 1.7976931348623157E308
+S002_3D.tif: [1,3](1124.2864990234375,963.47900390625,0.0) 1.7976931348623157E308
+S003_3D.tif: [1,3](-6.550955772399902,956.3533935546875,0.0) 1.7976931348623157E308
+S004_3D.tif: [1,3](-1140.8941650390625,947.6239013671875,0.0) 1.7976931348623157E308
+S005_3D.tif: [1,3](-2269.45166015625,939.2022705078125,0.0) 1.7976931348623157E308
+S006_3D.tif: [1,3](-3409.32080078125,1889.91259765625,0.0) 1.7976931348623157E308
+S007_3D.tif: [1,3](-2275.157958984375,1897.3414306640625,0.0) 1.7976931348623157E308
+S008_3D.tif: [1,3](-1146.5936279296875,1905.5274658203125,0.0) 1.7976931348623157E308
+S009_3D.tif: [1,3](-12.485897064208984,1913.5146484375,0.0) 1.7976931348623157E308
+S010_3D.tif: [1,3](1118.3338623046875,1922.18115234375,0.0) 1.7976931348623157E308
+S011_3D.tif: [1,3](-1153.354248046875,2864.2119140625,0.0) 1.7976931348623157E308
+S012_3D.tif: [1,3](-2282.003662109375,2856.30322265625,0.0) 1.7976931348623157E308
+S013_3D.tif: [1,3](-3415.92431640625,2847.033935546875,0.0) 1.7976931348623157E308
+S014_3D.tif: [1,3](-3422.1748046875,3803.58544921875,0.0) 1.7976931348623157E308
+S015_3D.tif: [1,3](-2288.430908203125,3811.551025390625,0.0) 1.7976931348623157E308
+S016_3D.tif: [1,3](-1158.95751953125,3819.370849609375,0.0) 1.7976931348623157E308
+S017_3D.tif: [1,3](-2293.8837890625,4769.669921875,0.0) 1.7976931348623157E308
+S018_3D.tif: [1,3](-3427.632080078125,4761.25048828125,0.0) 1.7976931348623157E308
+S019_3D.tif: [1,3](-3434.42626953125,5717.08740234375,0.0) 1.7976931348623157E308
+S020_3D.tif: [1,3](-2300.495361328125,5725.30810546875,0.0) 1.7976931348623157E308
+Fuse & Display ...
+Finished fusion (87641 ms)
+Finished ... (130218 ms)
+[CZI-Stitcher]   3D fusion completed in 132.2 seconds
+[CZI-Stitcher]   Total stitching time: 139.0 seconds
+[CZI-Stitcher] [MEMORY] Used: 26399.7MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 3D fusion
+[CZI-Stitcher] [MEMORY] Used: 18413.5MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION AND LUT APPLICATION ===
+[CZI-Stitcher] [DEBUG]   Initial image state:
+[CZI-Stitcher] [DEBUG]     - Stack size: 76
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Type: 1
+[CZI-Stitcher] [DEBUG]   Expected: 4 channels, 18 slices (total: 72)
+[CZI-Stitcher] [DEBUG]   Stack size mismatch, skipping HyperStack conversion
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Applying channel LUTs...
+[CZI-Stitcher] [DEBUG]   Image before LUT application:
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Channels: 4
+[CZI-Stitcher] [DEBUG] === APPLYING CHANNEL LUTS ===
+[CZI-Stitcher] [DEBUG]   Image: 4 channels, 19 slices, stack size=76
+[CZI-Stitcher] [DEBUG] === PARSING CHANNEL COLORS FROM OME-XML ===
+[CZI-Stitcher] [DEBUG]   OME-XML length: 415182 characters
+[CZI-Stitcher] [DEBUG]   Found <Image> tag, searching within first image only
+[CZI-Stitcher] [DEBUG]   Channel 0 raw color value: 7798783
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 7798783
+[CZI-Stitcher] [DEBUG]   Channel 1 raw color value: 16724991
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 16724991
+[CZI-Stitcher] [DEBUG]   Channel 2 raw color value: -16771841
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -16771841
+[CZI-Stitcher] [DEBUG]   Channel 3 raw color value: -5439233
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -5439233
+[CZI-Stitcher] [DEBUG]   Total colors found: 4
+[CZI-Stitcher] [DEBUG] === CHANNEL COLOR PARSING COMPLETE ===
+[CZI-Stitcher] [DEBUG]   Using OME-XML colors (preferred)
+[CZI-Stitcher] LUT Debug: OME colors=[7798783, 16724991, -16771841, -5439233], GM colors=[4278220543L, 4278255411L, 4294901780L, 4294946048L, 4294946048L], chosen=[7798783, 16724991, -16771841, -5439233]
+[CZI-Stitcher] [DEBUG]   Building LUTs from colors...
+[CZI-Stitcher] [DEBUG]   Colors are integers (RGBA format expected)
+[CZI-Stitcher] [DEBUG]   Channel 0: raw int = 7798783
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x0076FFFF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=118, B=255, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 1: raw int = 16724991
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x00FF33FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=255, B=51, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 2: raw int = -16771841
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFF0014FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=0, B=20, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 3: raw int = -5439233
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFFAD00FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=173, B=0, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] LUT Debug: built 4 LUTs from 4 colors
+[CZI-Stitcher] [DEBUG]   Attempting to apply 4 LUTs to image...
+[CZI-Stitcher] [DEBUG]   Image is ALREADY a CompositeImage. Using existing instance.
+[CZI-Stitcher] [DEBUG]   CompositeImage mode set to COMPOSITE
+[CZI-Stitcher] [DEBUG]   CompositeImage has 4 channels
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 1
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 2
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 3
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 4
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Calling updateAllChannelsAndDraw on CompositeImage
+[CZI-Stitcher] [DEBUG]   Returning CompositeImage (SUCCESS)
+[CZI-Stitcher] [DEBUG] === LUT APPLICATION COMPLETE (CompositeImage) ===
+[CZI-Stitcher] [DEBUG]   LUT application SUCCESS - checking result...
+[CZI-Stitcher] [DEBUG]     - Returned image is composite: 1
+[CZI-Stitcher] [DEBUG]     - Returned image channels: 4
+[CZI-Stitcher]   >>> LUTs applied successfully, CompositeImage created and assigned
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Setting display mode...
+[CZI-Stitcher] [DEBUG]   Image IS CompositeImage - setting COMPOSITE display mode
+[CZI-Stitcher]   >>> Display mode set to COMPOSITE, image updated
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION COMPLETE ===
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] File size ~5.53GB, using BigTIFF format
+[CZI-Stitcher] Saved stitched (BigTIFF): M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-05(1)-ApoTome RAW Convert-06_stitched.tif
+[CZI-Stitcher] Creating Z-projection with method: Max Intensity
+[CZI-Stitcher] Saved Z-projection: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-05(1)-ApoTome RAW Convert-06_projection.tif
+[CZI-Stitcher] Displaying Z-projection
+[CZI-Stitcher] [MEMORY] Used: 19319.1MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after saving
+[CZI-Stitcher] [MEMORY] Used: 18544.4MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] --- Processing: 218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-06(1)-ApoTome RAW Convert-01 ---
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION START ===
+[CZI-Stitcher] [DEBUG] OME-XML length: 661880 characters
+[CZI-Stitcher] [DEBUG] Attempting method 1: OME-XML <Pixels> tag
+[CZI-Stitcher] [DEBUG]   Parsed raw value: 0.345
+[CZI-Stitcher] [DEBUG]   Unit (converted): µm
+[CZI-Stitcher] [DEBUG]   Method 1 exception: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+[CZI-Stitcher] [DEBUG] Attempting method 2: OME metadata object
+[CZI-Stitcher] [DEBUG]   OMEMeta object is available
+[CZI-Stitcher] [DEBUG]   getPixelsPhysicalSizeX returned: ome.units.quantity.Length: value[0.345], unit[µm] stored as java.lang.Double
+[CZI-Stitcher] [DEBUG]   Raw value: 0.345
+[CZI-Stitcher] Pixel size from OME metadata (assumed um): 0.345 um
+[CZI-Stitcher] [DEBUG] === PIXEL SIZE EXTRACTION END (success, method 2) ===
+[CZI-Stitcher] px = 0.345 um (from XML, correction factor NOT applied)
+[CZI-Stitcher] Series 0 -> raw pos (31977.873, 46527.738) via StageLabel-order-map
+[CZI-Stitcher] Series 1 -> raw pos (32355.455, 46527.738) via StageLabel-order-map
+[CZI-Stitcher] Series 2 -> raw pos (32733.002, 46527.738) via StageLabel-order-map
+[CZI-Stitcher] Series 3 -> raw pos (33110.584, 46527.738) via StageLabel-order-map
+[CZI-Stitcher] Series 4 -> raw pos (33110.584, 46846.937) via StageLabel-order-map
+[CZI-Stitcher] Series 5 -> raw pos (32733.002, 46846.937) via StageLabel-order-map
+[CZI-Stitcher] Series 6 -> raw pos (32355.455, 46846.937) via StageLabel-order-map
+[CZI-Stitcher] Series 7 -> raw pos (31977.873, 46846.937) via StageLabel-order-map
+[CZI-Stitcher] Series 8 -> raw pos (31977.873, 47166.137) via StageLabel-order-map
+[CZI-Stitcher] Series 9 -> raw pos (32355.455, 47166.137) via StageLabel-order-map
+[CZI-Stitcher] Series 10 -> raw pos (32733.002, 47166.137) via StageLabel-order-map
+[CZI-Stitcher] Series 11 -> raw pos (32355.455, 47485.319) via StageLabel-order-map
+[CZI-Stitcher] Series 12 -> raw pos (31977.873, 47485.319) via StageLabel-order-map
+[CZI-Stitcher] Series 13 -> raw pos (31600.326, 47485.319) via StageLabel-order-map
+[CZI-Stitcher] Series 14 -> raw pos (31222.744, 47804.518) via StageLabel-order-map
+[CZI-Stitcher] Series 15 -> raw pos (31600.326, 47804.518) via StageLabel-order-map
+[CZI-Stitcher] Series 16 -> raw pos (31977.873, 47804.518) via StageLabel-order-map
+[CZI-Stitcher] Series 17 -> raw pos (32355.455, 47804.518) via StageLabel-order-map
+[CZI-Stitcher] Series 18 -> raw pos (32355.455, 48123.718) via StageLabel-order-map
+[CZI-Stitcher] Series 19 -> raw pos (31977.873, 48123.718) via StageLabel-order-map
+[CZI-Stitcher] Series 20 -> raw pos (31600.326, 48123.718) via StageLabel-order-map
+[CZI-Stitcher] Series 21 -> raw pos (31222.744, 48123.718) via StageLabel-order-map
+[CZI-Stitcher] Series 22 -> raw pos (31222.744, 48442.9) via StageLabel-order-map
+[CZI-Stitcher] Series 23 -> raw pos (31600.326, 48442.9) via StageLabel-order-map
+[CZI-Stitcher] Series 24 -> raw pos (31977.873, 48442.9) via StageLabel-order-map
+[CZI-Stitcher] Tiles: 25 | px-range x=[0.0,5472.0] y=[0.0,5551.2]
+[CZI-Stitcher] [MEMORY] Used: 18944.6MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed before tile extraction
+[CZI-Stitcher] [MEMORY] Used: 18545.5MB / Total: 39802.4MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S017_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S012_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S016_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S005_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S019_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S000_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S014_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S009_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S015_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S006_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S024_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S022_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S008_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S003_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S011_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S001_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S010_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S004_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S007_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S013_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S023_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S018_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S002_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S020_3D.tif
+[CZI-Stitcher] [DEBUG]   Saved 3D stack: S021_3D.tif
+[CZI-Stitcher] 
+[CZI-Stitcher] === CREATING TILE CONFIGURATION ===
+[CZI-Stitcher]   2D Configuration (for registration): M:\Neuer Ordner\temp_1766760198\TileConfiguration.txt
+[CZI-Stitcher]   Number of tiles: 25
+[CZI-Stitcher] [DEBUG]     Tile: S000_MIP.tif at (2188.8, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S001_MIP.tif at (3283.2, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S002_MIP.tif at (4377.6, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S003_MIP.tif at (5472.0, 0.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S004_MIP.tif at (5472.0, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S005_MIP.tif at (4377.6, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S006_MIP.tif at (3283.2, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S007_MIP.tif at (2188.8, 925.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S008_MIP.tif at (2188.8, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S009_MIP.tif at (3283.2, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S010_MIP.tif at (4377.6, 1850.4) px
+[CZI-Stitcher] [DEBUG]     Tile: S011_MIP.tif at (3283.2, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S012_MIP.tif at (2188.8, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S013_MIP.tif at (1094.4, 2775.6) px
+[CZI-Stitcher] [DEBUG]     Tile: S014_MIP.tif at (0.0, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S015_MIP.tif at (1094.4, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S016_MIP.tif at (2188.8, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S017_MIP.tif at (3283.2, 3700.8) px
+[CZI-Stitcher] [DEBUG]     Tile: S018_MIP.tif at (3283.2, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S019_MIP.tif at (2188.8, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S020_MIP.tif at (1094.4, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S021_MIP.tif at (0.0, 4626.0) px
+[CZI-Stitcher] [DEBUG]     Tile: S022_MIP.tif at (0.0, 5551.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S023_MIP.tif at (1094.4, 5551.2) px
+[CZI-Stitcher] [DEBUG]     Tile: S024_MIP.tif at (2188.8, 5551.2) px
+[CZI-Stitcher]   2D TileConfiguration written
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 1: 2D REGISTRATION ===
+[CZI-Stitcher]   Stitching 2D MIPs to compute tile positions...
+[CZI-Stitcher]   Fusion method: Linear Blending
+[CZI-Stitcher]   Regression threshold: 0.3
+[CZI-Stitcher]   Max displacement: 5.0
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766760198\S000_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S001_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S002_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S003_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S004_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S005_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S006_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (67 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S007_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S008_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S009_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S010_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S011_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (109 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S012_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S013_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S014_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S015_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (61 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S016_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S017_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (63 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S018_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S019_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S020_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S021_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (65 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S022_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (93 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S023_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (62 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S024_MIP.tif ... 
+1216x1028px, channels=1, timepoints=1 (64 ms)
+S000_MIP.tif[1] <- S001_MIP.tif[1]: (1129.6028, 7.941599) correlation (R)=0.9822824 (59 ms)
+S000_MIP.tif[1] <- S006_MIP.tif[1]: (1122.9327, 966.0114) correlation (R)=0.93360144 (35 ms)
+S000_MIP.tif[1] <- S007_MIP.tif[1]: (-7.0974274, 958.90356) correlation (R)=0.99060524 (57 ms)
+S001_MIP.tif[1] <- S002_MIP.tif[1]: (1132.1852, 7.6260977) correlation (R)=0.97892284 (58 ms)
+S001_MIP.tif[1] <- S005_MIP.tif[1]: (1125.1387, 968.9423) correlation (R)=0.9878007 (34 ms)
+S001_MIP.tif[1] <- S006_MIP.tif[1]: (-7.025368, 958.5199) correlation (R)=0.9775154 (58 ms)
+S001_MIP.tif[1] <- S007_MIP.tif[1]: (-1137.016, 950.75903) correlation (R)=0.96933156 (34 ms)
+S002_MIP.tif[1] <- S003_MIP.tif[1]: (1131.5, 8.792218) correlation (R)=0.97309947 (57 ms)
+S002_MIP.tif[1] <- S004_MIP.tif[1]: (1126.4114, 968.25525) correlation (R)=0.9741793 (35 ms)
+S002_MIP.tif[1] <- S005_MIP.tif[1]: (-7.061829, 960.0155) correlation (R)=0.9775495 (55 ms)
+S002_MIP.tif[1] <- S006_MIP.tif[1]: (-1139.6097, 951.94867) correlation (R)=0.8729377 (35 ms)
+S003_MIP.tif[1] <- S004_MIP.tif[1]: (-6.5, 959.5) correlation (R)=0.9783711 (57 ms)
+S003_MIP.tif[1] <- S005_MIP.tif[1]: (-1139.7247, 952.7109) correlation (R)=0.9664302 (36 ms)
+S004_MIP.tif[1] <- S005_MIP.tif[1]: (-1133.1091, -7.299804) correlation (R)=0.98459965 (58 ms)
+S004_MIP.tif[1] <- S010_MIP.tif[1]: (-1139.3884, 947.24207) correlation (R)=0.9746749 (34 ms)
+S005_MIP.tif[1] <- S006_MIP.tif[1]: (-1131.1519, -9.210614) correlation (R)=0.93487245 (85 ms)
+S005_MIP.tif[1] <- S009_MIP.tif[1]: (-1138.9281, 946.3774) correlation (R)=0.97166115 (32 ms)
+S005_MIP.tif[1] <- S010_MIP.tif[1]: (-6.077079, 954.20435) correlation (R)=0.9775152 (56 ms)
+S006_MIP.tif[1] <- S007_MIP.tif[1]: (-1130.3164, -8.169978) correlation (R)=0.98552823 (57 ms)
+S006_MIP.tif[1] <- S008_MIP.tif[1]: (-1137.2904, 947.40674) correlation (R)=0.9613342 (34 ms)
+S006_MIP.tif[1] <- S009_MIP.tif[1]: (-6.791524, 954.85205) correlation (R)=0.957354 (58 ms)
+S006_MIP.tif[1] <- S010_MIP.tif[1]: (1126.0654, 963.4069) correlation (R)=0.94253856 (34 ms)
+S007_MIP.tif[1] <- S008_MIP.tif[1]: (-6.8310237, 955.72894) correlation (R)=0.9866796 (56 ms)
+S007_MIP.tif[1] <- S009_MIP.tif[1]: (1123.8942, 963.4645) correlation (R)=0.8507209 (35 ms)
+S008_MIP.tif[1] <- S009_MIP.tif[1]: (1130.2695, 7.871512) correlation (R)=0.97029084 (58 ms)
+S008_MIP.tif[1] <- S011_MIP.tif[1]: (1123.9308, 967.684) correlation (R)=0.9226692 (34 ms)
+S008_MIP.tif[1] <- S012_MIP.tif[1]: (-6.373724, 959.80194) correlation (R)=0.9571452 (73 ms)
+S008_MIP.tif[1] <- S013_MIP.tif[1]: (-1140.4586, 951.11206) correlation (R)=0.94314235 (35 ms)
+S009_MIP.tif[1] <- S010_MIP.tif[1]: (1132.311, 8.209101) correlation (R)=0.975041 (57 ms)
+S009_MIP.tif[1] <- S011_MIP.tif[1]: (-6.1789436, 959.9254) correlation (R)=0.96992695 (57 ms)
+S009_MIP.tif[1] <- S012_MIP.tif[1]: (-1136.7872, 952.0043) correlation (R)=0.571328 (34 ms)
+S010_MIP.tif[1] <- S011_MIP.tif[1]: (-1138.9895, 952.10693) correlation (R)=0.95991963 (34 ms)
+S011_MIP.tif[1] <- S012_MIP.tif[1]: (-1130.0857, -8.055916) correlation (R)=0.92666703 (60 ms)
+S011_MIP.tif[1] <- S016_MIP.tif[1]: (-1136.5, 947.66547) correlation (R)=0.9719059 (34 ms)
+S011_MIP.tif[1] <- S017_MIP.tif[1]: (-5.8023343, 955.51) correlation (R)=0.9837821 (56 ms)
+S012_MIP.tif[1] <- S013_MIP.tif[1]: (-1134.0725, -8.822398) correlation (R)=0.9762373 (74 ms)
+S012_MIP.tif[1] <- S015_MIP.tif[1]: (-1140.0487, 948.02985) correlation (R)=0.96674085 (35 ms)
+S012_MIP.tif[1] <- S016_MIP.tif[1]: (-5.4132233, 954.8429) correlation (R)=0.97217923 (57 ms)
+S012_MIP.tif[1] <- S017_MIP.tif[1]: (1125.1544, 963.8811) correlation (R)=0.9618305 (34 ms)
+S013_MIP.tif[1] <- S014_MIP.tif[1]: (-1136.9492, 948.9105) correlation (R)=0.9560615 (34 ms)
+S013_MIP.tif[1] <- S015_MIP.tif[1]: (-5.716243, 956.46893) correlation (R)=0.9742881 (77 ms)
+S013_MIP.tif[1] <- S016_MIP.tif[1]: (1128.851, 964.5564) correlation (R)=0.9345949 (34 ms)
+S014_MIP.tif[1] <- S015_MIP.tif[1]: (1130.989, 7.978251) correlation (R)=0.9920823 (59 ms)
+S014_MIP.tif[1] <- S020_MIP.tif[1]: (995.97974, 896.96295) correlation (R)=0.04222479 (33 ms)
+S014_MIP.tif[1] <- S021_MIP.tif[1]: (-6.2401805, 955.3033) correlation (R)=0.9091137 (75 ms)
+S015_MIP.tif[1] <- S016_MIP.tif[1]: (1133.8918, 7.794055) correlation (R)=0.9592328 (60 ms)
+S015_MIP.tif[1] <- S019_MIP.tif[1]: (986.8602, 838.8222) correlation (R)=0.10046682 (35 ms)
+S015_MIP.tif[1] <- S020_MIP.tif[1]: (1129.0923, 832.96265) correlation (R)=0.04980226 (78 ms)
+S015_MIP.tif[1] <- S021_MIP.tif[1]: (-975.95685, 951.96405) correlation (R)=0.10553158 (34 ms)
+S016_MIP.tif[1] <- S017_MIP.tif[1]: (1130.2893, 8.064784) correlation (R)=0.9864842 (59 ms)
+S016_MIP.tif[1] <- S018_MIP.tif[1]: (1123.5, 965.21027) correlation (R)=0.9719771 (33 ms)
+S016_MIP.tif[1] <- S019_MIP.tif[1]: (-7.1755185, 956.45386) correlation (R)=0.9772686 (77 ms)
+S016_MIP.tif[1] <- S020_MIP.tif[1]: (-1154.0485, 923.9543) correlation (R)=0.03339908 (35 ms)
+S017_MIP.tif[1] <- S018_MIP.tif[1]: (-6.907792, 957.1349) correlation (R)=0.9863046 (57 ms)
+S017_MIP.tif[1] <- S019_MIP.tif[1]: (-1137.3594, 948.88586) correlation (R)=0.92498225 (54 ms)
+S018_MIP.tif[1] <- S019_MIP.tif[1]: (-1130.0143, -8.051482) correlation (R)=0.98451746 (62 ms)
+S018_MIP.tif[1] <- S024_MIP.tif[1]: (-1135.9242, 950.8237) correlation (R)=0.9763658 (33 ms)
+S019_MIP.tif[1] <- S020_MIP.tif[1]: (-1132.918, -7.938916) correlation (R)=0.9815473 (79 ms)
+S019_MIP.tif[1] <- S023_MIP.tif[1]: (-1139.4679, 949.7047) correlation (R)=0.94195586 (34 ms)
+S019_MIP.tif[1] <- S024_MIP.tif[1]: (-5.7372966, 958.68427) correlation (R)=0.98058313 (56 ms)
+S020_MIP.tif[1] <- S021_MIP.tif[1]: (-1129.9791, -9.088118) correlation (R)=0.98631006 (77 ms)
+S020_MIP.tif[1] <- S022_MIP.tif[1]: (-1137.1077, 950.0814) correlation (R)=0.97330016 (34 ms)
+S020_MIP.tif[1] <- S023_MIP.tif[1]: (-6.3709593, 957.09674) correlation (R)=0.95562243 (74 ms)
+S020_MIP.tif[1] <- S024_MIP.tif[1]: (1127.6378, 966.9366) correlation (R)=0.9017294 (72 ms)
+S021_MIP.tif[1] <- S022_MIP.tif[1]: (-6.9013696, 959.03375) correlation (R)=0.9846284 (56 ms)
+S021_MIP.tif[1] <- S023_MIP.tif[1]: (1124.0005, 966.7747) correlation (R)=0.9708684 (69 ms)
+S022_MIP.tif[1] <- S023_MIP.tif[1]: (1130.4636, 7.163249) correlation (R)=0.968808 (76 ms)
+S023_MIP.tif[1] <- S024_MIP.tif[1]: (1133.6935, 9.297784) correlation (R)=0.98052615 (75 ms)
+Finished registration process (3578 ms).
+S000_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) 0.23200038499837902
+S001_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1129.793165023953], [0.0, 1.0, 7.663537638720629]]) 0.2006459831711713
+S002_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2262.1772079462353], [0.0, 1.0, 15.117249411926885]]) 0.36486531530419763
+S003_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 3394.2802151018473], [0.0, 1.0, 23.57612686665404]]) 0.27182879984773406
+S004_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 3388.1160256611524], [0.0, 1.0, 983.1322610681009]]) 0.12424037744078519
+S005_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2254.822722350108], [0.0, 1.0, 975.8946482149765]]) 0.3015287692653024
+S006_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1122.9734550470469], [0.0, 1.0, 966.6594129011322]]) 0.22759032023494583
+S007_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -7.3268802764307], [0.0, 1.0, 958.5598474415344]]) 0.06816647939254926
+S008_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -14.163225330491912], [0.0, 1.0, 1914.1849659285472]]) 0.018459971301832807
+S009_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1116.2063852518038], [0.0, 1.0, 1921.982702371333]]) 0.09863797518972627
+S010_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 2248.7785068559388], [0.0, 1.0, 1930.128098723234]]) 0.05348927223858416
+S011_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1109.8837285808552], [0.0, 1.0, 2882.010712053947]]) 0.07270458731558517
+S012_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -20.5783915631647], [0.0, 1.0, 2874.0328960311144]]) 0.16519573969946083
+S013_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1154.6452691325985], [0.0, 1.0, 2865.2000943732446]]) 0.0907498493085528
+S014_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2291.2032226610036], [0.0, 1.0, 3814.0125679558864]]) 0.15833851572306498
+S015_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1160.3336504790748], [0.0, 1.0, 3821.8680226627826]]) 0.061894212051038254
+S016_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -26.241137566237285], [0.0, 1.0, 3829.5415449448533]]) 0.1722096388366723
+S017_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1104.125217519153], [0.0, 1.0, 3837.5959919305715]]) 0.08125239804328005
+S018_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, 1097.004997775614], [0.0, 1.0, 4794.588548528221]]) 0.08344357186684496
+S019_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -33.34743471876004], [0.0, 1.0, 4786.372738898647]]) 0.08578824888686719
+S020_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1166.5858374141094], [0.0, 1.0, 4778.498796182036]]) 0.07251407362831831
+S021_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2296.901590404587], [0.0, 1.0, 4769.346742451232]]) 0.12873594904347557
+S022_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -2303.626113497664], [0.0, 1.0, 5728.564494644465]]) 0.05353822172319529
+S023_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -1172.9149453868067], [0.0, 1.0, 5735.899364359917]]) 0.0624604411420515
+S024_MIP.tif: [3,3](AffineTransform[[1.0, 0.0, -39.045492483942155], [0.0, 1.0, 5745.2718376820385]]) 0.03910090633769488
+Writing registered TileConfiguration: M:\Neuer Ordner\temp_1766760198\TileConfiguration.registered.txt
+Fuse & Display ...
+Finished fusion (2824 ms)
+Finished ... (8108 ms)
+[CZI-Stitcher]   2D registration completed in 8.3 seconds
+[CZI-Stitcher] [MEMORY] Used: 27606.6MB / Total: 44842.2MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 2D registration
+[CZI-Stitcher] [MEMORY] Used: 18517.2MB / Total: 44842.2MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 2: TRANSFER TO 3D ===
+[CZI-Stitcher]   Creating 3D configuration from 2D registration results...
+[CZI-Stitcher] [DEBUG]     3D Tile: S000_3D.tif at (0.0, 0.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S001_3D.tif at (1129.8, 7.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S002_3D.tif at (2262.2, 15.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S003_3D.tif at (3394.3, 23.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S004_3D.tif at (3388.1, 983.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S005_3D.tif at (2254.8, 975.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S006_3D.tif at (1123.0, 966.7, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S007_3D.tif at (-7.3, 958.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S008_3D.tif at (-14.2, 1914.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S009_3D.tif at (1116.2, 1922.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S010_3D.tif at (2248.8, 1930.1, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S011_3D.tif at (1109.9, 2882.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S012_3D.tif at (-20.6, 2874.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S013_3D.tif at (-1154.6, 2865.2, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S014_3D.tif at (-2291.2, 3814.0, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S015_3D.tif at (-1160.3, 3821.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S016_3D.tif at (-26.2, 3829.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S017_3D.tif at (1104.1, 3837.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S018_3D.tif at (1097.0, 4794.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S019_3D.tif at (-33.3, 4786.4, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S020_3D.tif at (-1166.6, 4778.5, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S021_3D.tif at (-2296.9, 4769.3, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S022_3D.tif at (-2303.6, 5728.6, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S023_3D.tif at (-1172.9, 5735.9, 0.0)
+[CZI-Stitcher] [DEBUG]     3D Tile: S024_3D.tif at (-39.0, 5745.3, 0.0)
+[CZI-Stitcher]   Wrote 25 tiles to 3D configuration
+[CZI-Stitcher]   3D config file: M:\Neuer Ordner\temp_1766760198\TileConfiguration_3D.txt
+[CZI-Stitcher] 
+[CZI-Stitcher] === STEP 3: 3D FUSION ===
+[CZI-Stitcher]   Fusing 3D stacks using computed positions...
+[CZI-Stitcher]   This preserves all z-slices from each tile
+Stitching internal version: 1.2
+Loading: M:\Neuer Ordner\temp_1766760198\S000_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2723 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S001_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2758 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S002_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2865 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S003_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2877 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S004_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2925 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S005_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2909 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S006_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2967 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S007_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2786 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S008_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2857 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S009_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2996 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S010_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2832 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S011_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2880 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S012_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2893 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S013_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2850 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S014_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2895 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S015_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2721 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S016_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2870 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S017_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2781 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S018_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2858 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S019_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2891 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S020_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2823 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S021_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2940 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S022_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2741 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S023_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2822 ms)
+Loading: M:\Neuer Ordner\temp_1766760198\S024_3D.tif ... 
+1216x1028x25px, channels=4, timepoints=1 (2842 ms)
+S000_3D.tif: [1,3](0.0,0.0,0.0) 1.7976931348623157E308
+S001_3D.tif: [1,3](1129.793212890625,7.663537979125977,0.0) 1.7976931348623157E308
+S002_3D.tif: [1,3](2262.17724609375,15.11724853515625,0.0) 1.7976931348623157E308
+S003_3D.tif: [1,3](3394.2802734375,23.576126098632812,0.0) 1.7976931348623157E308
+S004_3D.tif: [1,3](3388.115966796875,983.1322631835938,0.0) 1.7976931348623157E308
+S005_3D.tif: [1,3](2254.82275390625,975.8946533203125,0.0) 1.7976931348623157E308
+S006_3D.tif: [1,3](1122.9735107421875,966.659423828125,0.0) 1.7976931348623157E308
+S007_3D.tif: [1,3](-7.326879978179932,958.5598754882812,0.0) 1.7976931348623157E308
+S008_3D.tif: [1,3](-14.163225173950195,1914.1849365234375,0.0) 1.7976931348623157E308
+S009_3D.tif: [1,3](1116.2064208984375,1921.982666015625,0.0) 1.7976931348623157E308
+S010_3D.tif: [1,3](2248.778564453125,1930.1280517578125,0.0) 1.7976931348623157E308
+S011_3D.tif: [1,3](1109.8837890625,2882.0107421875,0.0) 1.7976931348623157E308
+S012_3D.tif: [1,3](-20.578392028808594,2874.032958984375,0.0) 1.7976931348623157E308
+S013_3D.tif: [1,3](-1154.645263671875,2865.2001953125,0.0) 1.7976931348623157E308
+S014_3D.tif: [1,3](-2291.203125,3814.012451171875,0.0) 1.7976931348623157E308
+S015_3D.tif: [1,3](-1160.3336181640625,3821.867919921875,0.0) 1.7976931348623157E308
+S016_3D.tif: [1,3](-26.241138458251953,3829.54150390625,0.0) 1.7976931348623157E308
+S017_3D.tif: [1,3](1104.125244140625,3837.595947265625,0.0) 1.7976931348623157E308
+S018_3D.tif: [1,3](1097.0050048828125,4794.58837890625,0.0) 1.7976931348623157E308
+S019_3D.tif: [1,3](-33.347434997558594,4786.37255859375,0.0) 1.7976931348623157E308
+S020_3D.tif: [1,3](-1166.5858154296875,4778.4990234375,0.0) 1.7976931348623157E308
+S021_3D.tif: [1,3](-2296.901611328125,4769.3466796875,0.0) 1.7976931348623157E308
+S022_3D.tif: [1,3](-2303.626220703125,5728.564453125,0.0) 1.7976931348623157E308
+S023_3D.tif: [1,3](-1172.9149169921875,5735.8994140625,0.0) 1.7976931348623157E308
+S024_3D.tif: [1,3](-39.04549026489258,5745.27197265625,0.0) 1.7976931348623157E308
+Fuse & Display ...
+Finished fusion (144926 ms)
+Finished ... (216320 ms)
+[CZI-Stitcher]   3D fusion completed in 218.7 seconds
+[CZI-Stitcher]   Total stitching time: 227.0 seconds
+[CZI-Stitcher] [MEMORY] Used: 37388.2MB / Total: 62842.5MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after 3D fusion
+[CZI-Stitcher] [MEMORY] Used: 28173.6MB / Total: 62842.5MB / Max: 439820.7MB
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION AND LUT APPLICATION ===
+[CZI-Stitcher] [DEBUG]   Initial image state:
+[CZI-Stitcher] [DEBUG]     - Stack size: 104
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Type: 1
+[CZI-Stitcher] [DEBUG]   Expected: 4 channels, 25 slices (total: 100)
+[CZI-Stitcher] [DEBUG]   Stack size mismatch, skipping HyperStack conversion
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Applying channel LUTs...
+[CZI-Stitcher] [DEBUG]   Image before LUT application:
+[CZI-Stitcher] [DEBUG]     - Is composite: 1
+[CZI-Stitcher] [DEBUG]     - Channels: 4
+[CZI-Stitcher] [DEBUG] === APPLYING CHANNEL LUTS ===
+[CZI-Stitcher] [DEBUG]   Image: 4 channels, 26 slices, stack size=104
+[CZI-Stitcher] [DEBUG] === PARSING CHANNEL COLORS FROM OME-XML ===
+[CZI-Stitcher] [DEBUG]   OME-XML length: 661880 characters
+[CZI-Stitcher] [DEBUG]   Found <Image> tag, searching within first image only
+[CZI-Stitcher] [DEBUG]   Channel 0 raw color value: 7798783
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 7798783
+[CZI-Stitcher] [DEBUG]   Channel 1 raw color value: 16724991
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: 16724991
+[CZI-Stitcher] [DEBUG]   Channel 2 raw color value: -16771841
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -16771841
+[CZI-Stitcher] [DEBUG]   Channel 3 raw color value: -5439233
+[CZI-Stitcher] [DEBUG]     Parsed as signed int: -5439233
+[CZI-Stitcher] [DEBUG]   Total colors found: 4
+[CZI-Stitcher] [DEBUG] === CHANNEL COLOR PARSING COMPLETE ===
+[CZI-Stitcher] [DEBUG]   Using OME-XML colors (preferred)
+[CZI-Stitcher] LUT Debug: OME colors=[7798783, 16724991, -16771841, -5439233], GM colors=[4278220543L, 4278255411L, 4294901780L, 4294946048L, 4294946048L], chosen=[7798783, 16724991, -16771841, -5439233]
+[CZI-Stitcher] [DEBUG]   Building LUTs from colors...
+[CZI-Stitcher] [DEBUG]   Colors are integers (RGBA format expected)
+[CZI-Stitcher] [DEBUG]   Channel 0: raw int = 7798783
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x0076FFFF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=118, B=255, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 118, 255)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 1: raw int = 16724991
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0x00FF33FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=0, G=255, B=51, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(0, 255, 51)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 2: raw int = -16771841
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFF0014FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=0, B=20, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 0, 20)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] [DEBUG]   Channel 3: raw int = -5439233
+[CZI-Stitcher] [DEBUG]     As unsigned hex: 0xFFAD00FF
+[CZI-Stitcher] [DEBUG]     Parsed RGBA: R=255, G=173, B=0, A=255
+[CZI-Stitcher] [DEBUG]     Using RGB tuple: (255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Building LUT from RGB(255, 173, 0)
+[CZI-Stitcher] [DEBUG]   Created Java byte arrays (length=256)
+[CZI-Stitcher] [DEBUG]   LUT created successfully
+[CZI-Stitcher] [DEBUG]     LUT added successfully
+[CZI-Stitcher] LUT Debug: built 4 LUTs from 4 colors
+[CZI-Stitcher] [DEBUG]   Attempting to apply 4 LUTs to image...
+[CZI-Stitcher] [DEBUG]   Image is ALREADY a CompositeImage. Using existing instance.
+[CZI-Stitcher] [DEBUG]   CompositeImage mode set to COMPOSITE
+[CZI-Stitcher] [DEBUG]   CompositeImage has 4 channels
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 1
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 2
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 3
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Applying LUT to channel 4
+[CZI-Stitcher] [DEBUG]     setChannelLut succeeded
+[CZI-Stitcher] [DEBUG]   Calling updateAllChannelsAndDraw on CompositeImage
+[CZI-Stitcher] [DEBUG]   Returning CompositeImage (SUCCESS)
+[CZI-Stitcher] [DEBUG] === LUT APPLICATION COMPLETE (CompositeImage) ===
+[CZI-Stitcher] [DEBUG]   LUT application SUCCESS - checking result...
+[CZI-Stitcher] [DEBUG]     - Returned image is composite: 1
+[CZI-Stitcher] [DEBUG]     - Returned image channels: 4
+[CZI-Stitcher]   >>> LUTs applied successfully, CompositeImage created and assigned
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] [DEBUG]   Setting display mode...
+[CZI-Stitcher] [DEBUG]   Image IS CompositeImage - setting COMPOSITE display mode
+[CZI-Stitcher]   >>> Display mode set to COMPOSITE, image updated
+[CZI-Stitcher] [DEBUG] === IMAGE CONVERSION COMPLETE ===
+[CZI-Stitcher] [DEBUG] 
+[CZI-Stitcher] File size ~9.07GB, using BigTIFF format
+[CZI-Stitcher] Saved stitched (BigTIFF): M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-06(1)-ApoTome RAW Convert-01_stitched.tif
+[CZI-Stitcher] Creating Z-projection with method: Max Intensity
+[CZI-Stitcher] Saved Z-projection: M:\Neuer Ordner\218_5_SVZ_488EdU_CY3GFAP647GAD_Färbung2025-06(1)-ApoTome RAW Convert-01_projection.tif
+[CZI-Stitcher] Displaying Z-projection
+[CZI-Stitcher] [MEMORY] Used: 28711.7MB / Total: 62842.5MB / Max: 439820.7MB
+[CZI-Stitcher] Garbage collection completed after saving
+[CZI-Stitcher] [MEMORY] Used: 28329.8MB / Total: 62842.5MB / Max: 439820.7MB
+[CZI-Stitcher] 
+[CZI-Stitcher] ======================================================================
+[CZI-Stitcher] Batch Done.
+[CZI-Stitcher] ======================================================================
+
+
+Ran the script and would like you to check the data out for multiple smaller sections spread across the entire gantry stage
