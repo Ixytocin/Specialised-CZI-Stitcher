@@ -8,6 +8,24 @@
 
 ---
 
+## ⚠️ IMPORTANT: File Placement
+
+**Both files MUST be in the SAME directory:**
+
+```
+your-folder/
+├── main.jy                    ← Main script (run this in Fiji)
+└── metadata_correction.py     ← Required module (same folder!)
+```
+
+**Verification:** When you run `main.jy`, check Fiji's log window:
+- ✅ **Success:** `[DEBUG] Metadata correction module loaded successfully`
+- ❌ **Error:** `[DEBUG] Metadata correction module not available`
+
+📖 **Full Installation Guide:** See [METADATA_CORRECTION_README.md](METADATA_CORRECTION_README.md)
+
+---
+
 ## What This Tool Does
 
 Stitches multi-tile Zeiss .czi microscopy images while preserving:
@@ -40,6 +58,7 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 - **Smart Progress Messages**: Emoji feedback on estimate accuracy at 100% completion
 - **Auto Brightness/Contrast**: Projections automatically enhanced for optimal visibility
 - **Batch Time Prediction**: Composite linear model estimates completion time accurately
+- **Metadata Correction System**: Adaptive correction for stage positioning errors (backlash, scale, skew)
 
 ### Reliability Features
 - **Comprehensive Debug Logging**: Visual markers (>>>, !!!) show success/failure at each step
@@ -47,6 +66,7 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 - **Unicode Support**: Handles German characters (ä, ö, ü, ß) in file paths
 - **Pure ASCII Source**: No encoding declaration errors in Jython 2.7
 - **Memory Optimization**: Automatic garbage collection to prevent RAM overflow
+- **Modular Architecture**: Correction logic in separate module to avoid file size issues
 
 ### User Experience
 - **ASCII Art Splash Screen**: Shows version and component tracking
