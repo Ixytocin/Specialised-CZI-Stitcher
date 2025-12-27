@@ -825,15 +825,33 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
 
 # Import correction functions from separate module to avoid file size issues
 try:
+    import sys
+    import os
+    
+    # Log where we're looking for the module
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+    logd(u"Checking for metadata_correction.py in: {}".format(script_dir))
+    module_path = os.path.join(script_dir, 'metadata_correction.py')
+    logd(u"metadata_correction.py exists: {}".format(os.path.exists(module_path)))
+    
+    # Add script directory to sys.path if not already there
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+        logd(u"Added {} to sys.path".format(script_dir))
+    
+    logd(u"Attempting to import metadata_correction module...")
     import metadata_correction as mc
     create_default_correction_matrix = mc.create_default_correction_matrix
     create_movement_state = mc.create_movement_state
     apply_metadata_corrections = mc.apply_metadata_corrections
     visualize_grid_layout = mc.visualize_grid_layout
     METADATA_CORRECTION_AVAILABLE = True
-    logd(u"Metadata correction module loaded successfully")
+    logd(u"[SUCCESS] Metadata correction module loaded successfully")
 except Exception as e:
-    logd(u"Metadata correction module not available: {}".format(e))
+    import traceback
+    logd(u"[ERROR] Metadata correction module not available: {}".format(e))
+    logd(u"[ERROR] Full traceback: {}".format(traceback.format_exc()))
+    logd(u"[WARNING] Using stub functions - corrections will NOT be applied")
     METADATA_CORRECTION_AVAILABLE = False
     
     # Fallback: create stub functions with correct signatures
