@@ -1,12 +1,13 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Test suite for metadata correction system core functionality.
 
 Tests the state machine, correction application, and debug visualization
 without requiring actual CZI files or Fiji environment.
 
-Run with: python test_metadata_correction.py
+Run with: python test_metadata_correction.py (CPython)
+         or jython test_metadata_correction.py (Jython/Fiji)
+
+Note: Jython-compatible - no encoding declaration or shebang.
 """
 
 import sys
@@ -268,9 +269,9 @@ def test_basic_correction_application():
     
     # Simple 2x2 grid
     tiles = [
-        (0.0, 0.0),      # Tile 0
+        (0.0, 0.0),      # Tile 0 - start
         (1000.0, 0.0),   # Tile 1 - right
-        (0.0, 1000.0),   # Tile 2 - down, left
+        (0.0, 1000.0),   # Tile 2 - down (Y change takes priority)
         (1000.0, 1000.0) # Tile 3 - right
     ]
     
@@ -287,8 +288,8 @@ def test_basic_correction_application():
     
     print("\nState sequence: %s" % ', '.join(states))
     
-    # Verify states
-    expected_states = ['start', 'right', 'left', 'right']
+    # Verify states - note that tile 2 is 'down' because Y movement is detected
+    expected_states = ['start', 'right', 'down', 'right']
     assert states == expected_states, "Expected %s, got %s" % (expected_states, states)
     print("✓ State sequence correct")
     
