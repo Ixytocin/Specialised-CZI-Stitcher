@@ -374,34 +374,8 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
         logd(u"OME-XML unicode conversion failed: {}".format(e))
         ome_xml = ome_xml
     
-    # Priority 1: OME-XML <Pixels> tag (most reliable for Zeiss)
-    logd(u"Attempting method 1: OME-XML <Pixels> tag")
-    try:
-        if ome_xml:
-            px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
-            if px_raw is not None:
-                logd(u"  Parsed raw value: {}".format(px_raw))
-                try:
-                    # Unit string may contain micro symbol which causes encoding issues
-                    unit_safe = ensure_unicode(unit) if unit else u""
-                    logd(u"  Unit (converted): {}".format(unit_safe))
-                except:
-                    logd(u"  Unit conversion issue, using unit as-is")
-                    unit_safe = unit
-                
-                px_um = _unit_to_um(px_raw, unit_safe)
-                log(u"Pixel size from OME-XML <Pixels>: {} um (TRUSTED VALUE)".format(px_um))
-                logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
-                return float(px_um)
-            else:
-                logd(u"  No PhysicalSizeX found in OME-XML")
-        else:
-            logd(u"  OME-XML is None or empty")
-    except Exception as e:
-        logd(u"  Method 1 exception: {}".format(e))
-    
-    # Priority 2: OME metadata object
-    logd(u"Attempting method 2: OME metadata object")
+    # Priority: OME metadata object (method 1 removed - always failed with Unicode errors)
+    logd(u"Attempting OME metadata object extraction")
     try:
         if omeMeta is not None:
             logd(u"  OMEMeta object is available")
@@ -418,11 +392,11 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
                 if abs(v) < 1e-3:
                     v_um = v * 1e6
                     log(u"Pixel size from OME metadata (meters->um): {} um".format(v_um))
-                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success) ===")
                     return float(v_um)
                 else:
                     log(u"Pixel size from OME metadata (assumed um): {} um".format(v))
-                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success) ===")
                     return float(v)
             else:
                 logd(u"  Query returned None")
@@ -829,30 +803,36 @@ try:
     import sys
     import os
     
-    # Log where we're looking for the module
+    # Log where we're looking for the module (ALWAYS VISIBLE)
     script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-    logd(u"Checking for metadata_correction.py in: {}".format(script_dir))
+    log(u"")
+    log(u"Checking for metadata_correction.py in: {}".format(script_dir))
     module_path = os.path.join(script_dir, 'metadata_correction.py')
-    logd(u"metadata_correction.py exists: {}".format(os.path.exists(module_path)))
+    log(u"metadata_correction.py exists: {}".format(os.path.exists(module_path)))
     
     # Add script directory to sys.path if not already there
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-        logd(u"Added {} to sys.path".format(script_dir))
+        log(u"Added {} to sys.path".format(script_dir))
     
-    logd(u"Attempting to import metadata_correction module...")
+    log(u"Attempting to import metadata_correction module...")
     import metadata_correction as mc
     create_default_correction_matrix = mc.create_default_correction_matrix
     create_movement_state = mc.create_movement_state
     apply_metadata_corrections = mc.apply_metadata_corrections
     visualize_grid_layout = mc.visualize_grid_layout
     METADATA_CORRECTION_AVAILABLE = True
-    logd(u"[SUCCESS] Metadata correction module loaded successfully")
+    log(u"[SUCCESS] Metadata correction module loaded successfully")
+    log(u"")
 except Exception as e:
     import traceback
-    logd(u"[ERROR] Metadata correction module not available: {}".format(e))
-    logd(u"[ERROR] Full traceback: {}".format(traceback.format_exc()))
-    logd(u"[WARNING] Using stub functions - corrections will NOT be applied")
+    log(u"")
+    log(u"[ERROR] Metadata correction module not available: {}".format(e))
+    log(u"[ERROR] Full traceback:")
+    for line in traceback.format_exc().split('\n'):
+        log(u"  {}".format(line))
+    log(u"[WARNING] Using stub functions - corrections will NOT be applied")
+    log(u"")
     METADATA_CORRECTION_AVAILABLE = False
     
     # Fallback: create stub functions with correct signatures
@@ -1220,10 +1200,10 @@ class UltimateStitcher:
         # Apply metadata corrections if enabled
         if METADATA_CORRECTION_AVAILABLE and self.correction_matrix and self.correction_matrix.get('enabled', False):
             try:
-                logd(u"")
-                logd(u"=== APPLYING METADATA CORRECTIONS ===")
-                logd(u"  Microscope: {}".format(self.correction_matrix.get('microscope_id', 'default')))
-                logd(u"  Thermal state: {}".format(self.correction_matrix.get('thermal_state', 'unknown')))
+                log(u"")
+                log(u"=== APPLYING METADATA CORRECTIONS ===")
+                log(u"  Microscope: {}".format(self.correction_matrix.get('microscope_id', 'default')))
+                log(u"  Thermal state: {}".format(self.correction_matrix.get('thermal_state', 'unknown')))
                 
                 # Estimate grid dimensions from tile positions
                 # Calculate typical spacing between tiles to infer grid structure
@@ -1306,10 +1286,10 @@ class UltimateStitcher:
                             idx, t['x_s_orig'], t['y_s_orig'], t['x_s'], t['y_s'], dx, dy, state_name))
                 
                 # Log state sequence
-                logd(u"")
-                logd(u"  State Sequence: {}".format(", ".join(state_sequence)))
-                logd(u"  Corrections applied to {} tiles".format(len(corrected_tiles)))
-                logd(u"")
+                log(u"")
+                log(u"  State Sequence: {}".format(", ".join(state_sequence)))
+                log(u"  Corrections applied to {} tiles".format(len(corrected_tiles)))
+                log(u"")
                 
                 # Update fx, fy with corrected positions
                 fx = [t['x_s'] for t in tiles]
@@ -1326,6 +1306,12 @@ class UltimateStitcher:
                 log(u"")
                 log(u"Continuing with UNCORRECTED positions - corrections were NOT applied!")
                 log(u"")
+        else:
+            # Log why corrections were skipped  
+            if not self.correction_matrix or not self.correction_matrix.get('enabled', False):
+                log(u"Metadata correction DISABLED in UI - using raw metadata positions")
+            elif not METADATA_CORRECTION_AVAILABLE:
+                log(u"Metadata correction module NOT AVAILABLE - using raw metadata positions")
         
         # Use first tile as reference (all positions relative to tile 0)
         ref_x = fx[0] if len(fx) > 0 else 0.0
