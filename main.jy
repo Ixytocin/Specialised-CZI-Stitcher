@@ -87,44 +87,6 @@ def _save_config(cfg):
     except Exception as e:
         logd(u"Config save failed: {}".format(e))
 
-def _load_correction_matrix(cfg, microscope_id='default'):
-    """Load correction matrix from config file"""
-    default_matrix = create_default_correction_matrix(microscope_id)
-    
-    # Check if metadata_correction exists in config
-    if 'metadata_correction' not in cfg:
-        logd(u"No metadata_correction in config, using defaults")
-        return default_matrix
-    
-    # Check if specific microscope config exists
-    mc = cfg['metadata_correction']
-    if microscope_id not in mc:
-        logd(u"No correction matrix for microscope '{}', using defaults".format(microscope_id))
-        return default_matrix
-    
-    # Load and merge with defaults (in case new fields were added)
-    loaded = mc[microscope_id]
-    for key in default_matrix:
-        if key not in loaded:
-            loaded[key] = default_matrix[key]
-    
-    logd(u"Loaded correction matrix for microscope: {}".format(microscope_id))
-    return loaded
-
-def _save_correction_matrix(cfg, correction_matrix):
-    """Save correction matrix to config file"""
-    microscope_id = correction_matrix.get('microscope_id', 'default')
-    
-    # Ensure metadata_correction section exists
-    if 'metadata_correction' not in cfg:
-        cfg['metadata_correction'] = {}
-    
-    # Save under microscope ID
-    cfg['metadata_correction'][microscope_id] = correction_matrix
-    
-    logd(u"Saved correction matrix for microscope: {}".format(microscope_id))
-    _save_config(cfg)
-
 def ensure_unicode(o):
     """Convert any object to unicode safely (v34.8 fix for German characters)"""
     if o is None:
@@ -838,347 +800,66 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
 # PART 4: METADATA CORRECTION SYSTEM (empirical measurements)
 # ==============================================================================
 
-class MatrixOps:
-    """Pure Python matrix operations for Jython compatibility"""
+# Import correction functions from separate module to avoid file size issues
+try:
+    import metadata_correction as mc
+    create_default_correction_matrix = mc.create_default_correction_matrix
+    create_movement_state = mc.create_movement_state
+    apply_metadata_corrections = mc.apply_metadata_corrections
+    visualize_grid_layout = mc.visualize_grid_layout
+    METADATA_CORRECTION_AVAILABLE = True
+    logd(u"Metadata correction module loaded successfully")
+except Exception as e:
+    logd(u"Metadata correction module not available: {}".format(e))
+    METADATA_CORRECTION_AVAILABLE = False
     
-    @staticmethod
-    def apply_2d_transform(x, y, scale_x, scale_y, skew_xy, skew_yx, offset_x, offset_y):
-        """Apply 2D affine transformation to point (x, y)"""
-        x_prime = scale_x * x + skew_xy * y + offset_x
-        y_prime = skew_yx * x + scale_y * y + offset_y
-        return x_prime, y_prime
+    # Fallback: create stub functions
+    def create_default_correction_matrix(microscope_id='default'):
+        return {'enabled': False}
     
-    @staticmethod
-    def interpolate(old_value, new_value, learning_rate):
-        """Exponential moving average for learning"""
-        return old_value * (1.0 - learning_rate) + new_value * learning_rate
+    def create_movement_state():
+        return {}
+    
+    def apply_metadata_corrections(x, y, i, tw, th, cm, ms):
+        return x, y, 'disabled'
+    
+    def visualize_grid_layout(tiles, w, h):
+        return []
 
 
-def create_default_correction_matrix(microscope_id='default'):
-    """Create correction matrix with empirical measurements"""
-    return {
-        'enabled': False,  # Default: disabled until user enables
-        'microscope_id': microscope_id,
-        'pixel_size_um': 0.345,  # Empirical: sensor calibration
-        'thermal_state': 'unknown',
-        'thermal_factors': {
-            'z_stack_height_um': 0.0,
-            'num_channels': 1,
-            'num_tiles': 0,
-            'thermal_load_factor': 0.0
-        },
-        # Affine transformation matrix (empirical measurements)
-        'scale_x': 1.0326,   # 3.26% under-travel
-        'scale_y': 1.0326,
-        'skew_xy': 0.0066,   # 0.38° gantry skew
-        'skew_yx': 0.0066,
-        # State-dependent offsets (in pixels, will convert to um)
-        'offset_right_x': 37.16,   # Confidence: 98%
-        'offset_right_y': 8.15,
-        'offset_left_x': -37.12,   # Confidence: 98%
-        'offset_left_y': -8.37,
-        # Backlash penalties for normal moves (in pixels, full backlash)
-        'backlash_x': 3.50,        # Short X direction changes
-        'backlash_y': 1.20,        # Short Y direction changes
-        'backlash_reversal': 0.70,  # 180° row flips
-        # Backlash penalties for long moves (in pixels, reduced - rapids allow settling)
-        'backlash_long_x_left': 0.0,    # Long X+ to X- (pure X with rapids)
-        'backlash_long_x_right': 0.0,   # Long X- to X+ (pure X with rapids)
-        'backlash_long_y': 0.0,         # Long Y moves (pure Y with rapids)
-        'backlash_long_diagonal': 0.0,  # Long diagonal (X+Y with rapids)
-        # Thresholds for detecting long moves (multiplier of tile size)
-        'long_move_threshold_x': 2.0,   # >2x tile width = long X move
-        'long_move_threshold_y': 2.0,   # >2x tile height = long Y move
-        # Thermal drift
-        'thermal_drift_x_cold': 0.0,
-        'thermal_drift_y_cold': 0.0,
-        'thermal_drift_x_preheated': 0.0,
-        'thermal_drift_y_preheated': 0.0,
-        'thermal_decay_rate': 0.95,
-        # First down special case (high stiction)
-        'first_down_x_offset': -6.10,   # Confidence: 92%
-        'first_down_y_offset': 33.90,
-        'first_down_confidence': 0.92,
-        # Subsequent down (kinetic friction)
-        'subseq_down_x_offset': -20.70,  # Confidence: 88%
-        'subseq_down_y_offset': 28.90,
-        'subseq_down_confidence': 0.88,
-        # Metadata
-        'last_updated': '',
-        'num_sessions': 0,
-        'learning_rate': 0.3
-    }
+def _load_correction_matrix(cfg, microscope_id='default'):
+    """Load correction matrix from config file"""
+    default_matrix = create_default_correction_matrix(microscope_id)
+    
+    if 'metadata_correction' not in cfg:
+        logd(u"No metadata_correction in config, using defaults")
+        return default_matrix
+    
+    mc = cfg['metadata_correction']
+    if microscope_id not in mc:
+        logd(u"No correction matrix for microscope '{}', using defaults".format(microscope_id))
+        return default_matrix
+    
+    loaded = mc[microscope_id]
+    for key in default_matrix:
+        if key not in loaded:
+            loaded[key] = default_matrix[key]
+    
+    logd(u"Loaded correction matrix for microscope: {}".format(microscope_id))
+    return loaded
 
 
-def create_movement_state():
-    """Create initial movement state for tracking"""
-    return {
-        'prev_x': None,
-        'prev_y': None,
-        'prev_dir_x': None,
-        'prev_dir_y': None,
-        'prev_state': None,
-        'first_down_done': False,
-        'tiles_processed': 0,
-    }
-
-
-def calculate_thermal_load_factor(z_stack_height_um, num_channels, num_tiles):
-    """Calculate thermal load factor from acquisition parameters"""
-    z_factor = z_stack_height_um / 100.0
-    ch_factor = num_channels / 3.0
-    tile_factor = num_tiles / 50.0
-    thermal_load = 0.4 * z_factor + 0.3 * ch_factor + 0.3 * tile_factor
-    return thermal_load
-
-
-def select_thermal_drift(correction_matrix, thermal_load_factor):
-    """Select thermal drift correction based on system state"""
-    thermal_state = correction_matrix['thermal_state']
+def _save_correction_matrix(cfg, correction_matrix):
+    """Save correction matrix to config file"""
+    microscope_id = correction_matrix.get('microscope_id', 'default')
     
-    if thermal_state == 'cold':
-        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
-        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
-    elif thermal_state == 'preheated':
-        drift_x = correction_matrix['thermal_drift_x_preheated'] * thermal_load_factor
-        drift_y = correction_matrix['thermal_drift_y_preheated'] * thermal_load_factor
-    else:
-        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
-        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
+    if 'metadata_correction' not in cfg:
+        cfg['metadata_correction'] = {}
     
-    return drift_x, drift_y
-
-
-def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_height_um, correction_matrix):
-    """
-    Classify movement type for current tile.
-    Returns: (state_code, state_name)
-    """
-    # First tile
-    if movement_state['prev_x'] is None:
-        return 'START', 'start'
+    cfg['metadata_correction'][microscope_id] = correction_matrix
     
-    # Calculate movement
-    delta_x = tile_x_um - movement_state['prev_x']
-    delta_y = tile_y_um - movement_state['prev_y']
-    
-    # Classify direction
-    curr_dir_x = None
-    if abs(delta_x) > 0.5:
-        curr_dir_x = 'right' if delta_x > 0 else 'left'
-    
-    curr_dir_y = None
-    if abs(delta_y) > 0.5:
-        curr_dir_y = 'down' if delta_y > 0 else None  # Up not primary
-    
-    # Check for long moves (rapids involved)
-    long_threshold_x = correction_matrix['long_move_threshold_x']
-    long_threshold_y = correction_matrix.get('long_move_threshold_y', 2.0)
-    is_long_x = abs(delta_x) > long_threshold_x * tile_width_um
-    is_long_y = abs(delta_y) > long_threshold_y * tile_height_um
-    
-    # Determine state - Priority order:
-    # 1. Long moves (with rapids - reduced backlash)
-    # 2. First down (special case)
-    # 3. Direction changes (full backlash)
-    # 4. Continuing moves
-    
-    # Long diagonal (both X and Y long, with rapids)
-    if is_long_x and is_long_y:
-        return 'LONG_DIAG', 'long_diagonal'
-    
-    # Long pure X moves (circle tracing, with rapids)
-    if is_long_x and not is_long_y:
-        if curr_dir_x == 'right':
-            return 'LONG_R', 'long_right'
-        elif curr_dir_x == 'left':
-            return 'LONG_L', 'long_left'
-    
-    # Long pure Y moves (with rapids)
-    if is_long_y and not is_long_x:
-        return 'LONG_Y', 'long_y'
-    
-    # Short diagonal (row transitions, normal speed - full backlash)
-    if curr_dir_x and curr_dir_y:
-        # Both X and Y movement, but short distances
-        # Treat as combined move with full backlash penalties
-        return 'DIAG_SHORT', 'diagonal'
-    
-    # First down special case (high stiction)
-    if curr_dir_y == 'down' and not movement_state['first_down_done']:
-        return 'Y_FIRST', 'down'
-    
-    # Subsequent down
-    if curr_dir_y == 'down':
-        return 'Y_SUBSEQ', 'down'
-    
-    # X direction changes (full backlash)
-    if movement_state['prev_dir_x'] == 'right' and curr_dir_x == 'left':
-        return 'R_TO_L', 'left'
-    elif movement_state['prev_dir_x'] == 'left' and curr_dir_x == 'right':
-        return 'L_TO_R', 'right'
-    
-    # Continuing moves
-    if curr_dir_x == 'right':
-        return 'RIGHT', 'right'
-    elif curr_dir_x == 'left':
-        return 'LEFT', 'left'
-    else:
-        return 'UNKNOWN', 'unknown'
-
-
-def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, tile_height_um,
-                                 correction_matrix, movement_state):
-    """
-    Apply empirical corrections to tile metadata position.
-    
-    P_true = M_affine · P_meta + V_state + V_backlash + V_thermal
-    
-    Returns: (corrected_x_um, corrected_y_um, state_name)
-    """
-    
-    if not correction_matrix.get('enabled', False):
-        # Corrections disabled - pass through unchanged
-        if movement_state['prev_x'] is not None:
-            movement_state['prev_x'] = tile_x_um
-            movement_state['prev_y'] = tile_y_um
-            movement_state['tiles_processed'] += 1
-        else:
-            movement_state['prev_x'] = tile_x_um
-            movement_state['prev_y'] = tile_y_um
-            movement_state['tiles_processed'] = 0
-        return tile_x_um, tile_y_um, 'passthrough'
-    
-    # Classify movement state
-    state_code, state_name = classify_movement(
-        tile_x_um, tile_y_um, movement_state, tile_width_um, tile_height_um, correction_matrix
-    )
-    
-    px_um = correction_matrix['pixel_size_um']
-    
-    # 1. Affine transformation (scale + skew)
-    scale_x = correction_matrix['scale_x']
-    scale_y = correction_matrix['scale_y']
-    skew_xy = correction_matrix['skew_xy']
-    skew_yx = correction_matrix['skew_yx']
-    
-    x_scaled = scale_x * tile_x_um - skew_xy * tile_y_um
-    y_scaled = skew_yx * tile_x_um + scale_y * tile_y_um
-    
-    # 2. State-dependent offset (convert px to μm)
-    offset_x_um = 0.0
-    offset_y_um = 0.0
-    
-    if state_code == 'RIGHT':
-        offset_x_um = correction_matrix['offset_right_x'] * px_um
-        offset_y_um = correction_matrix['offset_right_y'] * px_um
-    elif state_code == 'LEFT':
-        offset_x_um = correction_matrix['offset_left_x'] * px_um
-        offset_y_um = correction_matrix['offset_left_y'] * px_um
-    elif state_code == 'Y_FIRST':
-        offset_x_um = correction_matrix['first_down_x_offset'] * px_um
-        offset_y_um = correction_matrix['first_down_y_offset'] * px_um
-        movement_state['first_down_done'] = True
-    elif state_code == 'Y_SUBSEQ':
-        offset_x_um = correction_matrix['subseq_down_x_offset'] * px_um
-        offset_y_um = correction_matrix['subseq_down_y_offset'] * px_um
-    elif state_code == 'DIAG_SHORT':
-        # Short diagonal: combine X and Y offsets from movement direction
-        delta_x = tile_x_um - movement_state['prev_x']
-        delta_y = tile_y_um - movement_state['prev_y']
-        if delta_x > 0:  # Moving right
-            offset_x_um = correction_matrix['offset_right_x'] * px_um
-            offset_y_um = correction_matrix['offset_right_y'] * px_um
-        else:  # Moving left
-            offset_x_um = correction_matrix['offset_left_x'] * px_um
-            offset_y_um = correction_matrix['offset_left_y'] * px_um
-        # Add Y component
-        if delta_y > 0:  # Moving down
-            offset_y_um += correction_matrix['subseq_down_y_offset'] * px_um
-    
-    # 3. Backlash penalties
-    backlash_x_um = 0.0
-    backlash_y_um = 0.0
-    
-    # Full backlash for short moves (normal speed, no rapids)
-    if state_code in ['R_TO_L', 'L_TO_R']:
-        backlash_x_um = correction_matrix['backlash_x'] * px_um
-        backlash_x_um += correction_matrix['backlash_reversal'] * px_um
-    
-    if state_code == 'Y_SUBSEQ' and movement_state['prev_state'] != 'Y_SUBSEQ':
-        backlash_y_um = correction_matrix['backlash_y'] * px_um
-    
-    if state_code == 'DIAG_SHORT':
-        # Short diagonal: full backlash (same as regular moves, no rapids)
-        delta_x = tile_x_um - movement_state['prev_x']
-        prev_dir_x = movement_state['prev_dir_x']
-        curr_dir_x = 'right' if delta_x > 0 else 'left'
-        if prev_dir_x and prev_dir_x != curr_dir_x:
-            backlash_x_um = correction_matrix['backlash_x'] * px_um
-            backlash_x_um += correction_matrix['backlash_reversal'] * px_um
-        # Y backlash for diagonal
-        backlash_y_um = correction_matrix['backlash_y'] * px_um
-    
-    # Reduced backlash for long moves (rapids allow settling)
-    if state_code == 'LONG_R':
-        backlash_x_um = correction_matrix['backlash_long_x_right'] * px_um
-    elif state_code == 'LONG_L':
-        backlash_x_um = correction_matrix['backlash_long_x_left'] * px_um
-    elif state_code == 'LONG_Y':
-        backlash_y_um = correction_matrix.get('backlash_long_y', 0.0) * px_um
-    elif state_code == 'LONG_DIAG':
-        # Long diagonal: reduced backlash for both axes
-        backlash_x_um = correction_matrix.get('backlash_long_diagonal', 0.0) * px_um
-        backlash_y_um = correction_matrix.get('backlash_long_diagonal', 0.0) * px_um
-    
-    # 4. Thermal drift (exponentially decaying)
-    tiles_processed = movement_state['tiles_processed']
-    decay_factor = correction_matrix['thermal_decay_rate'] ** tiles_processed
-    thermal_load = correction_matrix['thermal_factors']['thermal_load_factor']
-    thermal_x, thermal_y = select_thermal_drift(correction_matrix, thermal_load)
-    thermal_x *= decay_factor
-    thermal_y *= decay_factor
-    
-    # Final position
-    x_corrected = x_scaled + offset_x_um + backlash_x_um + thermal_x
-    y_corrected = y_scaled + offset_y_um + backlash_y_um + thermal_y
-    
-    # Update state for next tile
-    if movement_state['prev_x'] is not None:
-        delta_x = tile_x_um - movement_state['prev_x']
-        delta_y = tile_y_um - movement_state['prev_y']
-        
-        if abs(delta_x) > 0.5:
-            movement_state['prev_dir_x'] = 'right' if delta_x > 0 else 'left'
-        if abs(delta_y) > 0.5:
-            movement_state['prev_dir_y'] = 'down' if delta_y > 0 else None
-    
-    movement_state['prev_x'] = tile_x_um
-    movement_state['prev_y'] = tile_y_um
-    movement_state['prev_state'] = state_code
-    movement_state['tiles_processed'] += 1
-    
-    return x_corrected, y_corrected, state_name
-
-
-def visualize_grid_layout(tiles, grid_width, grid_height):
-    """Generate ASCII visualization of tile grid for debugging"""
-    # Create empty grid
-    grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
-    
-    # Place tiles
-    for i, tile_info in enumerate(tiles):
-        x_grid = int(round(tile_info['x_grid']))
-        y_grid = int(round(tile_info['y_grid']))
-        if 0 <= x_grid < grid_width and 0 <= y_grid < grid_height:
-            if i == 0:
-                grid[y_grid][x_grid] = '0'
-            else:
-                grid[y_grid][x_grid] = 'x'
-    
-    # Convert to strings
-    return [''.join(row) for row in grid]
-
+    logd(u"Saved correction matrix for microscope: {}".format(microscope_id))
+    _save_config(cfg)
 
 # ==============================================================================
 # PART 5: STITCHING SUPPORT (from v31.16h)
