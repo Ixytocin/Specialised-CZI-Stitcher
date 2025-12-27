@@ -836,17 +836,19 @@ except Exception as e:
     logd(u"Metadata correction module not available: {}".format(e))
     METADATA_CORRECTION_AVAILABLE = False
     
-    # Fallback: create stub functions
+    # Fallback: create stub functions with correct signatures
     def create_default_correction_matrix(microscope_id='default'):
-        return {'enabled': False}
+        return {'enabled': False, 'microscope_id': microscope_id}
     
     def create_movement_state():
-        return {}
+        return {'prev_x': None, 'prev_y': None, 'prev_dir_x': None, 'prev_dir_y': None, 
+                'prev_state': None, 'tiles_processed': 0, 'first_y_negative_done': False}
     
-    def apply_metadata_corrections(x, y, i, tw, th, cm, ms):
-        return x, y, 'disabled'
+    def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, tile_height_um,
+                                    correction_matrix, movement_state):
+        return tile_x_um, tile_y_um, 'disabled'
     
-    def visualize_grid_layout(tiles, w, h):
+    def visualize_grid_layout(tiles, grid_width, grid_height):
         return []
 
 
@@ -1206,13 +1208,22 @@ class UltimateStitcher:
                 
                 # Visualize grid layout and detect states
                 try:
-                    grid_viz = visualize_grid_layout(tiles, px_um_eff)
-                    if grid_viz:
-                        logd(u"")
-                        logd(u"  Grid Layout:")
-                        for line in grid_viz.split('\n'):
-                            if line.strip():
-                                logd(u"    {}".format(line))
+                    # Calculate grid dimensions
+                    if tiles:
+                        min_x = min(t['x_grid'] for t in tiles if 'x_grid' in t)
+                        max_x = max(t['x_grid'] for t in tiles if 'x_grid' in t)
+                        min_y = min(t['y_grid'] for t in tiles if 'y_grid' in t)
+                        max_y = max(t['y_grid'] for t in tiles if 'y_grid' in t)
+                        grid_width = int(max_x - min_x + 1)
+                        grid_height = int(max_y - min_y + 1)
+                        
+                        grid_lines = visualize_grid_layout(tiles, grid_width, grid_height)
+                        if grid_lines:
+                            logd(u"")
+                            logd(u"  Grid Layout:")
+                            for line in grid_lines:
+                                if line.strip():
+                                    logd(u"    {}".format(line))
                 except Exception as e:
                     logd(u"  Grid visualization failed: {}".format(e))
                 
@@ -1235,33 +1246,35 @@ class UltimateStitcher:
                         num_channels = 1
                         num_z = 1
                     
-                    # Apply corrections
-                    corrected = apply_metadata_corrections(
+                    # Convert tile dimensions from pixels to micrometers
+                    tile_width_um = tile_width_px * px_um_eff
+                    tile_height_um = tile_height_px * px_um_eff
+                    
+                    # Apply corrections (returns tuple: x_corrected, y_corrected, state_name)
+                    x_corrected, y_corrected, state_name = apply_metadata_corrections(
                         t['x_s'], t['y_s'], 
-                        tiles, idx,
+                        idx,
+                        tile_width_um, tile_height_um,
                         self.correction_matrix,
-                        movement_state,
-                        px_um_eff,
-                        tile_width_px, tile_height_px,
-                        num_channels, num_z
+                        movement_state
                     )
                     
                     # Update tile with corrected position
                     t['x_s_orig'] = t['x_s']
                     t['y_s_orig'] = t['y_s']
-                    t['x_s'] = corrected['x_um']
-                    t['y_s'] = corrected['y_um']
+                    t['x_s'] = x_corrected
+                    t['y_s'] = y_corrected
                     t['correction_applied'] = True
-                    t['movement_state'] = corrected['state']
+                    t['movement_state'] = state_name
                     
-                    state_sequence.append(corrected['state'])
+                    state_sequence.append(state_name)
                     corrected_tiles.append(t)
                     
                     if LOG_TILE_POS:
                         dx = t['x_s'] - t['x_s_orig']
                         dy = t['y_s'] - t['y_s_orig']
                         log(u"Tile {}: ({:.2f}, {:.2f}) -> ({:.2f}, {:.2f}) [delta: ({:.2f}, {:.2f}) um] state: {}".format(
-                            idx, t['x_s_orig'], t['y_s_orig'], t['x_s'], t['y_s'], dx, dy, corrected['state']))
+                            idx, t['x_s_orig'], t['y_s_orig'], t['x_s'], t['y_s'], dx, dy, state_name))
                 
                 # Log state sequence
                 logd(u"")
