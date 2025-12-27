@@ -231,9 +231,26 @@ Per microscope coordinate convention (Down = Y+, Right = X+):
 ### Grid Traversal Properties
 
 - Grid is **closed without holes** (contiguous tiles)
-- Grid can be **traversed without diagonal moves** (only orthogonal)
-- Only **discontinuous move** is the long X jump for circle tracing
+- Grid **CAN be traversed without diagonal moves** (topologically possible with only orthogonal moves)
+- **Real data DOES use diagonal moves** at row ends to jump to next row start position
+- **Long X jumps** occur for circle tracing patterns (discontinuous moves with rapids)
 - **Idle time does NOT affect backlash** (mechanical property, not time-dependent)
+
+### Movement Types in Real Data
+
+1. **Orthogonal moves** (within rows/columns):
+   - Horizontal: left/right within same row
+   - Vertical: up/down within same column
+
+2. **Diagonal moves** (row transitions):
+   - Combined X+Y movement at row ends
+   - Example: End of row → start of next row (left+down or right+down)
+   - State machine treats as simultaneous X and Y movements
+
+3. **Long jumps** (circle tracing):
+   - Large X displacement (>2x tile width)
+   - Used for rapid repositioning
+   - Different backlash behavior due to slowdown
 
 ### Truth Table (Empirically-Driven State Machine)
 
@@ -248,8 +265,15 @@ Based on real stitching data, each movement state has measured offsets and backl
 | `L_TO_R` | **Left → Right** | left | right | Any | Any | `affine_transform` + `offset_right` + `backlash_x` + `reversal` | (+37.16, +8.15) | X: 3.50, Rev: 0.70 |
 | `Y_FIRST` | **First down** | Any | Any | None | down | `affine_transform` + `first_down_offset` | (-6.10, +33.90) | None (high stiction) |
 | `Y_SUBSEQ` | **Subsequent down** | Any | Any | down | down | `affine_transform` + `subseq_down_offset` + `backlash_y` | (-20.70, +28.90) | Y: 1.20 |
+| `DIAGONAL` | **Diagonal move** | Any | Any | Any | Any | `affine_transform` + `offset_X` + `offset_Y` + `backlash` | Combined X+Y offsets | Combined penalties |
 | `LONG_R` | **Long right** | Any | right | Any | Any | `affine_transform` + `backlash_long_x_right` | TBD | Reduced |
 | `LONG_L` | **Long left** | Any | left | Any | Any | `affine_transform` + `backlash_long_x_left` | TBD | Reduced |
+
+**Note on DIAGONAL moves:**
+- Occur at row ends (e.g., end of right-moving row → start of left-moving row below)
+- Apply BOTH X and Y corrections simultaneously
+- Common pattern: right+down or left+down at row transitions
+- State machine processes X and Y components independently, then combines corrections
 
 **Key:**
 - **affine_transform**: Apply the 2x2 matrix `[[1.0326, -0.0066], [0.0066, 1.0326]]`
