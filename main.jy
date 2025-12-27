@@ -1282,11 +1282,12 @@ class UltimateStitcher:
                         logd(u"    {}".format(line))
                 # Continue with uncorrected positions
         
-        min_x = min(fx) if fx else 0.0
-        min_y = min(fy) if fy else 0.0
+        # Use first tile as reference (all positions relative to tile 0)
+        ref_x = fx[0] if fx else 0.0
+        ref_y = fy[0] if fy else 0.0
         for t in tiles:
-            t['x'] = (t['x_s'] - min_x) / px_um_eff
-            t['y'] = (t['y_s'] - min_y) / px_um_eff
+            t['x'] = (t['x_s'] - ref_x) / px_um_eff
+            t['y'] = (t['y_s'] - ref_y) / px_um_eff
         
         xs = [t['x'] for t in tiles]
         ys = [t['y'] for t in tiles]
@@ -2162,7 +2163,7 @@ def main():
         gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
         
         gd.addMessage("=== Metadata Correction (Experimental) ===")
-        gd.addCheckbox("Enable metadata correction", False)
+        gd.addCheckbox("Enable metadata correction", True)
         gd.addChoice("Microscope", ["default", "zeiss_axio_1", "zeiss_axio_2"], "default")
         gd.addChoice("Thermal state", ["unknown", "cold", "preheated"], "unknown")
         
