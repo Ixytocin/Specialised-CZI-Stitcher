@@ -41,11 +41,12 @@
 
 import os, time, shutil, math, re, sys, json, codecs
 from java.lang import Runtime, Thread, System
-from java.awt import Color
+from java.awt import Color, BasicStroke
 from java.util.concurrent import Executors, Callable
 from ij import IJ, ImagePlus, WindowManager, CompositeImage
 from ij.plugin import ZProjector, HyperStackConverter, ChannelSplitter, RGBStackMerge, Duplicator
 from ij.process import LUT
+from ij.gui import Roi, Overlay, TextRoi
 from loci.plugins import BF
 from loci.plugins.in import ImporterOptions, ImportProcess
 from java.io import File
@@ -1224,26 +1225,36 @@ class UltimateStitcher:
                 logd(u"  Microscope: {}".format(self.correction_matrix.get('microscope_id', 'default')))
                 logd(u"  Thermal state: {}".format(self.correction_matrix.get('thermal_state', 'unknown')))
                 
-                # Visualize grid layout and detect states
+                # Estimate grid dimensions from tile positions
+                # Calculate typical spacing between tiles to infer grid structure
                 try:
-                    # Calculate grid dimensions
-                    if tiles:
-                        min_x = min(t['x_grid'] for t in tiles if 'x_grid' in t)
-                        max_x = max(t['x_grid'] for t in tiles if 'x_grid' in t)
-                        min_y = min(t['y_grid'] for t in tiles if 'y_grid' in t)
-                        max_y = max(t['y_grid'] for t in tiles if 'y_grid' in t)
-                        grid_width = int(max_x - min_x + 1)
-                        grid_height = int(max_y - min_y + 1)
+                    if len(tiles) > 1:
+                        # Get all positions
+                        positions = [(t['x_s'], t['y_s']) for t in tiles]
                         
-                        grid_lines = visualize_grid_layout(tiles, grid_width, grid_height)
-                        if grid_lines:
-                            logd(u"")
-                            logd(u"  Grid Layout:")
-                            for line in grid_lines:
-                                if line.strip():
-                                    logd(u"    {}".format(line))
+                        # Find unique X and Y coordinates (with small tolerance for rounding)
+                        tolerance = px_um_eff * 10  # 10 pixels tolerance
+                        unique_x = []
+                        unique_y = []
+                        
+                        for x, y in positions:
+                            # Check if this X is new (not close to any existing)
+                            if not any(abs(x - ux) < tolerance for ux in unique_x):
+                                unique_x.append(x)
+                            # Check if this Y is new
+                            if not any(abs(y - uy) < tolerance for uy in unique_y):
+                                unique_y.append(y)
+                        
+                        grid_width = len(unique_x)
+                        grid_height = len(unique_y)
+                        
+                        logd(u"")
+                        logd(u"  Grid dimensions: {} x {} (estimated from {} tiles)".format(grid_width, grid_height, len(tiles)))
+                        logd(u"")
                 except Exception as e:
-                    logd(u"  Grid visualization failed: {}".format(e))
+                    logd(u"  Grid dimension estimation failed: {}".format(e))
+                    grid_width = 1
+                    grid_height = len(tiles)
                 
                 # Apply corrections to each tile
                 movement_state = create_movement_state()
@@ -1305,13 +1316,16 @@ class UltimateStitcher:
                 fy = [t['y_s'] for t in tiles]
                 
             except Exception as e:
-                log(u"WARNING: Metadata correction failed: {}".format(e))
-                if DEBUG_STITCHING:
-                    import traceback
-                    logd(u"  Traceback:")
-                    for line in traceback.format_exc().split('\n'):
-                        logd(u"    {}".format(line))
-                # Continue with uncorrected positions
+                log(u"")
+                log(u"ERROR: Metadata correction failed: {}".format(e))
+                log(u"")
+                import traceback
+                log(u"Full Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    log(u"  {}".format(line))
+                log(u"")
+                log(u"Continuing with UNCORRECTED positions - corrections were NOT applied!")
+                log(u"")
         
         # Use first tile as reference (all positions relative to tile 0)
         ref_x = fx[0] if len(fx) > 0 else 0.0
