@@ -1,10 +1,47 @@
 """
 Metadata Correction Module for CZI Stitcher
 
+============================================================================
+FILE PLACEMENT: IMPORTANT!
+============================================================================
+This file MUST be in the SAME DIRECTORY as main.jy
+
+Correct placement:
+  /your/scripts/folder/main.jy                    <-- Main script
+  /your/scripts/folder/metadata_correction.py     <-- This file
+
+Do NOT place this in:
+  - A subdirectory
+  - Python's site-packages
+  - Fiji's plugins folder (unless main.jy is also there)
+
+Verification:
+  When you run main.jy in Fiji, check the log window:
+    ✓ SUCCESS: "[DEBUG] Metadata correction module loaded successfully"
+    ✗ ERROR:   "[DEBUG] Metadata correction module not available: ..."
+
+If you see an error, this file is not in the correct location!
+============================================================================
+
+PURPOSE:
 Implements adaptive correction system for systematic stage positioning errors
 (backlash, scale drift, skew, thermal expansion).
 
-Jython-compatible (no NumPy, pure Python operations).
+FEATURES:
+- 12-state movement classification (START, RIGHT, LEFT, R_TO_L, L_TO_R, 
+  Y_FIRST, Y_SUBSEQ, DIAG_SHORT, LONG_R, LONG_L, LONG_Y, LONG_DIAG)
+- Empirical measurements with confidence levels
+- Speed-based backlash (short moves: full, long moves: reduced)
+- Per-microscope configuration
+- Thermal state support (cold/preheated)
+- Jython-compatible (no NumPy, pure Python operations)
+
+USAGE:
+This module is imported by main.jy. Do not run it directly.
+
+DOCUMENTATION:
+See METADATA_CORRECTION_README.md for complete documentation
+See TECHDOC/METADATA_CORRECTION_DESIGN.md for technical details
 """
 
 # ==============================================================================

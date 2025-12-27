@@ -1,6 +1,22 @@
 # SPECIALISED CZI STITCHER v37.5 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
+# ============================================================================
+# FILE PLACEMENT: IMPORTANT!
+# ============================================================================
+# This script requires metadata_correction.py to be in the SAME DIRECTORY
+#
+# Correct placement:
+#   /your/scripts/folder/main.jy                    <-- This file
+#   /your/scripts/folder/metadata_correction.py     <-- Required module
+#
+# When you run this in Fiji, check the log window for:
+#   SUCCESS: "[DEBUG] Metadata correction module loaded successfully"
+#   ERROR:   "[DEBUG] Metadata correction module not available: ..."
+#
+# If you see the error, metadata_correction.py is not in the same folder!
+# ============================================================================
+#
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
 # - v31.16h: Dual 2D/3D stitching workflow, thread pool execution
 # - v34.8:   Bug fixes for UTF-8, booleans, pixel size correction
@@ -15,6 +31,13 @@
 # - ensure_unicode() for all external inputs
 # - .format() instead of + for string concatenation
 # - codecs.open() for file I/O with UTF-8 encoding
+#
+# METADATA CORRECTION SYSTEM:
+# - Adaptive correction for stage positioning errors (backlash, scale, skew)
+# - 12-state machine with empirical measurements
+# - Per-microscope configuration with thermal state support
+# - Enable via checkbox in parameter dialog (disabled by default)
+# - See METADATA_CORRECTION_README.md for detailed documentation
 
 import os, time, shutil, math, re, sys, json, codecs
 from java.lang import Runtime, Thread, System
