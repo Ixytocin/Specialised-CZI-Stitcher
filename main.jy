@@ -1554,7 +1554,9 @@ class UltimateStitcher:
                     tile_count_parsed += 1
         
         # Link metadata predictions from tiles[] array (always store predictions, needed for fallback)
-        # Use corrected positions if available, otherwise use raw metadata
+        # CRITICAL: Store raw metadata positions as fallback predictions
+        # If corrections were applied, x_s/y_s contain corrected values
+        # If corrections were NOT applied, x_s/y_s contain raw metadata (still useful for fallback!)
         for t in tiles:
             # Find corresponding MIP name for this tile
             mip_name = None
@@ -1564,7 +1566,8 @@ class UltimateStitcher:
                     break
             
             if mip_name and mip_name in tile_positions:
-                # Store predicted position in pixels (use corrected if available, else raw)
+                # ALWAYS store position as prediction (even if raw metadata, better than nothing!)
+                # Convert from micrometers (stage coordinates) to pixels (image coordinates)
                 pred_x = (t['x_s'] - ref_x) / px_um_eff
                 pred_y = (t['y_s'] - ref_y) / px_um_eff
                 tile_positions[mip_name]['predicted_xy'] = (pred_x, pred_y)
@@ -1644,20 +1647,20 @@ class UltimateStitcher:
                         # Inverse distance weighting: w = (1/d²) * correlation
                         weight = (1.0 / (distance * distance)) * neigh_info['correlation']
                         
-                        # Movement-specific filtering: only use errors from similar move types
+                        # Movement-specific filtering: use errors from similar move types (more aggressive)
                         move_compat = 1.0
                         if failed_info['movement_state'] and neigh_info['movement_state']:
                             # Check if movements are compatible
                             failed_move = failed_info['movement_state']
                             neigh_move = neigh_info['movement_state']
                             
-                            # Only apply full weight if movements match direction
+                            # Reduced penalty for mismatched movements (was 0.3, now 0.6 = more aggressive)
                             if ('RIGHT' in failed_move and 'RIGHT' not in neigh_move) or \
                                ('LEFT' in failed_move and 'LEFT' not in neigh_move):
-                                move_compat *= 0.3  # Reduce weight for mismatched X direction
+                                move_compat *= 0.6  # Less strict penalty for mismatched X direction
                             
                             if ('DOWN' in failed_move and 'DOWN' not in neigh_move):
-                                move_compat *= 0.3  # Reduce weight for mismatched Y direction
+                                move_compat *= 0.6  # Less strict penalty for mismatched Y direction
                         
                         weight *= move_compat
                         
@@ -1676,8 +1679,8 @@ class UltimateStitcher:
                         
                         log(u"    Weighted error correction: ({:+.1f}, {:+.1f})".format(avg_error_x, avg_error_y))
                         
-                        # Constrained correction: don't deviate too much from prediction
-                        max_correction = 50.0  # pixels (safety limit)
+                        # Constrained correction: allow larger deviations (observed errors in good tiles reach ±20px)
+                        max_correction = 200.0  # pixels (increased safety limit - real tile errors are ~15-20px)
                         clamped_x = max(-max_correction, min(max_correction, avg_error_x))
                         clamped_y = max(-max_correction, min(max_correction, avg_error_y))
                         
