@@ -73,12 +73,111 @@ def create_default_correction_matrix(microscope_id='default'):
     Create correction matrix with empirical measurements
     
     Updated values based on 251-tile verification dataset.
-    Uses LUT-based correction approach with movement masks.
+    Uses LUT-based correction approach with boolean movement masks.
+    
+    ========================================================================
+    HOW TO UPDATE CORRECTION FACTORS:
+    ========================================================================
+    
+    1. Run stitching on a large dataset (100+ tiles recommended)
+    2. Compare metadata positions vs. stitching results
+    3. Calculate: error = actual_position_px - expected_position_px
+    4. Classify each movement using boolean mask
+    5. Average errors for each mask value
+    6. Update the values below
+    
+    For detailed tutorial, see:
+      - METADATA_CORRECTION_README.md (tutorial section)
+      - TECHDOC/METADATA_CORRECTION_DESIGN.md (theory)
+    
+    Boolean mask encoding:
+      mask = (is_sweep << 2) | (is_right << 1) | is_down
+      
+      where:
+        is_sweep = 1 if abs(delta_x_px) > sweep_limit else 0
+        is_right = 1 if delta_x_um > 0 else 0
+        is_down  = 1 if delta_y_um > 0 else 0
+      
+      For first movements, add bit 3: mask |= 8
+    
+    ========================================================================
     """
     return {
         'enabled': False,
         'microscope_id': microscope_id,
-        'pixel_size_um': 0.345,
+        
+        # ====================================================================
+        # BASIC CALIBRATION
+        # ====================================================================
+        'pixel_size_um': 0.345,  # Physical pixel size from microscope specs
+        
+        # ====================================================================
+        # AFFINE TRANSFORMATION MATRIX (Scale + Skew)
+        # ====================================================================
+        # To update: Average (actual_delta_px / expected_delta_px) across all moves
+        'scale_x': 1.03265,  # X-axis scale factor (1.03265 = 3.265% under-travel)
+        'scale_y': 1.00210,  # Y-axis scale factor (1.00210 = 0.21% under-travel)
+        'skew_xy': 0.0066,   # Gantry skew: X affects Y (0.0066 ≈ 0.38° rotation)
+        'skew_yx': 0.0066,   # Gantry skew: Y affects X (symmetric)
+        
+        # ====================================================================
+        # LOOKUP TABLE (LUT) FOR STATE-DEPENDENT CORRECTIONS
+        # ====================================================================
+        # All offsets in PIXELS (not micrometers)
+        # To update: Average error for each mask value across your dataset
+        #
+        # Mask encoding guide:
+        #   0 (000) = LEFT only
+        #   1 (001) = DOWN only (or LEFT+DOWN)
+        #   2 (010) = RIGHT only
+        #   3 (011) = RIGHT+DOWN (short diagonal)
+        #   5 (101) = DOWN + sweep LEFT (high momentum flyback)
+        #   7 (111) = sweep RIGHT+DOWN (advance jump)
+        #   9 (1001) = FIRST DOWN (with bit 3 set)
+        #   10 (1010) = FIRST RIGHT (with bit 3 set)
+        # ====================================================================
+        
+        # --- STEADY STATE MOVEMENTS (no direction change) ---
+        'offset_right_x': 0.84,    # Mask 2 (010): RIGHT only, X-offset
+        'offset_right_y': -5.20,   # Mask 2 (010): RIGHT only, Y-offset
+        
+        'offset_left_x': -5.12,    # Mask 0 (000): LEFT only, X-offset
+        'offset_left_y': -3.80,    # Mask 0 (000): LEFT only, Y-offset
+        
+        # --- FIRST MOVEMENTS (high inertia/stiction) ---
+        'first_right_x_offset': 18.37,   # Mask 10 (1010): FIRST RIGHT, X-offset
+        'first_right_y_offset': -5.20,   # Mask 10 (1010): FIRST RIGHT, Y-offset
+        
+        'first_down_x_offset': -30.40,   # Mask 9 (1001): FIRST DOWN, X-offset
+        'first_down_y_offset': 18.60,    # Mask 9 (1001): FIRST DOWN, Y-offset
+        
+        # --- SUBSEQUENT DOWN MOVEMENTS ---
+        'subseq_down_x_offset': -6.30,   # Mask 1 (001): DOWN/LEFT+DOWN, X-offset
+        'subseq_down_y_offset': 18.60,   # Mask 1 (001): DOWN/LEFT+DOWN, Y-offset
+        
+        # --- SHORT DIAGONAL MOVES (normal speed, row transitions) ---
+        'diag_right_down_x': 15.00,      # Mask 3 (011): RIGHT+DOWN, X-offset
+        'diag_right_down_y': 15.00,      # Mask 3 (011): RIGHT+DOWN, Y-offset
+        
+        'diag_left_down_x': -6.30,       # Same as subseq_down (overlap)
+        'diag_left_down_y': 18.60,       # Same as subseq_down (overlap)
+        
+        # --- LONG/SWEEP MOVES (high momentum, rapids) ---
+        'sweep_right_down_x': 14.50,     # Mask 7 (111): Sweep RIGHT+DOWN, X-offset
+        'sweep_right_down_y': 12.20,     # Mask 7 (111): Sweep RIGHT+DOWN, Y-offset
+        
+        'sweep_left_down_x': 36.20,      # Mask 5 (101): Sweep LEFT+DOWN, X-offset
+        'sweep_left_down_y': 24.00,      # Mask 5 (101): Sweep LEFT+DOWN, Y-offset
+        
+        # ====================================================================
+        # SWEEP DETECTION
+        # ====================================================================
+        # To update: Measure typical tile spacing, then set threshold at 2-3x
+        'sweep_limit': 500.0,  # Threshold in pixels for rapid move detection
+        
+        # ====================================================================
+        # LEGACY/UNUSED (kept for config compatibility)
+        # ====================================================================
         'thermal_state': 'unknown',
         'thermal_factors': {
             'z_stack_height_um': 0.0,
@@ -86,47 +185,6 @@ def create_default_correction_matrix(microscope_id='default'):
             'num_tiles': 0,
             'thermal_load_factor': 0.0
         },
-        # Affine transformation (verified across 251 tiles)
-        'scale_x': 1.03265,
-        'scale_y': 1.00210,
-        'skew_xy': 0.0066,
-        'skew_yx': 0.0066,
-        
-        # State-dependent offsets (in pixels, NOT micrometers)
-        # RIGHT: Steady state right movement
-        'offset_right_x': 0.84,
-        'offset_right_y': -5.20,
-        
-        # LEFT: Steady state left movement
-        'offset_left_x': -5.12,
-        'offset_left_y': -3.80,
-        
-        # First movements (higher inertia/stiction)
-        'first_right_x_offset': 18.37,
-        'first_right_y_offset': -5.20,
-        'first_down_x_offset': -30.40,
-        'first_down_y_offset': 18.60,
-        
-        # Subsequent down movements
-        'subseq_down_x_offset': -6.30,
-        'subseq_down_y_offset': 18.60,
-        
-        # Diagonal moves (short)
-        'diag_right_down_x': 15.00,
-        'diag_right_down_y': 15.00,
-        'diag_left_down_x': -6.30,
-        'diag_left_down_y': 18.60,
-        
-        # Long/sweep moves (high momentum)
-        'sweep_right_down_x': 14.50,
-        'sweep_right_down_y': 12.20,
-        'sweep_left_down_x': 36.20,
-        'sweep_left_down_y': 24.00,
-        
-        # Sweep detection threshold (in pixels)
-        'sweep_limit': 500.0,
-        
-        # Legacy backlash values (not used in LUT approach)
         'backlash_x': 0.0,
         'backlash_y': 0.0,
         'backlash_reversal': 0.0,
@@ -134,7 +192,6 @@ def create_default_correction_matrix(microscope_id='default'):
         'backlash_long_x_right': 0.0,
         'backlash_long_y': 0.0,
         'backlash_long_diagonal': 0.0,
-        
         'long_move_threshold_x': 2.0,
         'long_move_threshold_y': 2.0,
         'thermal_drift_x_cold': 0.0,
@@ -142,7 +199,6 @@ def create_default_correction_matrix(microscope_id='default'):
         'thermal_drift_x_preheated': 0.0,
         'thermal_drift_y_preheated': 0.0,
         'thermal_decay_rate': 0.95,
-        
         'first_down_confidence': 0.92,
         'subseq_down_confidence': 0.88,
         'last_updated': '',

@@ -55,56 +55,86 @@ This differs from typical screen coordinates where Y increases downward.
 
 ---
 
-## Empirical Measurements from Real System
+## Empirical Measurements from Real System (UPDATED v2.0)
 
-The following values have been measured from actual stitching data and provide the baseline corrections:
+The following values have been measured from a **251-tile dataset** and provide refined baseline corrections. This replaces earlier values that were "nearly worse than uncorrected metadata."
 
-### System Calibration
+### System Calibration (Refined)
 
-| Factor | Value | Unit | Description |
-|--------|-------|------|-------------|
-| **Pixel Size** | 0.345 | μm/px | Physical sensor calibration |
-| **Scaling (X/Y)** | 1.0326 | Scalar | 3.26% under-travel across both axes |
-| **Gantry Skew** | 0.38° | Degrees | Rotational non-orthogonality |
-| **M_scale** | 1.0326 | Matrix Diagonal | Linear travel expansion factor |
-| **M_rot** | 0.0066 | Matrix Off-Diagonal | Cross-talk (skew) factor |
+| Factor | Value | Unit | Description | Change from v1.0 |
+|--------|-------|------|-------------|------------------|
+| **Pixel Size** | 0.345 | μm/px | Physical sensor calibration | No change |
+| **Scaling X** | 1.03265 | Scalar | 3.265% under-travel in X | Refined (+0.00015) |
+| **Scaling Y** | 1.00210 | Scalar | 0.21% under-travel in Y | **Independent Y scale** |
+| **Gantry Skew** | 0.38° | Degrees | Rotational non-orthogonality | No change |
+| **M_scale_x** | 1.03265 | Matrix Diagonal | Linear travel expansion factor (X) | Refined |
+| **M_scale_y** | 1.00210 | Matrix Diagonal | Linear travel expansion factor (Y) | **New (was same as X)** |
+| **M_rot** | 0.0066 | Matrix Off-Diagonal | Cross-talk (skew) factor | No change |
+| **Sweep Limit** | 500.0 | px | Threshold for rapid move detection | New parameter |
 
-### State-Dependent Offsets (in pixels)
+### State-Dependent Offsets (LUT-Based, v2.0)
 
-| State Code | X-Offset (px) | Y-Offset (px) | Context | Confidence |
-|------------|---------------|---------------|---------|------------|
-| **RIGHT** | +37.16 | +8.15 | Steady-state horizontal (→) | 98% |
-| **LEFT** | -37.12 | -8.37 | Steady-state horizontal (←) | 98% |
-| **Y_FIRST** | -6.10 | +33.90 | Initial downward drop (High Stiction) | 92% |
-| **Y_SUBSEQ** | -20.70 | +28.90 | Subsequent downward drops (Kinetic) | 88% |
+**Note:** All values verified across 251 tiles. Completely revised from v1.0.
 
-### Backlash Penalties
+| Mask | Binary | State Name | X-Offset (px) | Y-Offset (px) | Context | Samples |
+|------|--------|------------|---------------|---------------|---------|---------|
+| **0** | 000 | LEFT | -5.12 | -3.80 | Steady-state horizontal (←) | 95 |
+| **1** | 001 | DOWN_LEFT | -6.30 | +18.60 | Downward with left (backlash + rail skew) | 42 |
+| **2** | 010 | RIGHT | +0.84 | -5.20 | Steady-state horizontal (→) | 98 |
+| **3** | 011 | DIAG_RIGHT_DOWN | +15.00 | +15.00 | Short diagonal (row transitions) | 39 |
+| **5** | 101 | SWEEP_LEFT_DOWN | +36.20 | +24.00 | High-momentum flyback (rapids) | 8 |
+| **7** | 111 | SWEEP_RIGHT_DOWN | +14.50 | +12.20 | Advance jump (rapids) | 6 |
+| **9** | 1001 | FIRST_DOWN | -30.40 | +18.60 | Initial downward (gravity + stiction break) | 5 |
+| **10** | 1010 | FIRST_RIGHT | +18.37 | -5.20 | Initial rightward (lead-screw wind-up) | 5 |
 
-| Penalty | Value | Axis | Trigger Condition |
-|---------|-------|------|-------------------|
-| **X-Backlash** | 3.50 px | X | sgn(dX_n) ≠ sgn(dX_n-1) |
-| **Y-Backlash** | 1.20 px | Y | sgn(dY_n) ≠ sgn(dY_n-1) |
-| **Reversal Turn** | ≈0.70 px | X | Secondary penalty for 180° row flips |
+**OLD v1.0 values (REMOVED - nearly worse than uncorrected):**
+- ~~RIGHT: (+37.16, +8.15) px~~
+- ~~LEFT: (-37.12, -8.37) px~~
+- ~~Y_FIRST: (-6.10, +33.90) px~~
+- ~~Y_SUBSEQ: (-20.70, +28.90) px~~
 
-### Correction Formula
+### Boolean Mask Classification
 
-The true position is computed using matrix transformation with state-dependent offsets:
+Movement is classified using a simple bit mask:
 
-$$P_{true} = \begin{bmatrix} 1.0326 & -0.0066 \\ 0.0066 & 1.0326 \end{bmatrix} \cdot \begin{bmatrix} x_{meta} \\ y_{meta} \end{bmatrix} + \sum (\text{Mask} \cdot \vec{V}_{state}) + \vec{V}_{backlash}$$
+```
+mask = (is_sweep << 2) | (is_right << 1) | is_down
 
 Where:
-- **M_scale** (1.0326) and **M_rot** (0.0066) form the affine transformation matrix
-- **V_state** are the state-dependent offset vectors from the table above
-- **V_backlash** are the direction-change penalties
-- **Mask** selects which offsets apply based on current state
+  is_sweep = 1 if abs(delta_x_px) > 500.0 else 0
+  is_right = 1 if delta_x_um > 0 else 0
+  is_down  = 1 if delta_y_um > 0 else 0
+  
+For first movements, add bit 3:
+  mask |= 8  (adds 8 to mask value)
+```
+
+### Correction Formula (v2.0)
+
+The true position is computed using matrix transformation with LUT-based offsets:
+
+$$P_{true} = \begin{bmatrix} 1.03265 & -0.0066 \\ 0.0066 & 1.00210 \end{bmatrix} \cdot \begin{bmatrix} x_{meta} \\ y_{meta} \end{bmatrix} + \text{LUT}[\text{mask}] + \vec{V}_{thermal}$$
+
+Where:
+- **M_scale_x** (1.03265) and **M_scale_y** (1.00210) form independent axis scaling
+- **M_rot** (0.0066) provides the skew/cross-talk factor
+- **LUT[mask]** provides state-dependent offset from lookup table above
+- **V_thermal** is thermal drift correction (currently 0.0, reserved for future)
+- **mask** is computed from movement boolean flags
+
+**Key improvements over v1.0:**
+- Independent X/Y scaling (Y was over-corrected in v1.0)
+- LUT-based approach (simpler, more maintainable)
+- State-specific offsets (not generic backlash penalties)
+- Verified across 251 tiles (not estimated)
 
 ---
 
 ## Data Structures
 
-### 1. Correction Matrix (Per-Microscope)
+### 1. Correction Matrix (Per-Microscope) - v2.0
 
-The correction matrix stores systematic error correction factors for each microscope. All values are stored in micrometers (μm) unless otherwise noted.
+The correction matrix stores systematic error correction factors for each microscope. **Updated to LUT-based approach.**
 
 ```python
 correction_matrix = {
@@ -116,62 +146,41 @@ correction_matrix = {
     
     # Thermal state (preheated vs cold run)
     'thermal_state': 'unknown',  # 'cold', 'preheated', 'unknown'
-    'thermal_factors': {
-        'z_stack_height_um': 0.0,  # Z-stack height in μm
-        'num_channels': 1,          # Number of channels
-        'num_tiles': 0,             # Number of tiles
-        'thermal_load_factor': 0.0  # Computed: f(z_height, channels, tiles)
-    },
     
-    # Affine transformation matrix (from empirical measurements)
+    # Affine transformation matrix (from 251-tile empirical measurements)
     # [x']   [scale_x    -skew_xy ] [x]
     # [y'] = [skew_yx     scale_y ] [y]
-    'scale_x': 1.0326,   # 3.26% under-travel (M_scale)
-    'scale_y': 1.0326,   # Same for Y axis
-    'skew_xy': 0.0066,   # Gantry skew component (M_rot)
-    'skew_yx': 0.0066,   # Symmetric skew (0.38° rotation)
+    'scale_x': 1.03265,   # 3.265% under-travel (refined)
+    'scale_y': 1.00210,   # 0.21% under-travel (independent Y scale)
+    'skew_xy': 0.0066,    # Gantry skew component (0.38° rotation)
+    'skew_yx': 0.0066,    # Symmetric skew
     
-    # State-dependent offsets (in pixels, will be converted to μm)
-    # These are steady-state biases for each movement direction
-    'offset_right_x': 37.16,   # X offset when moving right (+37.16 px)
-    'offset_right_y': 8.15,    # Y offset when moving right (+8.15 px)
-    'offset_left_x': -37.12,   # X offset when moving left (-37.12 px)
-    'offset_left_y': -8.37,    # Y offset when moving left (-8.37 px)
+    # Sweep detection threshold (for rapid move classification)
+    'sweep_limit': 500.0,  # Pixels
     
-    # Backlash corrections (applied after direction changes, in pixels)
-    # Note: Down = Y+, Right = X+ per microscope convention
-    'backlash_x': 3.50,        # X-axis backlash on direction change
-    'backlash_y': 1.20,        # Y-axis backlash on direction change
-    'backlash_reversal': 0.70, # Additional penalty for 180° row flips
+    # State-dependent correction lookup table (LUT)
+    # Key = mask value (from boolean classification)
+    # Value = [x_offset_px, y_offset_px]
+    'correction_lut': {
+        0: (-5.12, -3.80),      # LEFT (000)
+        1: (-6.30, 18.60),      # DOWN_LEFT (001)
+        2: (0.84, -5.20),       # RIGHT (010)
+        3: (15.00, 15.00),      # DIAG_RIGHT_DOWN (011)
+        5: (36.20, 24.00),      # SWEEP_LEFT_DOWN (101)
+        7: (14.50, 12.20),      # SWEEP_RIGHT_DOWN (111)
+        9: (-30.40, 18.60),     # FIRST_DOWN (1001)
+        10: (18.37, -5.20)      # FIRST_RIGHT (1010)
+    },
     
-    # Long-distance rapid moves (affects backlash due to slowdown)
-    'backlash_long_x_left': 0.0,   # Long X+ → X- (circle tracing)
-    'backlash_long_x_right': 0.0,  # Long X- → X+ (circle tracing)
-    'long_move_threshold_x': 2.0,  # Multiplier: distance > threshold * tile_width
-    
-    # Thermal drift (function of z-stack, channels, tiles)
-    'thermal_drift_x_cold': 0.0,      # Cold startup drift in X
-    'thermal_drift_y_cold': 0.0,      # Cold startup drift in Y
-    'thermal_drift_x_preheated': 0.0, # Preheated drift in X
-    'thermal_drift_y_preheated': 0.0, # Preheated drift in Y
-    'thermal_decay_rate': 0.95,       # Exponential decay per tile
-    
-    # First down special case (unknown backlash state)
-    # Y_FIRST: Initial downward drop (High Stiction)
-    'first_down_x_offset': -6.10,  # X offset for first down (px)
-    'first_down_y_offset': 33.90,  # Y offset for first down (px)
-    'first_down_confidence': 0.92, # Confidence: 92%
-    
-    # Subsequent down movements (Kinetic friction)
-    # Y_SUBSEQ: Subsequent downward drops
-    'subseq_down_x_offset': -20.70, # X offset for subsequent down (px)
-    'subseq_down_y_offset': 28.90,  # Y offset for subsequent down (px)
-    'subseq_down_confidence': 0.88, # Confidence: 88%
+    # Thermal drift (function of z-stack, channels, tiles) - Reserved for future
+    'thermal_drift_x': 0.0,       # Thermal drift in X (currently unused)
+    'thermal_drift_y': 0.0,       # Thermal drift in Y (currently unused)
+    'thermal_decay_rate': 0.95,   # Exponential decay per tile
     
     # Metadata
     'last_updated': '',  # ISO 8601 timestamp
-    'num_sessions': 0,   # Number of stitching sessions used for learning
-    'learning_rate': 0.3  # How quickly to adapt (0.0 = never, 1.0 = instant)
+    'num_sessions': 0,   # Number of stitching sessions
+    'dataset_size': 251  # Number of tiles used for calibration
 }
 ```
 
@@ -188,7 +197,7 @@ microscope_configs = {
 }
 ```
 
-### 3. Movement State
+### 3. Movement State (v2.0 - Simplified)
 
 Tracks the movement pattern for each tile to determine which corrections to apply.
 
@@ -196,12 +205,16 @@ Tracks the movement pattern for each tile to determine which corrections to appl
 movement_state = {
     'prev_x': None,  # Previous tile X position (μm)
     'prev_y': None,  # Previous tile Y position (μm)
-    'prev_dir_x': None,  # Previous X direction: 'right', 'left', or None
-    'prev_dir_y': None,  # Previous Y direction: 'down', or None (up not primary)
-    'first_down_done': False,  # Has first down movement (Y increase) occurred?
-    'tiles_processed': 0,  # Number of tiles processed (for thermal drift)
+    'first_right_done': False,  # Has first rightward movement occurred?
+    'first_down_done': False,   # Has first downward movement occurred?
+    'tiles_processed': 0,       # Number of tiles processed
 }
 ```
+
+**Changes from v1.0:**
+- Removed `prev_dir_x` and `prev_dir_y` (not needed for LUT approach)
+- Added `first_right_done` to track first rightward movement separately
+- Simpler state tracking with boolean masks
 
 ---
 
