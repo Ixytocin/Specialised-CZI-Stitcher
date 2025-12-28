@@ -1679,16 +1679,10 @@ class UltimateStitcher:
                         
                         log(u"    Weighted error correction: ({:+.1f}, {:+.1f})".format(avg_error_x, avg_error_y))
                         
-                        # Constrained correction: allow larger deviations (observed errors in good tiles reach ±20px)
-                        max_correction = 200.0  # pixels (increased safety limit - real tile errors are ~15-20px)
-                        clamped_x = max(-max_correction, min(max_correction, avg_error_x))
-                        clamped_y = max(-max_correction, min(max_correction, avg_error_y))
-                        
-                        if clamped_x != avg_error_x or clamped_y != avg_error_y:
-                            log(u"    Clamped to: ({:+.1f}, {:+.1f}) [safety limit ±{:.0f}px]".format(clamped_x, clamped_y, max_correction))
-                        
-                        corrected_x = pred_x + clamped_x
-                        corrected_y = pred_y + clamped_y
+                        # NO SAFETY LIMIT: Trust the weighted correction fully
+                        # Having *some* fit from neighbors is always better than (0,0)
+                        corrected_x = pred_x + avg_error_x
+                        corrected_y = pred_y + avg_error_y
                         
                         tile_positions[failed_name]['xy'] = (corrected_x, corrected_y)
                         tile_positions[failed_name]['failed'] = False  # Mark as recovered
