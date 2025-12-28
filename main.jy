@@ -1593,26 +1593,27 @@ class UltimateStitcher:
                 log(u"    Failed: {}, Correlation: {:.3f}".format(failed_info['failed'], failed_info['correlation']))
                 log(u"    Has prediction: {}".format(failed_info['predicted_xy'] is not None))
                 
-                # Find confident neighbors (4-8 connectivity in grid)
+                # Find ALL successful neighbors - NO DISTANCE OR CORRELATION LIMITS
+                # Use inverse distance weighting to naturally prioritize closer/better tiles
                 neighbors = []
                 for cand_name, cand_info in tile_positions.items():
-                    if cand_info['failed'] or cand_info['correlation'] < 0.3:
-                        continue  # Skip unreliable tiles
+                    if cand_info['failed']:
+                        continue  # Only skip tiles that also failed
                     
                     # Calculate grid distance (Manhattan distance if grid positions available)
                     cand_grid = cand_info.get('grid_pos', (0, 0))
                     if failed_grid != (0, 0) and cand_grid != (0, 0):
                         # Use grid-based distance (Manhattan)
                         grid_dist = abs(failed_grid[0] - cand_grid[0]) + abs(failed_grid[1] - cand_grid[1])
-                        if grid_dist <= 2 and grid_dist > 0:  # Adjacent or near-adjacent in grid
+                        if grid_dist > 0:  # Don't use self
                             neighbors.append((cand_name, cand_info, grid_dist))
                     else:
                         # Fallback to index-based distance
                         idx_dist = abs(cand_info['index'] - failed_idx)
-                        if idx_dist <= 3 and idx_dist > 0:  # Wider search when no grid info
-                            neighbors.append((cand_name, cand_info, max(idx_dist / 2.0, 1.0)))  # Scale down index distance
+                        if idx_dist > 0:  # Don't use self
+                            neighbors.append((cand_name, cand_info, max(idx_dist / 2.0, 1.0)))
                 
-                log(u"    Found {} confident neighbors (R>0.3)".format(len(neighbors)))
+                log(u"    Found {} neighbors (all successful tiles, no filters)".format(len(neighbors)))
                 
                 if len(neighbors) == 0:
                     log(u"    [NO NEIGHBORS] Cannot apply weighted correction")
@@ -1687,9 +1688,9 @@ class UltimateStitcher:
                         tile_positions[failed_name]['xy'] = (corrected_x, corrected_y)
                         tile_positions[failed_name]['failed'] = False  # Mark as recovered
                         
-                        # Calculate confidence
+                        # Calculate confidence - NO ARTIFICIAL REDUCTION
                         avg_correlation = sum(n[1]['correlation'] for n in neighbors) / len(neighbors)
-                        confidence = avg_correlation * 0.75  # Reduce confidence for fallback
+                        confidence = avg_correlation  # Trust the neighbor correlations fully
                         
                         log(u"    [SUCCESS] Final position: ({:.1f}, {:.1f}) [confidence: {:.2f}]".format(
                             corrected_x, corrected_y, confidence))
