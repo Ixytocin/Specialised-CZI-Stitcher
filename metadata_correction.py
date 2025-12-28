@@ -174,7 +174,9 @@ def create_default_correction_matrix(microscope_id='default'):
         # SWEEP DETECTION
         # ====================================================================
         # To update: Measure typical tile spacing, then set threshold at 2-3x
-        'sweep_limit': 500.0,  # Threshold in pixels for rapid move detection
+        # Normal tile spacing is ~1094 pixels (377μm / 0.345μm)
+        # Set threshold high enough to avoid classifying normal moves as sweeps
+        'sweep_limit': 2000.0,  # Threshold in pixels for rapid move detection (2× normal spacing)
         
         # ====================================================================
         # LEGACY/UNUSED (kept for config compatibility)
@@ -254,7 +256,10 @@ def select_thermal_drift(correction_matrix, thermal_load_factor):
 
 def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_height_um, correction_matrix):
     """
-    Classify movement type for current tile using LUT-based approach
+    Classify movement type for current tile
+    
+    Normal cases: right, left, down, right_down, left_down
+    Special case: sweep (when movement > sweep_limit threshold)
     
     Returns tuple: (state_code, state_name, mask)
     Mask encoding: (is_sweep << 2) | (is_right << 1) | is_down
@@ -273,10 +278,13 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
     delta_y_px = delta_y / px_um
     
     # Classify movement direction (use small threshold in micrometers)
-    # Typical tile movements are 377+ microns, so 0.5 um threshold is sufficient
+    # Normal tile spacing is ~377 microns (1094 pixels), so 0.5 um threshold is sufficient
     is_right = 1 if delta_x > 0.5 else 0
     is_left = 1 if delta_x < -0.5 else 0
     is_down = 1 if delta_y > 0.5 else 0
+    
+    # Sweep detection: only for movements MUCH larger than normal tile spacing
+    # Normal tile spacing = ~1094 pixels, so sweep_limit should be 2000+ pixels
     is_sweep = 1 if abs(delta_x_px) > correction_matrix['sweep_limit'] else 0
     
     # Build basic mask: (is_sweep << 2) | (is_right << 1) | is_down
@@ -284,48 +292,50 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
     mask = (is_sweep << 2) | (is_right << 1) | is_down
     
     # Check for first-time axis activation (inertia/stiction boost)
+    # This adds bit 3 (mask |= 8) for first movements
     is_first_move = False
-    if not movement_state['first_right_done'] and is_right and not is_down:
-        mask |= 8  # Set bit 3 for first right
+    if not movement_state['first_right_done'] and is_right and not is_down and not is_sweep:
+        mask |= 8  # Set bit 3 for first right (normal, not sweep)
         is_first_move = True
         movement_state['first_right_done'] = True
-    elif not movement_state['first_down_done'] and is_down:
-        mask |= 8  # Set bit 3 for first down
+    elif not movement_state['first_down_done'] and is_down and not is_sweep:
+        mask |= 8  # Set bit 3 for first down (normal, not sweep)
         is_first_move = True
         movement_state['first_down_done'] = True
     
     # Generate state code and name based on mask
-    # Mask values:
-    #   0 (000) = LEFT only (no down, no sweep)
-    #   1 (001) = DOWN only or LEFT+DOWN (no sweep)
-    #   2 (010) = RIGHT only (no down, no sweep)
-    #   3 (011) = RIGHT+DOWN (short diagonal, no sweep)
-    #   4 (100) = sweep LEFT only (no down)
-    #   5 (101) = sweep LEFT+DOWN (high-momentum flyback)
-    #   6 (110) = sweep RIGHT only (no down)
-    #   7 (111) = sweep RIGHT+DOWN (advance jump)
+    # Normal cases (is_sweep = 0):
+    #   0 (000) = LEFT only
+    #   1 (001) = DOWN or LEFT+DOWN
+    #   2 (010) = RIGHT only
+    #   3 (011) = RIGHT+DOWN (diagonal)
     #   9 (1001) = FIRST DOWN (with bit 3)
     #   10 (1010) = FIRST RIGHT (with bit 3)
+    # Special sweep cases (is_sweep = 1):
+    #   4 (100) = sweep LEFT only
+    #   5 (101) = sweep LEFT+DOWN
+    #   6 (110) = sweep RIGHT only
+    #   7 (111) = sweep RIGHT+DOWN
     
-    if mask == 0:  # 000: Left steady state
+    if mask == 0:  # 000: Left steady state (normal)
         return 'LEFT', 'left', mask
-    elif mask == 1:  # 001: Down / Left-Down
+    elif mask == 1:  # 001: Down / Left-Down (normal)
         return 'DOWN_LEFT', 'down_left', mask
-    elif mask == 2:  # 010: Right steady state
+    elif mask == 2:  # 010: Right steady state (normal)
         return 'RIGHT', 'right', mask
-    elif mask == 3:  # 011: Right-Down (short diagonal)
-        return 'DIAG_RIGHT_DOWN', 'diag_right_down', mask
-    elif mask == 4:  # 100: Sweep Left (no down)
+    elif mask == 3:  # 011: Right-Down diagonal (normal)
+        return 'DIAG_RIGHT_DOWN', 'right_down', mask
+    elif mask == 4:  # 100: Sweep Left (special)
         return 'SWEEP_LEFT', 'sweep_left', mask
-    elif mask == 5:  # 101: Sweep Left-Down (high-momentum flyback)
+    elif mask == 5:  # 101: Sweep Left-Down (special)
         return 'SWEEP_LEFT_DOWN', 'sweep_left_down', mask
-    elif mask == 6:  # 110: Sweep Right (no down)
+    elif mask == 6:  # 110: Sweep Right (special)
         return 'SWEEP_RIGHT', 'sweep_right', mask
-    elif mask == 7:  # 111: Sweep Right-Down (advance jump)
+    elif mask == 7:  # 111: Sweep Right-Down (special)
         return 'SWEEP_RIGHT_DOWN', 'sweep_right_down', mask
-    elif mask == 9:  # 1001: First Down (stiction break)
+    elif mask == 9:  # 1001: First Down (stiction break, normal)
         return 'FIRST_DOWN', 'first_down', mask
-    elif mask == 10:  # 1010: First Right (lead-screw wind-up)
+    elif mask == 10:  # 1010: First Right (lead-screw wind-up, normal)
         return 'FIRST_RIGHT', 'first_right', mask
     else:
         # Fallback for unexpected states
@@ -372,18 +382,26 @@ def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, 
     offset_y_px = 0.0
     
     # LUT-based correction selection
+    # Normal cases: right, left, down, right_down, left_down
     if state_code == 'LEFT':  # mask == 0
         offset_x_px = correction_matrix['offset_left_x']
         offset_y_px = correction_matrix['offset_left_y']
-    elif state_code == 'DOWN_LEFT':  # mask == 1
-        offset_x_px = correction_matrix['diag_left_down_x']
-        offset_y_px = correction_matrix['diag_left_down_y']
+    elif state_code == 'DOWN_LEFT':  # mask == 1 (down or left+down)
+        offset_x_px = correction_matrix['subseq_down_x_offset']
+        offset_y_px = correction_matrix['subseq_down_y_offset']
     elif state_code == 'RIGHT':  # mask == 2
         offset_x_px = correction_matrix['offset_right_x']
         offset_y_px = correction_matrix['offset_right_y']
-    elif state_code == 'DIAG_RIGHT_DOWN':  # mask == 3
+    elif state_code == 'DIAG_RIGHT_DOWN':  # mask == 3 (right+down diagonal)
         offset_x_px = correction_matrix['diag_right_down_x']
         offset_y_px = correction_matrix['diag_right_down_y']
+    elif state_code == 'FIRST_DOWN':  # mask == 9 (first down with stiction)
+        offset_x_px = correction_matrix['first_down_x_offset']
+        offset_y_px = correction_matrix['first_down_y_offset']
+    elif state_code == 'FIRST_RIGHT':  # mask == 10 (first right with wind-up)
+        offset_x_px = correction_matrix['first_right_x_offset']
+        offset_y_px = correction_matrix['first_right_y_offset']
+    # Special sweep cases (large movements)
     elif state_code == 'SWEEP_LEFT':  # mask == 4
         # Use LEFT offsets for sweep left (no down component)
         offset_x_px = correction_matrix['offset_left_x']
@@ -398,12 +416,6 @@ def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, 
     elif state_code == 'SWEEP_RIGHT_DOWN':  # mask == 7
         offset_x_px = correction_matrix['sweep_right_down_x']
         offset_y_px = correction_matrix['sweep_right_down_y']
-    elif state_code == 'FIRST_DOWN':  # mask == 9
-        offset_x_px = correction_matrix['first_down_x_offset']
-        offset_y_px = correction_matrix['first_down_y_offset']
-    elif state_code == 'FIRST_RIGHT':  # mask == 10
-        offset_x_px = correction_matrix['first_right_x_offset']
-        offset_y_px = correction_matrix['first_right_y_offset']
     
     # Convert pixel offsets to micrometers
     offset_x_um = offset_x_px * px_um
