@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Metadata Correction Module for CZI Stitcher
 
@@ -271,12 +272,15 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
     delta_x_px = delta_x / px_um
     delta_y_px = delta_y / px_um
     
-    # Classify movement direction
-    is_right = int(delta_x > 0.5)
-    is_down = int(delta_y > 0.5)
-    is_sweep = int(abs(delta_x_px) > correction_matrix['sweep_limit'])
+    # Classify movement direction (use small threshold in micrometers)
+    # Typical tile movements are 377+ microns, so 0.5 um threshold is sufficient
+    is_right = 1 if delta_x > 0.5 else 0
+    is_left = 1 if delta_x < -0.5 else 0
+    is_down = 1 if delta_y > 0.5 else 0
+    is_sweep = 1 if abs(delta_x_px) > correction_matrix['sweep_limit'] else 0
     
-    # Build basic mask
+    # Build basic mask: (is_sweep << 2) | (is_right << 1) | is_down
+    # Note: is_right is 1 for rightward, 0 for leftward/no X movement
     mask = (is_sweep << 2) | (is_right << 1) | is_down
     
     # Check for first-time axis activation (inertia/stiction boost)
@@ -291,6 +295,18 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
         movement_state['first_down_done'] = True
     
     # Generate state code and name based on mask
+    # Mask values:
+    #   0 (000) = LEFT only (no down, no sweep)
+    #   1 (001) = DOWN only or LEFT+DOWN (no sweep)
+    #   2 (010) = RIGHT only (no down, no sweep)
+    #   3 (011) = RIGHT+DOWN (short diagonal, no sweep)
+    #   4 (100) = sweep LEFT only (no down)
+    #   5 (101) = sweep LEFT+DOWN (high-momentum flyback)
+    #   6 (110) = sweep RIGHT only (no down)
+    #   7 (111) = sweep RIGHT+DOWN (advance jump)
+    #   9 (1001) = FIRST DOWN (with bit 3)
+    #   10 (1010) = FIRST RIGHT (with bit 3)
+    
     if mask == 0:  # 000: Left steady state
         return 'LEFT', 'left', mask
     elif mask == 1:  # 001: Down / Left-Down
@@ -299,8 +315,12 @@ def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_
         return 'RIGHT', 'right', mask
     elif mask == 3:  # 011: Right-Down (short diagonal)
         return 'DIAG_RIGHT_DOWN', 'diag_right_down', mask
+    elif mask == 4:  # 100: Sweep Left (no down)
+        return 'SWEEP_LEFT', 'sweep_left', mask
     elif mask == 5:  # 101: Sweep Left-Down (high-momentum flyback)
         return 'SWEEP_LEFT_DOWN', 'sweep_left_down', mask
+    elif mask == 6:  # 110: Sweep Right (no down)
+        return 'SWEEP_RIGHT', 'sweep_right', mask
     elif mask == 7:  # 111: Sweep Right-Down (advance jump)
         return 'SWEEP_RIGHT_DOWN', 'sweep_right_down', mask
     elif mask == 9:  # 1001: First Down (stiction break)
@@ -364,9 +384,17 @@ def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, 
     elif state_code == 'DIAG_RIGHT_DOWN':  # mask == 3
         offset_x_px = correction_matrix['diag_right_down_x']
         offset_y_px = correction_matrix['diag_right_down_y']
+    elif state_code == 'SWEEP_LEFT':  # mask == 4
+        # Use LEFT offsets for sweep left (no down component)
+        offset_x_px = correction_matrix['offset_left_x']
+        offset_y_px = correction_matrix['offset_left_y']
     elif state_code == 'SWEEP_LEFT_DOWN':  # mask == 5
         offset_x_px = correction_matrix['sweep_left_down_x']
         offset_y_px = correction_matrix['sweep_left_down_y']
+    elif state_code == 'SWEEP_RIGHT':  # mask == 6
+        # Use RIGHT offsets for sweep right (no down component)
+        offset_x_px = correction_matrix['offset_right_x']
+        offset_y_px = correction_matrix['offset_right_y']
     elif state_code == 'SWEEP_RIGHT_DOWN':  # mask == 7
         offset_x_px = correction_matrix['sweep_right_down_x']
         offset_y_px = correction_matrix['sweep_right_down_y']
