@@ -1817,7 +1817,7 @@ class UltimateStitcher:
         
         # Convert to hyperstack if needed (DO NOT create CompositeImage here - let apply_channel_luts_to_image do it)
         try:
-            c_cnt, z_cnt = res[0][4][2], res[0][4][3]
+            c_cnt, z_cnt = res[0][5][2], res[0][5][3]
             logd(u"  Expected: {} channels, {} slices (total: {})".format(c_cnt, z_cnt, c_cnt * z_cnt))
             
             if imp.getStackSize() == (c_cnt * z_cnt):
