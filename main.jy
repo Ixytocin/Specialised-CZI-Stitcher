@@ -1557,6 +1557,11 @@ class UltimateStitcher:
         # CRITICAL: Store raw metadata positions as fallback predictions
         # If corrections were applied, x_s/y_s contain corrected values
         # If corrections were NOT applied, x_s/y_s contain raw metadata (still useful for fallback!)
+        logd(u"[DEBUG] Matching tiles to MIP names for predictions...")
+        logd(u"[DEBUG] tiles[] has {} entries, res[] has {} entries, tile_positions has {} entries".format(
+            len(tiles), len(res), len(tile_positions)))
+        
+        predictions_stored = 0
         for t in tiles:
             # Find corresponding MIP name for this tile
             mip_name = None
@@ -1565,14 +1570,26 @@ class UltimateStitcher:
                     mip_name = r[0]
                     break
             
-            if mip_name and mip_name in tile_positions:
-                # ALWAYS store position as prediction (even if raw metadata, better than nothing!)
-                # Convert from micrometers (stage coordinates) to pixels (image coordinates)
-                pred_x = (t['x_s'] - ref_x) / px_um_eff
-                pred_y = (t['y_s'] - ref_y) / px_um_eff
-                tile_positions[mip_name]['predicted_xy'] = (pred_x, pred_y)
-                tile_positions[mip_name]['movement_state'] = t.get('movement_state', 'UNKNOWN')
-                tile_positions[mip_name]['grid_pos'] = (t.get('x_grid', 0), t.get('y_grid', 0))  # Store grid coordinates
+            if not mip_name:
+                logd(u"[DEBUG] Tile idx {} - no matching MIP name found in res[]".format(t['i']))
+                continue
+                
+            if mip_name not in tile_positions:
+                logd(u"[DEBUG] Tile idx {} - MIP name '{}' not found in tile_positions".format(t['i'], mip_name))
+                continue
+            
+            # ALWAYS store position as prediction (even if raw metadata, better than nothing!)
+            # Convert from micrometers (stage coordinates) to pixels (image coordinates)
+            pred_x = (t['x_s'] - ref_x) / px_um_eff
+            pred_y = (t['y_s'] - ref_y) / px_um_eff
+            tile_positions[mip_name]['predicted_xy'] = (pred_x, pred_y)
+            tile_positions[mip_name]['movement_state'] = t.get('movement_state', 'UNKNOWN')
+            tile_positions[mip_name]['grid_pos'] = (t.get('x_grid', 0), t.get('y_grid', 0))  # Store grid coordinates
+            predictions_stored += 1
+            logd(u"[DEBUG] Stored prediction for {} (idx {}): ({:.1f}, {:.1f})".format(
+                mip_name, t['i'], pred_x, pred_y))
+        
+        logd(u"[DEBUG] Predictions stored: {}/{}".format(predictions_stored, len(tiles)))
         
         # Apply neighbor-constrained fallback for failed tiles
         failed_tiles = [name for name, info in tile_positions.items() if info['failed']]
