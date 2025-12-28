@@ -1514,29 +1514,187 @@ class UltimateStitcher:
                 pass
             return None
 
-        with codecs.open(src_c, 'r', encoding='utf-8') as fr, codecs.open(final_conf, 'w', encoding='utf-8') as fw:
-            fw.write(u"dim = 3\n")
-            tile_count = 0
+        # Parse registered configuration to detect failed alignments
+        # Build tile position database with correlation scores and metadata predictions
+        tile_positions = {}  # name -> {'xy': (x, y), 'correlation': R, 'failed': bool, 'predicted_xy': (px, py), 'movement_state': state}
+        tile_count_parsed = 0
+        
+        with codecs.open(src_c, 'r', encoding='utf-8') as fr:
             for line in fr:
                 if ".tif" in line and "(" in line and ")" in line:
                     xy = extract_xy_from_parentheses(line)
                     if xy is None:
-                        logv(u"Could not parse coordinates: {}".format(line.strip()))
                         continue
                     name = line.split(";")[0].strip()
-                    name3d = mip_to_3d.get(name, name)
-                    tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
-                    fw.write(tile_line)
-                    if DEBUG_STITCHING:
-                        logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0)".format(name3d, xy[0], xy[1]))
-                    tile_count += 1
+                    
+                    # Extract correlation score if present (format: "correlation (R)=0.8282859")
+                    correlation = 1.0  # Default: assume success
+                    if "correlation" in line and "=" in line:
+                        try:
+                            corr_part = line[line.index("correlation"):line.index(")", line.index("correlation"))]
+                            corr_val = float(corr_part.split("=")[1].strip())
+                            correlation = corr_val
+                        except:
+                            pass
+                    
+                    # Detect failed alignment: position (0.0, 0.0) indicates alignment failure
+                    # Exception: Tile 0 is reference point and should be at (0, 0)
+                    failed = (abs(xy[0]) < 0.01 and abs(xy[1]) < 0.01) and (tile_count_parsed > 0)
+                    
+                    # Store tile info
+                    tile_positions[name] = {
+                        'xy': xy,
+                        'correlation': correlation,
+                        'failed': failed,
+                        'index': tile_count_parsed,
+                        'predicted_xy': None,  # Will be filled from tiles[] if corrections were applied
+                        'movement_state': None
+                    }
+                    tile_count_parsed += 1
+        
+        # Link metadata predictions from tiles[] array (if corrections were applied)
+        if METADATA_CORRECTION_AVAILABLE and self.correction_matrix and self.correction_matrix.get('enabled', False):
+            for t in tiles:
+                # Find corresponding MIP name for this tile
+                mip_name = None
+                for r in res:
+                    if r[2] == t['i']:  # Match series index
+                        mip_name = r[0]
+                        break
+                
+                if mip_name and mip_name in tile_positions:
+                    # Store predicted position (metadata corrected) in pixels
+                    pred_x = (t['x_s'] - ref_x) / px_um_eff
+                    pred_y = (t['y_s'] - ref_y) / px_um_eff
+                    tile_positions[mip_name]['predicted_xy'] = (pred_x, pred_y)
+                    tile_positions[mip_name]['movement_state'] = t.get('movement_state', 'UNKNOWN')
+        
+        # Apply neighbor-constrained fallback for failed tiles
+        failed_tiles = [name for name, info in tile_positions.items() if info['failed']]
+        
+        if len(failed_tiles) > 0:
+            log(u"")
+            log(u"=== NEIGHBOR-CONSTRAINED FALLBACK ===")
+            log(u"  Detected {} failed tile alignment(s)".format(len(failed_tiles)))
+            log(u"  Applying intelligent position recovery...")
+            
+            for failed_name in failed_tiles:
+                failed_info = tile_positions[failed_name]
+                failed_idx = failed_info['index']
+                
+                # Find confident neighbors (4-8 connectivity in grid)
+                neighbors = []
+                for cand_name, cand_info in tile_positions.items():
+                    if cand_info['failed'] or cand_info['correlation'] < 0.3:
+                        continue  # Skip unreliable tiles
+                    
+                    # Calculate grid distance (approximate - assumes regular grid)
+                    idx_dist = abs(cand_info['index'] - failed_idx)
+                    if idx_dist <= 2 and idx_dist > 0:  # Adjacent or near-adjacent
+                        neighbors.append((cand_name, cand_info, idx_dist))
+                
+                if len(neighbors) == 0:
+                    log(u"  [FALLBACK] Tile {} - No confident neighbors, using pure prediction".format(failed_name))
+                    # Use metadata prediction if available
+                    if failed_info['predicted_xy']:
+                        tile_positions[failed_name]['xy'] = failed_info['predicted_xy']
+                        tile_positions[failed_name]['failed'] = False  # Mark as recovered
+                    continue
+                
+                # Calculate weighted position using inverse distance weighting
+                if failed_info['predicted_xy']:
+                    pred_x, pred_y = failed_info['predicted_xy']
+                    
+                    # Compute weighted error correction from neighbors
+                    total_weight = 0.0
+                    weighted_error_x = 0.0
+                    weighted_error_y = 0.0
+                    
+                    for neigh_name, neigh_info, distance in neighbors:
+                        if not neigh_info['predicted_xy']:
+                            continue  # Skip if no prediction available
+                        
+                        # Calculate error: actual - predicted
+                        error_x = neigh_info['xy'][0] - neigh_info['predicted_xy'][0]
+                        error_y = neigh_info['xy'][1] - neigh_info['predicted_xy'][1]
+                        
+                        # Inverse distance weighting: w = (1/d²) * correlation
+                        weight = (1.0 / (distance * distance)) * neigh_info['correlation']
+                        
+                        # Movement-specific filtering: only use errors from similar move types
+                        if failed_info['movement_state'] and neigh_info['movement_state']:
+                            # Check if movements are compatible
+                            failed_move = failed_info['movement_state']
+                            neigh_move = neigh_info['movement_state']
+                            
+                            # Only apply full weight if movements match direction
+                            if ('RIGHT' in failed_move and 'RIGHT' not in neigh_move) or \
+                               ('LEFT' in failed_move and 'LEFT' not in neigh_move):
+                                weight *= 0.3  # Reduce weight for mismatched X direction
+                            
+                            if ('DOWN' in failed_move and 'DOWN' not in neigh_move):
+                                weight *= 0.3  # Reduce weight for mismatched Y direction
+                        
+                        weighted_error_x += weight * error_x
+                        weighted_error_y += weight * error_y
+                        total_weight += weight
+                    
+                    # Apply weighted correction
+                    if total_weight > 0:
+                        avg_error_x = weighted_error_x / total_weight
+                        avg_error_y = weighted_error_y / total_weight
+                        
+                        # Constrained correction: don't deviate too much from prediction
+                        max_correction = 50.0  # pixels (safety limit)
+                        avg_error_x = max(-max_correction, min(max_correction, avg_error_x))
+                        avg_error_y = max(-max_correction, min(max_correction, avg_error_y))
+                        
+                        corrected_x = pred_x + avg_error_x
+                        corrected_y = pred_y + avg_error_y
+                        
+                        tile_positions[failed_name]['xy'] = (corrected_x, corrected_y)
+                        tile_positions[failed_name]['failed'] = False  # Mark as recovered
+                        
+                        # Calculate confidence
+                        avg_correlation = sum(n[1]['correlation'] for n in neighbors) / len(neighbors)
+                        confidence = avg_correlation * 0.75  # Reduce confidence for fallback
+                        
+                        log(u"  [FALLBACK] Tile {} (idx {})".format(failed_name, failed_idx))
+                        log(u"    Neighbors: {} tiles (avg R={:.2f})".format(len(neighbors), avg_correlation))
+                        log(u"    Movement: {}".format(failed_info['movement_state']))
+                        log(u"    Predicted: ({:.1f}, {:.1f})".format(pred_x, pred_y))
+                        log(u"    Correction: ({:+.1f}, {:+.1f})".format(avg_error_x, avg_error_y))
+                        log(u"    Final: ({:.1f}, {:.1f}) [confidence: {:.2f}]".format(corrected_x, corrected_y, confidence))
+                    else:
+                        # Fallback to pure prediction
+                        tile_positions[failed_name]['xy'] = failed_info['predicted_xy']
+                        tile_positions[failed_name]['failed'] = False
+                        log(u"  [FALLBACK] Tile {} - Using pure prediction (no weighted neighbors)".format(failed_name))
                 else:
-                    if line.strip().lower().startswith("dim"):
-                        continue
-                    fw.write(line)
+                    log(u"  [FALLBACK] Tile {} - No prediction available, keeping (0,0)".format(failed_name))
+            
+            log(u"")
+        
+        # Write 3D configuration with corrected positions
+        with codecs.open(final_conf, 'w', encoding='utf-8') as fw:
+            fw.write(u"dim = 3\n")
+            tile_count = 0
+            for name in sorted(tile_positions.keys(), key=lambda n: tile_positions[n]['index']):
+                info = tile_positions[name]
+                name3d = mip_to_3d.get(name, name)
+                xy = info['xy']
+                tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
+                fw.write(tile_line)
+                if DEBUG_STITCHING:
+                    status = "[RECOVERED]" if (name in failed_tiles and not info['failed']) else ""
+                    logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0) {}".format(name3d, xy[0], xy[1], status))
+                tile_count += 1
         
         if DEBUG_STITCHING:
+            recovered_count = len([n for n in failed_tiles if not tile_positions[n]['failed']])
             log(u"  Wrote {} tiles to 3D configuration".format(tile_count))
+            if recovered_count > 0:
+                log(u"  Recovered {} failed alignment(s) using neighbor constraints".format(recovered_count))
             log(u"  3D config file: {}".format(final_conf))
 
         # Step 3: Stitch 3D stacks using transferred registration
