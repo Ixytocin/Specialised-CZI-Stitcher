@@ -1,6 +1,22 @@
 # SPECIALISED CZI STITCHER v37.5 - UNIFIED WORKING VERSION
 # Consolidated from all working versions to prevent regression
 #
+# ============================================================================
+# FILE PLACEMENT: IMPORTANT!
+# ============================================================================
+# This script requires metadata_correction.py to be in the SAME DIRECTORY
+#
+# Correct placement:
+#   /your/scripts/folder/main.jy                    <-- This file
+#   /your/scripts/folder/metadata_correction.py     <-- Required module
+#
+# When you run this in Fiji, check the log window for:
+#   SUCCESS: "[DEBUG] Metadata correction module loaded successfully"
+#   ERROR:   "[DEBUG] Metadata correction module not available: ..."
+#
+# If you see the error, metadata_correction.py is not in the same folder!
+# ============================================================================
+#
 # PROVEN WORKING COMPONENTS EXTRACTED FROM:
 # - v31.16h: Dual 2D/3D stitching workflow, thread pool execution
 # - v34.8:   Bug fixes for UTF-8, booleans, pixel size correction
@@ -15,14 +31,22 @@
 # - ensure_unicode() for all external inputs
 # - .format() instead of + for string concatenation
 # - codecs.open() for file I/O with UTF-8 encoding
+#
+# METADATA CORRECTION SYSTEM:
+# - Adaptive correction for stage positioning errors (backlash, scale, skew)
+# - 12-state machine with empirical measurements
+# - Per-microscope configuration with thermal state support
+# - Enable via checkbox in parameter dialog (disabled by default)
+# - See METADATA_CORRECTION_README.md for detailed documentation
 
 import os, time, shutil, math, re, sys, json, codecs
 from java.lang import Runtime, Thread, System
-from java.awt import Color
+from java.awt import Color, BasicStroke
 from java.util.concurrent import Executors, Callable
 from ij import IJ, ImagePlus, WindowManager, CompositeImage
 from ij.plugin import ZProjector, HyperStackConverter, ChannelSplitter, RGBStackMerge, Duplicator
 from ij.process import LUT
+from ij.gui import Roi, Overlay, TextRoi
 from loci.plugins import BF
 from loci.plugins.in import ImporterOptions, ImportProcess
 from java.io import File
@@ -350,34 +374,8 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
         logd(u"OME-XML unicode conversion failed: {}".format(e))
         ome_xml = ome_xml
     
-    # Priority 1: OME-XML <Pixels> tag (most reliable for Zeiss)
-    logd(u"Attempting method 1: OME-XML <Pixels> tag")
-    try:
-        if ome_xml:
-            px_raw, unit = _parse_pixels_physicalsize_from_xml(ome_xml)
-            if px_raw is not None:
-                logd(u"  Parsed raw value: {}".format(px_raw))
-                try:
-                    # Unit string may contain micro symbol which causes encoding issues
-                    unit_safe = ensure_unicode(unit) if unit else u""
-                    logd(u"  Unit (converted): {}".format(unit_safe))
-                except:
-                    logd(u"  Unit conversion issue, using unit as-is")
-                    unit_safe = unit
-                
-                px_um = _unit_to_um(px_raw, unit_safe)
-                log(u"Pixel size from OME-XML <Pixels>: {} um (TRUSTED VALUE)".format(px_um))
-                logd(u"=== PIXEL SIZE EXTRACTION END (success, method 1) ===")
-                return float(px_um)
-            else:
-                logd(u"  No PhysicalSizeX found in OME-XML")
-        else:
-            logd(u"  OME-XML is None or empty")
-    except Exception as e:
-        logd(u"  Method 1 exception: {}".format(e))
-    
-    # Priority 2: OME metadata object
-    logd(u"Attempting method 2: OME metadata object")
+    # Priority: OME metadata object (method 1 removed - always failed with Unicode errors)
+    logd(u"Attempting OME metadata object extraction")
     try:
         if omeMeta is not None:
             logd(u"  OMEMeta object is available")
@@ -394,11 +392,11 @@ def get_pixel_size_um_strict(ome_xml, omeMeta, reader, gMeta):
                 if abs(v) < 1e-3:
                     v_um = v * 1e6
                     log(u"Pixel size from OME metadata (meters->um): {} um".format(v_um))
-                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success) ===")
                     return float(v_um)
                 else:
                     log(u"Pixel size from OME metadata (assumed um): {} um".format(v))
-                    logd(u"=== PIXEL SIZE EXTRACTION END (success, method 2) ===")
+                    logd(u"=== PIXEL SIZE EXTRACTION END (success) ===")
                     return float(v)
             else:
                 logd(u"  Query returned None")
@@ -797,7 +795,98 @@ def apply_channel_luts_to_image(imp, ome_xml, gMeta):
             return imp
 
 # ==============================================================================
-# PART 4: STITCHING SUPPORT (from v31.16h)
+# PART 4: METADATA CORRECTION SYSTEM (empirical measurements)
+# ==============================================================================
+
+# Import correction functions from separate module to avoid file size issues
+try:
+    import sys
+    import os
+    
+    # Log where we're looking for the module (ALWAYS VISIBLE)
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+    log(u"")
+    log(u"Checking for metadata_correction.py in: {}".format(script_dir))
+    module_path = os.path.join(script_dir, 'metadata_correction.py')
+    log(u"metadata_correction.py exists: {}".format(os.path.exists(module_path)))
+    
+    # Add script directory to sys.path if not already there
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+        log(u"Added {} to sys.path".format(script_dir))
+    
+    log(u"Attempting to import metadata_correction module...")
+    import metadata_correction as mc
+    create_default_correction_matrix = mc.create_default_correction_matrix
+    create_movement_state = mc.create_movement_state
+    apply_metadata_corrections = mc.apply_metadata_corrections
+    visualize_grid_layout = mc.visualize_grid_layout
+    METADATA_CORRECTION_AVAILABLE = True
+    log(u"[SUCCESS] Metadata correction module loaded successfully")
+    log(u"")
+except Exception as e:
+    import traceback
+    log(u"")
+    log(u"[ERROR] Metadata correction module not available: {}".format(e))
+    log(u"[ERROR] Full traceback:")
+    for line in traceback.format_exc().split('\n'):
+        log(u"  {}".format(line))
+    log(u"[WARNING] Using stub functions - corrections will NOT be applied")
+    log(u"")
+    METADATA_CORRECTION_AVAILABLE = False
+    
+    # Fallback: create stub functions with correct signatures
+    def create_default_correction_matrix(microscope_id='default'):
+        return {'enabled': False, 'microscope_id': microscope_id}
+    
+    def create_movement_state():
+        return {'prev_x': None, 'prev_y': None, 'prev_dir_x': None, 'prev_dir_y': None, 
+                'prev_state': None, 'tiles_processed': 0, 'first_y_negative_done': False}
+    
+    def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, tile_height_um,
+                                    correction_matrix, movement_state):
+        return tile_x_um, tile_y_um, 'disabled'
+    
+    def visualize_grid_layout(tiles, grid_width, grid_height):
+        return []
+
+
+def _load_correction_matrix(cfg, microscope_id='default'):
+    """Load correction matrix from config file"""
+    default_matrix = create_default_correction_matrix(microscope_id)
+    
+    if 'metadata_correction' not in cfg:
+        logd(u"No metadata_correction in config, using defaults")
+        return default_matrix
+    
+    mc = cfg['metadata_correction']
+    if microscope_id not in mc:
+        logd(u"No correction matrix for microscope '{}', using defaults".format(microscope_id))
+        return default_matrix
+    
+    loaded = mc[microscope_id]
+    for key in default_matrix:
+        if key not in loaded:
+            loaded[key] = default_matrix[key]
+    
+    logd(u"Loaded correction matrix for microscope: {}".format(microscope_id))
+    return loaded
+
+
+def _save_correction_matrix(cfg, correction_matrix):
+    """Save correction matrix to config file"""
+    microscope_id = correction_matrix.get('microscope_id', 'default')
+    
+    if 'metadata_correction' not in cfg:
+        cfg['metadata_correction'] = {}
+    
+    cfg['metadata_correction'][microscope_id] = correction_matrix
+    
+    logd(u"Saved correction matrix for microscope: {}".format(microscope_id))
+    _save_config(cfg)
+
+# ==============================================================================
+# PART 5: STITCHING SUPPORT (from v31.16h)
 # ==============================================================================
 
 def suggest_stitcher_thresholds(tile_width_px, tile_height_px, avg_disp_px):
@@ -920,7 +1009,7 @@ class TileWorker(Callable):
             except: 
                 pass
             
-            return (nm, nr, self.x, self.y, d)
+            return (nm, nr, self.i, self.x, self.y, d)
         except Exception as e:
             log(u"TileWorker series {} failed: {}".format(self.i, e))
             return None
@@ -993,7 +1082,7 @@ class UltimateStitcher:
     """Main stitcher class implementing proven 2D->3D workflow (v31.16h)"""
     
     def __init__(self, src, dst, t_limit, temp_root, fusion_method, rb_radius, reg_thresh, disp_thresh, 
-                 do_show, do_save, do_clean, auto_adjust, corr_factor):
+                 do_show, do_save, do_clean, auto_adjust, corr_factor, correction_matrix):
         self.src = src
         self.dst = dst
         self.t_limit = t_limit
@@ -1007,6 +1096,7 @@ class UltimateStitcher:
         self.do_clean = do_clean
         self.auto_adjust = auto_adjust
         self.corr_factor = corr_factor
+        self.correction_matrix = correction_matrix
 
     def process_file(self, czi_path):
         """Process single CZI file with proven 2D->3D stitching workflow"""
@@ -1107,11 +1197,128 @@ class UltimateStitcher:
             if LOG_TILE_POS:
                 log(u"Series {} -> raw pos ({}, {}) via {}".format(s, x_s, y_s, m))
 
-        min_x = min(fx) if fx else 0.0
-        min_y = min(fy) if fy else 0.0
+        # Apply metadata corrections if enabled
+        if METADATA_CORRECTION_AVAILABLE and self.correction_matrix and self.correction_matrix.get('enabled', False):
+            try:
+                log(u"")
+                log(u"=== APPLYING METADATA CORRECTIONS ===")
+                log(u"  Microscope: {}".format(self.correction_matrix.get('microscope_id', 'default')))
+                log(u"  Thermal state: {}".format(self.correction_matrix.get('thermal_state', 'unknown')))
+                
+                # Estimate grid dimensions from tile positions
+                # Calculate typical spacing between tiles to infer grid structure
+                try:
+                    if len(tiles) > 1:
+                        # Get all positions
+                        positions = [(t['x_s'], t['y_s']) for t in tiles]
+                        
+                        # Find unique X and Y coordinates (with small tolerance for rounding)
+                        tolerance = px_um_eff * 10  # 10 pixels tolerance
+                        unique_x = []
+                        unique_y = []
+                        
+                        for x, y in positions:
+                            # Check if this X is new (not close to any existing)
+                            if not any(abs(x - ux) < tolerance for ux in unique_x):
+                                unique_x.append(x)
+                            # Check if this Y is new
+                            if not any(abs(y - uy) < tolerance for uy in unique_y):
+                                unique_y.append(y)
+                        
+                        grid_width = len(unique_x)
+                        grid_height = len(unique_y)
+                        
+                        logd(u"")
+                        logd(u"  Grid dimensions: {} x {} (estimated from {} tiles)".format(grid_width, grid_height, len(tiles)))
+                        logd(u"")
+                except Exception as e:
+                    logd(u"  Grid dimension estimation failed: {}".format(e))
+                    grid_width = 1
+                    grid_height = len(tiles)
+                
+                # Apply corrections to each tile
+                movement_state = create_movement_state()
+                corrected_tiles = []
+                state_sequence = []
+                
+                for idx, t in enumerate(tiles):
+                    # Get tile dimensions (use reader to get actual dimensions)
+                    try:
+                        reader.setSeries(t['i'])
+                        tile_width_px = reader.getSizeX()
+                        tile_height_px = reader.getSizeY()
+                        num_channels = reader.getSizeC()
+                        num_z = reader.getSizeZ()
+                    except:
+                        tile_width_px = 1216  # Default fallback
+                        tile_height_px = 1028
+                        num_channels = 1
+                        num_z = 1
+                    
+                    # Convert tile dimensions from pixels to micrometers
+                    tile_width_um = tile_width_px * px_um_eff
+                    tile_height_um = tile_height_px * px_um_eff
+                    
+                    # Apply corrections (returns tuple: x_corrected, y_corrected, state_name)
+                    x_corrected, y_corrected, state_name = apply_metadata_corrections(
+                        t['x_s'], t['y_s'], 
+                        idx,
+                        tile_width_um, tile_height_um,
+                        self.correction_matrix,
+                        movement_state
+                    )
+                    
+                    # Update tile with corrected position
+                    t['x_s_orig'] = t['x_s']
+                    t['y_s_orig'] = t['y_s']
+                    t['x_s'] = x_corrected
+                    t['y_s'] = y_corrected
+                    t['correction_applied'] = True
+                    t['movement_state'] = state_name
+                    
+                    state_sequence.append(state_name)
+                    corrected_tiles.append(t)
+                    
+                    if LOG_TILE_POS:
+                        dx = t['x_s'] - t['x_s_orig']
+                        dy = t['y_s'] - t['y_s_orig']
+                        log(u"Tile {}: ({:.2f}, {:.2f}) -> ({:.2f}, {:.2f}) [delta: ({:.2f}, {:.2f}) um] state: {}".format(
+                            idx, t['x_s_orig'], t['y_s_orig'], t['x_s'], t['y_s'], dx, dy, state_name))
+                
+                # Log state sequence
+                log(u"")
+                log(u"  State Sequence: {}".format(", ".join(state_sequence)))
+                log(u"  Corrections applied to {} tiles".format(len(corrected_tiles)))
+                log(u"")
+                
+                # Update fx, fy with corrected positions
+                fx = [t['x_s'] for t in tiles]
+                fy = [t['y_s'] for t in tiles]
+                
+            except Exception as e:
+                log(u"")
+                log(u"ERROR: Metadata correction failed: {}".format(e))
+                log(u"")
+                import traceback
+                log(u"Full Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    log(u"  {}".format(line))
+                log(u"")
+                log(u"Continuing with UNCORRECTED positions - corrections were NOT applied!")
+                log(u"")
+        else:
+            # Log why corrections were skipped  
+            if not self.correction_matrix or not self.correction_matrix.get('enabled', False):
+                log(u"Metadata correction DISABLED in UI - using raw metadata positions")
+            elif not METADATA_CORRECTION_AVAILABLE:
+                log(u"Metadata correction module NOT AVAILABLE - using raw metadata positions")
+        
+        # Use first tile as reference (all positions relative to tile 0)
+        ref_x = fx[0] if len(fx) > 0 else 0.0
+        ref_y = fy[0] if len(fy) > 0 else 0.0
         for t in tiles:
-            t['x'] = (t['x_s'] - min_x) / px_um_eff
-            t['y'] = (t['y_s'] - min_y) / px_um_eff
+            t['x'] = (t['x_s'] - ref_x) / px_um_eff
+            t['y'] = (t['y_s'] - ref_y) / px_um_eff
         
         xs = [t['x'] for t in tiles]
         ys = [t['y'] for t in tiles]
@@ -1222,10 +1429,10 @@ class UltimateStitcher:
         with codecs.open(conf, 'w', encoding='utf-8') as f:
             f.write(u"dim = 2\n")
             for r in res:
-                tile_line = u"{}; ; ({:.3f}, {:.3f})\n".format(r[0], r[2], r[3])
+                tile_line = u"{}; ; ({:.3f}, {:.3f})\n".format(r[0], r[3], r[4])
                 f.write(tile_line)
                 if DEBUG_STITCHING:
-                    logd(u"    Tile: {} at ({:.1f}, {:.1f}) px".format(r[0], r[2], r[3]))
+                    logd(u"    Tile: {} at ({:.1f}, {:.1f}) px".format(r[0], r[3], r[4]))
         
         if DEBUG_STITCHING:
             log(u"  2D TileConfiguration written")
@@ -1307,29 +1514,241 @@ class UltimateStitcher:
                 pass
             return None
 
-        with codecs.open(src_c, 'r', encoding='utf-8') as fr, codecs.open(final_conf, 'w', encoding='utf-8') as fw:
-            fw.write(u"dim = 3\n")
-            tile_count = 0
+        # Parse registered configuration to detect failed alignments
+        # Build tile position database with correlation scores and metadata predictions
+        tile_positions = {}  # name -> {'xy': (x, y), 'correlation': R, 'failed': bool, 'predicted_xy': (px, py), 'movement_state': state}
+        tile_count_parsed = 0
+        
+        with codecs.open(src_c, 'r', encoding='utf-8') as fr:
             for line in fr:
                 if ".tif" in line and "(" in line and ")" in line:
                     xy = extract_xy_from_parentheses(line)
                     if xy is None:
-                        logv(u"Could not parse coordinates: {}".format(line.strip()))
                         continue
                     name = line.split(";")[0].strip()
-                    name3d = mip_to_3d.get(name, name)
-                    tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
-                    fw.write(tile_line)
-                    if DEBUG_STITCHING:
-                        logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0)".format(name3d, xy[0], xy[1]))
-                    tile_count += 1
+                    
+                    # Extract correlation score if present (format: "correlation (R)=0.8282859")
+                    correlation = 1.0  # Default: assume success
+                    if "correlation" in line and "=" in line:
+                        try:
+                            corr_part = line[line.index("correlation"):line.index(")", line.index("correlation"))]
+                            corr_val = float(corr_part.split("=")[1].strip())
+                            correlation = corr_val
+                        except:
+                            pass
+                    
+                    # Detect failed alignment: position (0.0, 0.0) indicates alignment failure
+                    # Exception: Tile 0 is reference point and should be at (0, 0)
+                    failed = (abs(xy[0]) < 0.01 and abs(xy[1]) < 0.01) and (tile_count_parsed > 0)
+                    
+                    # Store tile info
+                    tile_positions[name] = {
+                        'xy': xy,
+                        'correlation': correlation,
+                        'failed': failed,
+                        'index': tile_count_parsed,
+                        'predicted_xy': None,  # Will be filled from tiles[]
+                        'movement_state': None,
+                        'grid_pos': (0, 0)  # Will be filled from tiles[] if available
+                    }
+                    tile_count_parsed += 1
+        
+        # Link metadata predictions from tiles[] array (always store predictions, needed for fallback)
+        # CRITICAL: Store raw metadata positions as fallback predictions
+        # If corrections were applied, x_s/y_s contain corrected values
+        # If corrections were NOT applied, x_s/y_s contain raw metadata (still useful for fallback!)
+        logd(u"[DEBUG] Matching tiles to MIP names for predictions...")
+        logd(u"[DEBUG] tiles[] has {} entries, res[] has {} entries, tile_positions has {} entries".format(
+            len(tiles), len(res), len(tile_positions)))
+        
+        predictions_stored = 0
+        for t in tiles:
+            # Find corresponding MIP name for this tile
+            mip_name = None
+            for r in res:
+                if r[2] == t['i']:  # Match series index
+                    mip_name = r[0]
+                    break
+            
+            if not mip_name:
+                logd(u"[DEBUG] Tile idx {} - no matching MIP name found in res[]".format(t['i']))
+                continue
+                
+            if mip_name not in tile_positions:
+                logd(u"[DEBUG] Tile idx {} - MIP name '{}' not found in tile_positions".format(t['i'], mip_name))
+                continue
+            
+            # ALWAYS store position as prediction (even if raw metadata, better than nothing!)
+            # Convert from micrometers (stage coordinates) to pixels (image coordinates)
+            pred_x = (t['x_s'] - ref_x) / px_um_eff
+            pred_y = (t['y_s'] - ref_y) / px_um_eff
+            tile_positions[mip_name]['predicted_xy'] = (pred_x, pred_y)
+            tile_positions[mip_name]['movement_state'] = t.get('movement_state', 'UNKNOWN')
+            tile_positions[mip_name]['grid_pos'] = (t.get('x_grid', 0), t.get('y_grid', 0))  # Store grid coordinates
+            predictions_stored += 1
+            logd(u"[DEBUG] Stored prediction for {} (idx {}): ({:.1f}, {:.1f})".format(
+                mip_name, t['i'], pred_x, pred_y))
+        
+        logd(u"[DEBUG] Predictions stored: {}/{}".format(predictions_stored, len(tiles)))
+        
+        # Apply neighbor-constrained fallback for failed tiles
+        failed_tiles = [name for name, info in tile_positions.items() if info['failed']]
+        
+        if len(failed_tiles) > 0:
+            log(u"")
+            log(u"=== NEIGHBOR-CONSTRAINED FALLBACK ===")
+            log(u"  Detected {} failed tile alignment(s)".format(len(failed_tiles)))
+            log(u"  Applying intelligent position recovery...")
+            
+            for failed_name in failed_tiles:
+                failed_info = tile_positions[failed_name]
+                failed_idx = failed_info['index']
+                failed_grid = failed_info.get('grid_pos', (0, 0))
+                
+                log(u"")
+                log(u"  [ANALYZING] Tile {} (idx {}, grid pos {})".format(failed_name, failed_idx, failed_grid))
+                log(u"    Failed: {}, Correlation: {:.3f}".format(failed_info['failed'], failed_info['correlation']))
+                log(u"    Has prediction: {}".format(failed_info['predicted_xy'] is not None))
+                
+                # Find confident neighbors (4-8 connectivity in grid)
+                # Apply correlation filter (R>0.3) to avoid trusting noise matches
+                neighbors = []
+                for cand_name, cand_info in tile_positions.items():
+                    if cand_info['failed'] or cand_info['correlation'] < 0.3:
+                        continue  # Skip failed tiles and unreliable matches (R<0.3)
+                    
+                    # Calculate grid distance (Manhattan distance if grid positions available)
+                    cand_grid = cand_info.get('grid_pos', (0, 0))
+                    if failed_grid != (0, 0) and cand_grid != (0, 0):
+                        # Use grid-based distance (Manhattan)
+                        grid_dist = abs(failed_grid[0] - cand_grid[0]) + abs(failed_grid[1] - cand_grid[1])
+                        if grid_dist <= 2 and grid_dist > 0:  # Adjacent or near-adjacent in grid
+                            neighbors.append((cand_name, cand_info, grid_dist))
+                    else:
+                        # Fallback to index-based distance
+                        idx_dist = abs(cand_info['index'] - failed_idx)
+                        if idx_dist <= 3 and idx_dist > 0:  # Wider search when no grid info
+                            neighbors.append((cand_name, cand_info, max(idx_dist / 2.0, 1.0)))
+                
+                log(u"    Found {} confident neighbors (R>0.3)".format(len(neighbors)))
+                
+                if len(neighbors) == 0:
+                    log(u"    [NO NEIGHBORS] Cannot apply weighted correction")
+                    # Use metadata prediction if available
+                    if failed_info['predicted_xy']:
+                        tile_positions[failed_name]['xy'] = failed_info['predicted_xy']
+                        tile_positions[failed_name]['failed'] = False  # Mark as recovered
+                        log(u"    [FALLBACK] Using pure metadata prediction: {}".format(failed_info['predicted_xy']))
+                    else:
+                        log(u"    [FAILED] No prediction available - tile remains at (0,0)")
+                    continue
+                
+                # Calculate weighted position using inverse distance weighting
+                if failed_info['predicted_xy']:
+                    pred_x, pred_y = failed_info['predicted_xy']
+                    log(u"    Metadata prediction: ({:.1f}, {:.1f})".format(pred_x, pred_y))
+                    
+                    # Compute weighted error correction from neighbors
+                    total_weight = 0.0
+                    weighted_error_x = 0.0
+                    weighted_error_y = 0.0
+                    
+                    for neigh_name, neigh_info, distance in neighbors:
+                        if not neigh_info['predicted_xy']:
+                            log(u"      Neighbor {} skipped (no prediction)".format(neigh_name))
+                            continue  # Skip if no prediction available
+                        
+                        # Calculate error: actual - predicted
+                        error_x = neigh_info['xy'][0] - neigh_info['predicted_xy'][0]
+                        error_y = neigh_info['xy'][1] - neigh_info['predicted_xy'][1]
+                        
+                        # Inverse distance weighting: w = (1/d²) * correlation
+                        weight = (1.0 / (distance * distance)) * neigh_info['correlation']
+                        
+                        # Movement-specific filtering: use errors from similar move types (more aggressive)
+                        move_compat = 1.0
+                        if failed_info['movement_state'] and neigh_info['movement_state']:
+                            # Check if movements are compatible
+                            failed_move = failed_info['movement_state']
+                            neigh_move = neigh_info['movement_state']
+                            
+                            # Reduced penalty for mismatched movements (was 0.3, now 0.6 = more aggressive)
+                            if ('RIGHT' in failed_move and 'RIGHT' not in neigh_move) or \
+                               ('LEFT' in failed_move and 'LEFT' not in neigh_move):
+                                move_compat *= 0.6  # Less strict penalty for mismatched X direction
+                            
+                            if ('DOWN' in failed_move and 'DOWN' not in neigh_move):
+                                move_compat *= 0.6  # Less strict penalty for mismatched Y direction
+                        
+                        weight *= move_compat
+                        
+                        if DEBUG_STITCHING:
+                            logd(u"      Neighbor {}: error=({:.1f},{:.1f}), dist={:.1f}, R={:.2f}, move_compat={:.2f}, weight={:.4f}".format(
+                                neigh_name, error_x, error_y, distance, neigh_info['correlation'], move_compat, weight))
+                        
+                        weighted_error_x += weight * error_x
+                        weighted_error_y += weight * error_y
+                        total_weight += weight
+                    
+                    # Apply weighted correction
+                    if total_weight > 0:
+                        avg_error_x = weighted_error_x / total_weight
+                        avg_error_y = weighted_error_y / total_weight
+                        
+                        log(u"    Weighted error correction: ({:+.1f}, {:+.1f})".format(avg_error_x, avg_error_y))
+                        
+                        # Apply correction WITHOUT magnitude limits
+                        # Correction is applied to predicted position (not raw metadata)
+                        # Trust weighted neighbors fully - having *some* fit >> no fit at (0,0)
+                        corrected_x = pred_x + avg_error_x
+                        corrected_y = pred_y + avg_error_y
+                        
+                        tile_positions[failed_name]['xy'] = (corrected_x, corrected_y)
+                        tile_positions[failed_name]['failed'] = False  # Mark as recovered
+                        
+                        # Calculate confidence with conservative penalty
+                        avg_correlation = sum(n[1]['correlation'] for n in neighbors) / len(neighbors)
+                        confidence = avg_correlation * 0.75  # Reduce confidence for fallback estimates
+                        
+                        log(u"    [SUCCESS] Final position: ({:.1f}, {:.1f}) [confidence: {:.2f}]".format(
+                            corrected_x, corrected_y, confidence))
+                    else:
+                        # Fallback to pure prediction (all neighbors had no predictions)
+                        tile_positions[failed_name]['xy'] = failed_info['predicted_xy']
+                        tile_positions[failed_name]['failed'] = False
+                        log(u"    [FALLBACK] No weighted neighbors available, using pure prediction")
                 else:
-                    if line.strip().lower().startswith("dim"):
-                        continue
-                    fw.write(line)
+                    log(u"    [FAILED] No metadata prediction available - tile remains at (0,0)")
+            
+            # Summary
+            recovered_count = sum(1 for name in failed_tiles if not tile_positions[name]['failed'])
+            log(u"")
+            log(u"  FALLBACK SUMMARY:")
+            log(u"    Total failed: {}".format(len(failed_tiles)))
+            log(u"    Recovered: {}".format(recovered_count))
+            log(u"    Still failed: {}".format(len(failed_tiles) - recovered_count))
+            log(u"")
+        
+        # Write 3D configuration with corrected positions
+        with codecs.open(final_conf, 'w', encoding='utf-8') as fw:
+            fw.write(u"dim = 3\n")
+            tile_count = 0
+            for name in sorted(tile_positions.keys(), key=lambda n: tile_positions[n]['index']):
+                info = tile_positions[name]
+                name3d = mip_to_3d.get(name, name)
+                xy = info['xy']
+                tile_line = u"{}; ; ({:.6f}, {:.6f}, 0.0)\n".format(name3d, xy[0], xy[1])
+                fw.write(tile_line)
+                if DEBUG_STITCHING:
+                    status = "[RECOVERED]" if (name in failed_tiles and not info['failed']) else ""
+                    logd(u"    3D Tile: {} at ({:.1f}, {:.1f}, 0.0) {}".format(name3d, xy[0], xy[1], status))
+                tile_count += 1
         
         if DEBUG_STITCHING:
+            recovered_count = len([n for n in failed_tiles if not tile_positions[n]['failed']])
             log(u"  Wrote {} tiles to 3D configuration".format(tile_count))
+            if recovered_count > 0:
+                log(u"  Recovered {} failed alignment(s) using neighbor constraints".format(recovered_count))
             log(u"  3D config file: {}".format(final_conf))
 
         # Step 3: Stitch 3D stacks using transferred registration
@@ -1398,7 +1817,7 @@ class UltimateStitcher:
         
         # Convert to hyperstack if needed (DO NOT create CompositeImage here - let apply_channel_luts_to_image do it)
         try:
-            c_cnt, z_cnt = res[0][4][2], res[0][4][3]
+            c_cnt, z_cnt = res[0][5][2], res[0][5][3]
             logd(u"  Expected: {} channels, {} slices (total: {})".format(c_cnt, z_cnt, c_cnt * z_cnt))
             
             if imp.getStackSize() == (c_cnt * z_cnt):
@@ -1985,6 +2404,12 @@ def main():
         gd.addCheckbox("Cleanup Temp Files", True)
         gd.addCheckbox("Auto-adjust stitching thresholds from metadata", False)
         gd.addNumericField("Pixel size correction factor (default 10)", 10.0, 1)
+        
+        gd.addMessage("=== Metadata Correction (Experimental) ===")
+        gd.addCheckbox("Enable metadata correction", True)
+        gd.addChoice("Microscope", ["default", "zeiss_axio_1", "zeiss_axio_2"], "default")
+        gd.addChoice("Thermal state", ["unknown", "cold", "preheated"], "unknown")
+        
         gd.showDialog()
         
         if gd.wasCanceled():
@@ -2035,6 +2460,16 @@ def main():
         do_clean = (int(gd.getNextBoolean()) == 1)
         auto_adjust = (int(gd.getNextBoolean()) == 1)
         corr_factor = float(gd.getNextNumber())
+        
+        # Metadata correction options
+        enable_correction = (int(gd.getNextBoolean()) == 1)
+        microscope_id = gd.getNextChoice()
+        thermal_state = gd.getNextChoice()
+        
+        # Load correction matrix
+        correction_matrix = _load_correction_matrix(_config, microscope_id)
+        correction_matrix['enabled'] = enable_correction
+        correction_matrix['thermal_state'] = thermal_state
         
         # Set global VERBOSE flag
         global VERBOSE
@@ -2119,7 +2554,7 @@ def main():
     
     stitcher = UltimateStitcher(s_dir, t_dir, t_lim, temp_root, fusion_method, rb_radius, 
                                  reg_thresh, disp_thresh, show_stack, save_stack, 
-                                 do_clean, auto_adjust, corr_factor)
+                                 do_clean, auto_adjust, corr_factor, correction_matrix)
     
     batch_start_time = time.time()
     files_completed = 0

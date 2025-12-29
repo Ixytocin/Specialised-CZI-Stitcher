@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*.log
+test_output/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Config files (user-specific)
+.specialised_czi_stitcher_config.json

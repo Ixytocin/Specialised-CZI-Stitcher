@@ -1,0 +1,467 @@
+# -*- coding: utf-8 -*-
+"""
+Metadata Correction Module for CZI Stitcher
+
+============================================================================
+FILE PLACEMENT: IMPORTANT!
+============================================================================
+This file MUST be in the SAME DIRECTORY as main.jy
+
+Correct placement:
+  /your/scripts/folder/main.jy                    <-- Main script
+  /your/scripts/folder/metadata_correction.py     <-- This file
+
+Do NOT place this in:
+  - A subdirectory
+  - Python's site-packages
+  - Fiji's plugins folder (unless main.jy is also there)
+
+Verification:
+  When you run main.jy in Fiji, check the log window:
+    ✓ SUCCESS: "[DEBUG] Metadata correction module loaded successfully"
+    ✗ ERROR:   "[DEBUG] Metadata correction module not available: ..."
+
+If you see an error, this file is not in the correct location!
+============================================================================
+
+PURPOSE:
+Implements adaptive correction system for systematic stage positioning errors
+(backlash, scale drift, skew, thermal expansion).
+
+FEATURES:
+- 12-state movement classification (START, RIGHT, LEFT, R_TO_L, L_TO_R, 
+  Y_FIRST, Y_SUBSEQ, DIAG_SHORT, LONG_R, LONG_L, LONG_Y, LONG_DIAG)
+- Empirical measurements with confidence levels
+- Speed-based backlash (short moves: full, long moves: reduced)
+- Per-microscope configuration
+- Thermal state support (cold/preheated)
+- Jython-compatible (no NumPy, pure Python operations)
+
+USAGE:
+This module is imported by main.jy. Do not run it directly.
+
+DOCUMENTATION:
+See METADATA_CORRECTION_README.md for complete documentation
+See TECHDOC/METADATA_CORRECTION_DESIGN.md for technical details
+"""
+
+# ==============================================================================
+# MATRIX OPERATIONS (Jython-compatible)
+# ==============================================================================
+
+class MatrixOps:
+    """Pure Python matrix operations for Jython compatibility"""
+    
+    @staticmethod
+    def apply_2d_transform(x, y, scale_x, scale_y, skew_xy, skew_yx, offset_x, offset_y):
+        """Apply 2D affine transformation to point (x, y)"""
+        x_prime = scale_x * x + skew_xy * y + offset_x
+        y_prime = skew_yx * x + scale_y * y + offset_y
+        return x_prime, y_prime
+    
+    @staticmethod
+    def interpolate(old_value, new_value, learning_rate):
+        """Exponential moving average for learning"""
+        return old_value * (1.0 - learning_rate) + new_value * learning_rate
+
+
+# ==============================================================================
+# CORRECTION MATRIX AND STATE
+# ==============================================================================
+
+def create_default_correction_matrix(microscope_id='default'):
+    """
+    Create correction matrix with empirical measurements
+    
+    Updated values based on 251-tile verification dataset.
+    Uses LUT-based correction approach with boolean movement masks.
+    
+    ========================================================================
+    HOW TO UPDATE CORRECTION FACTORS:
+    ========================================================================
+    
+    1. Run stitching on a large dataset (100+ tiles recommended)
+    2. Compare metadata positions vs. stitching results
+    3. Calculate: error = actual_position_px - expected_position_px
+    4. Classify each movement using boolean mask
+    5. Average errors for each mask value
+    6. Update the values below
+    
+    For detailed tutorial, see:
+      - METADATA_CORRECTION_README.md (tutorial section)
+      - TECHDOC/METADATA_CORRECTION_DESIGN.md (theory)
+    
+    Boolean mask encoding:
+      mask = (is_sweep << 2) | (is_right << 1) | is_down
+      
+      where:
+        is_sweep = 1 if abs(delta_x_px) > sweep_limit else 0
+        is_right = 1 if delta_x_um > 0 else 0
+        is_down  = 1 if delta_y_um > 0 else 0
+      
+      For first movements, add bit 3: mask |= 8
+    
+    ========================================================================
+    """
+    return {
+        'enabled': False,
+        'microscope_id': microscope_id,
+        
+        # ====================================================================
+        # BASIC CALIBRATION
+        # ====================================================================
+        'pixel_size_um': 0.345,  # Physical pixel size from microscope specs
+        
+        # ====================================================================
+        # AFFINE TRANSFORMATION MATRIX (Scale + Skew)
+        # ====================================================================
+        # To update: Average (actual_delta_px / expected_delta_px) across all moves
+        'scale_x': 1.03265,  # X-axis scale factor (1.03265 = 3.265% under-travel)
+        'scale_y': 1.00210,  # Y-axis scale factor (1.00210 = 0.21% under-travel)
+        'skew_xy': 0.0066,   # Gantry skew: X affects Y (0.0066 ≈ 0.38° rotation)
+        'skew_yx': 0.0066,   # Gantry skew: Y affects X (symmetric)
+        
+        # ====================================================================
+        # LOOKUP TABLE (LUT) FOR STATE-DEPENDENT CORRECTIONS
+        # ====================================================================
+        # All offsets in PIXELS (not micrometers)
+        # To update: Average error for each mask value across your dataset
+        #
+        # Mask encoding guide:
+        #   0 (000) = LEFT only
+        #   1 (001) = DOWN only (or LEFT+DOWN)
+        #   2 (010) = RIGHT only
+        #   3 (011) = RIGHT+DOWN (short diagonal)
+        #   5 (101) = DOWN + sweep LEFT (high momentum flyback)
+        #   7 (111) = sweep RIGHT+DOWN (advance jump)
+        #   9 (1001) = FIRST DOWN (with bit 3 set)
+        #   10 (1010) = FIRST RIGHT (with bit 3 set)
+        # ====================================================================
+        
+        # --- STEADY STATE MOVEMENTS (no direction change) ---
+        'offset_right_x': 0.84,    # Mask 2 (010): RIGHT only, X-offset
+        'offset_right_y': -5.20,   # Mask 2 (010): RIGHT only, Y-offset
+        
+        'offset_left_x': -5.12,    # Mask 0 (000): LEFT only, X-offset
+        'offset_left_y': -3.80,    # Mask 0 (000): LEFT only, Y-offset
+        
+        # --- FIRST MOVEMENTS (high inertia/stiction) ---
+        'first_right_x_offset': 18.37,   # Mask 10 (1010): FIRST RIGHT, X-offset
+        'first_right_y_offset': -5.20,   # Mask 10 (1010): FIRST RIGHT, Y-offset
+        
+        'first_down_x_offset': -30.40,   # Mask 9 (1001): FIRST DOWN, X-offset
+        'first_down_y_offset': 18.60,    # Mask 9 (1001): FIRST DOWN, Y-offset
+        
+        # --- SUBSEQUENT DOWN MOVEMENTS ---
+        'subseq_down_x_offset': -6.30,   # Mask 1 (001): DOWN/LEFT+DOWN, X-offset
+        'subseq_down_y_offset': 18.60,   # Mask 1 (001): DOWN/LEFT+DOWN, Y-offset
+        
+        # --- SHORT DIAGONAL MOVES (normal speed, row transitions) ---
+        'diag_right_down_x': 15.00,      # Mask 3 (011): RIGHT+DOWN, X-offset
+        'diag_right_down_y': 15.00,      # Mask 3 (011): RIGHT+DOWN, Y-offset
+        
+        'diag_left_down_x': -6.30,       # Same as subseq_down (overlap)
+        'diag_left_down_y': 18.60,       # Same as subseq_down (overlap)
+        
+        # --- LONG/SWEEP MOVES (high momentum, rapids) ---
+        'sweep_right_down_x': 14.50,     # Mask 7 (111): Sweep RIGHT+DOWN, X-offset
+        'sweep_right_down_y': 12.20,     # Mask 7 (111): Sweep RIGHT+DOWN, Y-offset
+        
+        'sweep_left_down_x': 36.20,      # Mask 5 (101): Sweep LEFT+DOWN, X-offset
+        'sweep_left_down_y': 24.00,      # Mask 5 (101): Sweep LEFT+DOWN, Y-offset
+        
+        # ====================================================================
+        # SWEEP DETECTION
+        # ====================================================================
+        # To update: Measure typical tile spacing, then set threshold at 2-3x
+        # Normal tile spacing is ~1094 pixels (377μm / 0.345μm)
+        # Set threshold high enough to avoid classifying normal moves as sweeps
+        'sweep_limit': 2000.0,  # Threshold in pixels for rapid move detection (2× normal spacing)
+        
+        # ====================================================================
+        # LEGACY/UNUSED (kept for config compatibility)
+        # ====================================================================
+        'thermal_state': 'unknown',
+        'thermal_factors': {
+            'z_stack_height_um': 0.0,
+            'num_channels': 1,
+            'num_tiles': 0,
+            'thermal_load_factor': 0.0
+        },
+        'backlash_x': 0.0,
+        'backlash_y': 0.0,
+        'backlash_reversal': 0.0,
+        'backlash_long_x_left': 0.0,
+        'backlash_long_x_right': 0.0,
+        'backlash_long_y': 0.0,
+        'backlash_long_diagonal': 0.0,
+        'long_move_threshold_x': 2.0,
+        'long_move_threshold_y': 2.0,
+        'thermal_drift_x_cold': 0.0,
+        'thermal_drift_y_cold': 0.0,
+        'thermal_drift_x_preheated': 0.0,
+        'thermal_drift_y_preheated': 0.0,
+        'thermal_decay_rate': 0.95,
+        'first_down_confidence': 0.92,
+        'subseq_down_confidence': 0.88,
+        'last_updated': '',
+        'num_sessions': 0,
+        'learning_rate': 0.3
+    }
+
+
+def create_movement_state():
+    """Create initial movement state for tracking"""
+    return {
+        'prev_x': None,
+        'prev_y': None,
+        'prev_dir_x': None,
+        'prev_dir_y': None,
+        'prev_state': None,
+        'first_down_done': False,
+        'first_right_done': False,
+        'tiles_processed': 0,
+    }
+
+
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
+
+def calculate_thermal_load_factor(z_stack_height_um, num_channels, num_tiles):
+    """Calculate thermal load factor from acquisition parameters"""
+    z_factor = z_stack_height_um / 100.0
+    ch_factor = num_channels / 3.0
+    tile_factor = num_tiles / 50.0
+    thermal_load = 0.4 * z_factor + 0.3 * ch_factor + 0.3 * tile_factor
+    return thermal_load
+
+
+def select_thermal_drift(correction_matrix, thermal_load_factor):
+    """Select thermal drift correction based on system state"""
+    thermal_state = correction_matrix['thermal_state']
+    
+    if thermal_state == 'cold':
+        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
+    elif thermal_state == 'preheated':
+        drift_x = correction_matrix['thermal_drift_x_preheated'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_preheated'] * thermal_load_factor
+    else:
+        drift_x = correction_matrix['thermal_drift_x_cold'] * thermal_load_factor
+        drift_y = correction_matrix['thermal_drift_y_cold'] * thermal_load_factor
+    
+    return drift_x, drift_y
+
+
+def classify_movement(tile_x_um, tile_y_um, movement_state, tile_width_um, tile_height_um, correction_matrix):
+    """
+    Classify movement type for current tile
+    
+    Normal cases: right, left, down, right_down, left_down
+    Special case: sweep (when movement > sweep_limit threshold)
+    
+    Returns tuple: (state_code, state_name, mask)
+    Mask encoding: (is_sweep << 2) | (is_right << 1) | is_down
+    Plus bit 3 for first-time axis activation (inertia/stiction)
+    """
+    if movement_state['prev_x'] is None:
+        return 'START', 'start', 0
+    
+    delta_x = tile_x_um - movement_state['prev_x']
+    delta_y = tile_y_um - movement_state['prev_y']
+    
+    px_um = correction_matrix['pixel_size_um']
+    
+    # Convert deltas to pixel space for sweep detection
+    delta_x_px = delta_x / px_um
+    delta_y_px = delta_y / px_um
+    
+    # Classify movement direction (use small threshold in micrometers)
+    # Normal tile spacing is ~377 microns (1094 pixels), so 0.5 um threshold is sufficient
+    is_right = 1 if delta_x > 0.5 else 0
+    is_left = 1 if delta_x < -0.5 else 0
+    is_down = 1 if delta_y > 0.5 else 0
+    
+    # Sweep detection: only for movements MUCH larger than normal tile spacing
+    # Normal tile spacing = ~1094 pixels, so sweep_limit should be 2000+ pixels
+    is_sweep = 1 if abs(delta_x_px) > correction_matrix['sweep_limit'] else 0
+    
+    # Build basic mask: (is_sweep << 2) | (is_right << 1) | is_down
+    # Note: is_right is 1 for rightward, 0 for leftward/no X movement
+    mask = (is_sweep << 2) | (is_right << 1) | is_down
+    
+    # Check for first-time axis activation (inertia/stiction boost)
+    # This adds bit 3 (mask |= 8) for first movements
+    is_first_move = False
+    if not movement_state['first_right_done'] and is_right and not is_down and not is_sweep:
+        mask |= 8  # Set bit 3 for first right (normal, not sweep)
+        is_first_move = True
+        movement_state['first_right_done'] = True
+    elif not movement_state['first_down_done'] and is_down and not is_sweep:
+        mask |= 8  # Set bit 3 for first down (normal, not sweep)
+        is_first_move = True
+        movement_state['first_down_done'] = True
+    
+    # Generate state code and name based on mask
+    # Normal cases (is_sweep = 0):
+    #   0 (000) = LEFT only
+    #   1 (001) = DOWN or LEFT+DOWN
+    #   2 (010) = RIGHT only
+    #   3 (011) = RIGHT+DOWN (diagonal)
+    #   9 (1001) = FIRST DOWN (with bit 3)
+    #   10 (1010) = FIRST RIGHT (with bit 3)
+    # Special sweep cases (is_sweep = 1):
+    #   4 (100) = sweep LEFT only
+    #   5 (101) = sweep LEFT+DOWN
+    #   6 (110) = sweep RIGHT only
+    #   7 (111) = sweep RIGHT+DOWN
+    
+    if mask == 0:  # 000: Left steady state (normal)
+        return 'LEFT', 'left', mask
+    elif mask == 1:  # 001: Down / Left-Down (normal)
+        return 'DOWN_LEFT', 'down_left', mask
+    elif mask == 2:  # 010: Right steady state (normal)
+        return 'RIGHT', 'right', mask
+    elif mask == 3:  # 011: Right-Down diagonal (normal)
+        return 'DIAG_RIGHT_DOWN', 'right_down', mask
+    elif mask == 4:  # 100: Sweep Left (special)
+        return 'SWEEP_LEFT', 'sweep_left', mask
+    elif mask == 5:  # 101: Sweep Left-Down (special)
+        return 'SWEEP_LEFT_DOWN', 'sweep_left_down', mask
+    elif mask == 6:  # 110: Sweep Right (special)
+        return 'SWEEP_RIGHT', 'sweep_right', mask
+    elif mask == 7:  # 111: Sweep Right-Down (special)
+        return 'SWEEP_RIGHT_DOWN', 'sweep_right_down', mask
+    elif mask == 9:  # 1001: First Down (stiction break, normal)
+        return 'FIRST_DOWN', 'first_down', mask
+    elif mask == 10:  # 1010: First Right (lead-screw wind-up, normal)
+        return 'FIRST_RIGHT', 'first_right', mask
+    else:
+        # Fallback for unexpected states
+        return 'UNKNOWN', 'unknown', mask
+
+
+def apply_metadata_corrections(tile_x_um, tile_y_um, tile_index, tile_width_um, tile_height_um,
+                                 correction_matrix, movement_state):
+    """
+    Apply empirical corrections to tile metadata position using LUT-based approach
+    
+    This implementation follows the cleaner boolean-based logic from the user's refined
+    correction system, verified across 251 tiles.
+    """
+    
+    if not correction_matrix.get('enabled', False):
+        if movement_state['prev_x'] is not None:
+            movement_state['prev_x'] = tile_x_um
+            movement_state['prev_y'] = tile_y_um
+            movement_state['tiles_processed'] += 1
+        else:
+            movement_state['prev_x'] = tile_x_um
+            movement_state['prev_y'] = tile_y_um
+            movement_state['tiles_processed'] = 0
+        return tile_x_um, tile_y_um, 'passthrough'
+    
+    state_code, state_name, mask = classify_movement(
+        tile_x_um, tile_y_um, movement_state, tile_width_um, tile_height_um, correction_matrix
+    )
+    
+    px_um = correction_matrix['pixel_size_um']
+    
+    # 1. Affine transformation (scale + skew)
+    scale_x = correction_matrix['scale_x']
+    scale_y = correction_matrix['scale_y']
+    skew_xy = correction_matrix['skew_xy']
+    skew_yx = correction_matrix['skew_yx']
+    
+    x_scaled = scale_x * tile_x_um + skew_xy * tile_y_um
+    y_scaled = skew_yx * tile_x_um + scale_y * tile_y_um
+    
+    # 2. State-dependent offset using LUT approach
+    offset_x_px = 0.0
+    offset_y_px = 0.0
+    
+    # LUT-based correction selection
+    # Normal cases: right, left, down, right_down, left_down
+    if state_code == 'LEFT':  # mask == 0
+        offset_x_px = correction_matrix['offset_left_x']
+        offset_y_px = correction_matrix['offset_left_y']
+    elif state_code == 'DOWN_LEFT':  # mask == 1 (down or left+down)
+        offset_x_px = correction_matrix['subseq_down_x_offset']
+        offset_y_px = correction_matrix['subseq_down_y_offset']
+    elif state_code == 'RIGHT':  # mask == 2
+        offset_x_px = correction_matrix['offset_right_x']
+        offset_y_px = correction_matrix['offset_right_y']
+    elif state_code == 'DIAG_RIGHT_DOWN':  # mask == 3 (right+down diagonal)
+        offset_x_px = correction_matrix['diag_right_down_x']
+        offset_y_px = correction_matrix['diag_right_down_y']
+    elif state_code == 'FIRST_DOWN':  # mask == 9 (first down with stiction)
+        offset_x_px = correction_matrix['first_down_x_offset']
+        offset_y_px = correction_matrix['first_down_y_offset']
+    elif state_code == 'FIRST_RIGHT':  # mask == 10 (first right with wind-up)
+        offset_x_px = correction_matrix['first_right_x_offset']
+        offset_y_px = correction_matrix['first_right_y_offset']
+    # Special sweep cases (large movements)
+    elif state_code == 'SWEEP_LEFT':  # mask == 4
+        # Use LEFT offsets for sweep left (no down component)
+        offset_x_px = correction_matrix['offset_left_x']
+        offset_y_px = correction_matrix['offset_left_y']
+    elif state_code == 'SWEEP_LEFT_DOWN':  # mask == 5
+        offset_x_px = correction_matrix['sweep_left_down_x']
+        offset_y_px = correction_matrix['sweep_left_down_y']
+    elif state_code == 'SWEEP_RIGHT':  # mask == 6
+        # Use RIGHT offsets for sweep right (no down component)
+        offset_x_px = correction_matrix['offset_right_x']
+        offset_y_px = correction_matrix['offset_right_y']
+    elif state_code == 'SWEEP_RIGHT_DOWN':  # mask == 7
+        offset_x_px = correction_matrix['sweep_right_down_x']
+        offset_y_px = correction_matrix['sweep_right_down_y']
+    
+    # Convert pixel offsets to micrometers
+    offset_x_um = offset_x_px * px_um
+    offset_y_um = offset_y_px * px_um
+    
+    # 3. Thermal drift (if needed)
+    tiles_processed = movement_state['tiles_processed']
+    decay_factor = correction_matrix['thermal_decay_rate'] ** tiles_processed
+    thermal_load = correction_matrix['thermal_factors']['thermal_load_factor']
+    thermal_x, thermal_y = select_thermal_drift(correction_matrix, thermal_load)
+    thermal_x *= decay_factor
+    thermal_y *= decay_factor
+    
+    # Final corrected position
+    x_corrected = x_scaled + offset_x_um + thermal_x
+    y_corrected = y_scaled + offset_y_um + thermal_y
+    
+    # Update state for next iteration
+    if movement_state['prev_x'] is not None:
+        delta_x = tile_x_um - movement_state['prev_x']
+        delta_y = tile_y_um - movement_state['prev_y']
+        
+        if abs(delta_x) > 0.5:
+            movement_state['prev_dir_x'] = 'right' if delta_x > 0 else 'left'
+        if abs(delta_y) > 0.5:
+            movement_state['prev_dir_y'] = 'down' if delta_y > 0 else None
+    
+    movement_state['prev_x'] = tile_x_um
+    movement_state['prev_y'] = tile_y_um
+    movement_state['prev_state'] = state_code
+    movement_state['tiles_processed'] += 1
+    
+    return x_corrected, y_corrected, state_name
+
+
+def visualize_grid_layout(tiles, grid_width, grid_height):
+    """Generate ASCII visualization of tile grid for debugging"""
+    grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
+    
+    for i, tile_info in enumerate(tiles):
+        x_grid = int(round(tile_info['x_grid']))
+        y_grid = int(round(tile_info['y_grid']))
+        if 0 <= x_grid < grid_width and 0 <= y_grid < grid_height:
+            if i == 0:
+                grid[y_grid][x_grid] = '0'
+            else:
+                grid[y_grid][x_grid] = 'x'
+    
+    return [''.join(row) for row in grid]
