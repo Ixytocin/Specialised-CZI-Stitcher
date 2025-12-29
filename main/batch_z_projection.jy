@@ -1,0 +1,881 @@
+# BATCH Z-PROJECTION v1.0
+# Standalone tool for batch Z-projection with layer selection
+# INDEPENDENT from main.jy - this is a separate pipeline tool
+#
+# PURPOSE: Process multiple TIFF stacks with flexible Z-layer selection
+# FEATURES:
+#   - Multiple projection methods (Max, Average, Sum, SD, Median, Min)
+#   - Three layer selection modes:
+#     1. Use all layers (fastest)
+#     2. Discard top/bottom layers (manual trimming)
+#     3. Threshold-based selection (noise filtering)
+#   - Multiple noise detection methods (fast to thorough)
+#   - Batch processing with progress tracking
+#   - Preserves channel colors (LUTs)
+#
+# BASED ON: Established patterns from main.jy v37.5
+# AVOIDS: All documented pitfalls from TECHDOC/PITFALLS.md
+
+import os, time, codecs, json, sys, re
+from java.lang import Runtime, System
+from java.awt import Color
+from ij import IJ, ImagePlus, WindowManager, CompositeImage
+from ij.plugin import ZProjector, ChannelSplitter, RGBStackMerge, Duplicator
+from ij.process import ImageStatistics
+from ij.gui import GenericDialog
+from java.io import File
+
+# ==============================================================================
+# VERSION AND CONFIGURATION
+# ==============================================================================
+VERSION = "v1.0"
+MICRO = u"\u00b5"
+
+# Debug flags
+VERBOSE = True
+DEBUG = True
+
+# Config file for remembering last used directories
+_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".batch_z_projection_config.json")
+
+# ==============================================================================
+# PART 1: UTILITY FUNCTIONS (from main.jy - proven patterns)
+# ==============================================================================
+
+def ensure_unicode(o):
+    """Convert any object to unicode safely"""
+    if o is None:
+        return None
+    if isinstance(o, unicode):
+        return o
+    
+    try:
+        result = unicode(bytearray(o.getBytes("UTF-8")), 'utf-8', 'replace')
+        return result
+    except:
+        pass
+    
+    try:
+        result = unicode(o, 'utf-8', 'replace')
+        return result
+    except:
+        pass
+    
+    try:
+        result = unicode(str(o), 'utf-8', 'replace')
+        return result
+    except:
+        pass
+    
+    try:
+        return u"%s" % o
+    except:
+        return u""
+
+def safe_unicode(o):
+    """Safe unicode conversion with fallback"""
+    try:
+        return ensure_unicode(o)
+    except:
+        try:
+            return unicode(o)
+        except:
+            try:
+                return u"%s" % o
+            except:
+                return u"<unrepresentable>"
+
+def log(msg):
+    """Thread-safe logging with unicode support"""
+    try:
+        IJ.log(u"[Z-Proj] {}".format(safe_unicode(msg)))
+    except UnicodeEncodeError:
+        try:
+            IJ.log("[Z-Proj] <message contains unsupported characters>")
+        except:
+            pass
+    except:
+        try:
+            IJ.log(str(msg))
+        except:
+            pass
+
+def logv(msg):
+    """Verbose logging"""
+    if VERBOSE:
+        log(u"[VERBOSE] {}".format(msg))
+
+def logd(msg):
+    """Debug logging"""
+    if DEBUG:
+        log(u"[DEBUG] {}".format(msg))
+
+def log_memory():
+    """Log current memory usage"""
+    try:
+        runtime = Runtime.getRuntime()
+        total_mb = runtime.totalMemory() / (1024.0 * 1024.0)
+        free_mb = runtime.freeMemory() / (1024.0 * 1024.0)
+        used_mb = total_mb - free_mb
+        max_mb = runtime.maxMemory() / (1024.0 * 1024.0)
+        log(u"[MEMORY] Used: {:.1f}MB / Total: {:.1f}MB / Max: {:.1f}MB".format(used_mb, total_mb, max_mb))
+    except Exception as e:
+        logd(u"Memory logging failed: {}".format(e))
+
+def _load_config():
+    """Load last used directories from config file"""
+    logd(u"Loading config from: {}".format(_CONFIG_PATH))
+    try:
+        if os.path.exists(_CONFIG_PATH):
+            with codecs.open(_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                logd(u"Config loaded: {}".format(cfg))
+                return cfg
+        else:
+            logd(u"Config file does not exist, using defaults")
+    except Exception as e:
+        logd(u"Config load failed: {}".format(e))
+    return {}
+
+def _save_config(cfg):
+    """Save directories to config file"""
+    logd(u"Saving config: {}".format(cfg))
+    try:
+        with codecs.open(_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+            logd(u"Config saved successfully")
+    except Exception as e:
+        logd(u"Config save failed: {}".format(e))
+
+# ==============================================================================
+# PART 2: LAYER SELECTION METHODS
+# ==============================================================================
+
+def select_all_layers(imp):
+    """
+    Mode 1: Use all layers (fastest)
+    
+    Returns: (start_slice, stop_slice)
+    """
+    return (1, imp.getNSlices())
+
+def select_discard_layers(imp, discard_top, discard_bottom):
+    """
+    Mode 2: Discard x top and y bottom layers
+    
+    Args:
+        imp: ImagePlus stack
+        discard_top: Number of top slices to discard
+        discard_bottom: Number of bottom slices to discard
+    
+    Returns: (start_slice, stop_slice) or None if invalid
+    """
+    total_slices = imp.getNSlices()
+    
+    # Validate
+    if discard_top + discard_bottom >= total_slices:
+        log(u"!!! ERROR: Cannot discard {} top + {} bottom from {} total slices".format(
+            discard_top, discard_bottom, total_slices))
+        return None
+    
+    start = 1 + discard_top
+    stop = total_slices - discard_bottom
+    
+    log(u"  Discarding {} top and {} bottom slices".format(discard_top, discard_bottom))
+    log(u"  Using slices {} to {} (total: {})".format(start, stop, stop - start + 1))
+    
+    return (start, stop)
+
+def detect_noise_threshold_fast(imp, channel_index=1):
+    """
+    Fast noise detection using histogram minimum value
+    
+    This is faster than calculating mean because it only needs
+    to scan pixel values, not sum them.
+    
+    Args:
+        imp: ImagePlus stack
+        channel_index: Which channel to analyze (1-based)
+    
+    Returns: threshold value (float)
+    """
+    try:
+        # Set to correct channel if multi-channel
+        if imp.getNChannels() > 1:
+            imp.setC(channel_index)
+        
+        # Get statistics from middle slice (representative)
+        mid_slice = imp.getNSlices() // 2
+        imp.setZ(mid_slice)
+        
+        stats = imp.getStatistics(ImageStatistics.MIN_MAX)
+        
+        # Use minimum value as baseline
+        threshold = stats.min
+        
+        logd(u"  Fast noise detection: min={:.2f}".format(threshold))
+        return float(threshold)
+        
+    except Exception as e:
+        logd(u"  Fast noise detection failed: {}".format(e))
+        return 0.0
+
+def detect_noise_threshold_mean(imp, channel_index=1, sigma_multiplier=3.0):
+    """
+    Thorough noise detection using mean and standard deviation
+    
+    Calculates: threshold = mean + (sigma * std_dev)
+    Traditional approach: 3-sigma above mean to exclude noise
+    
+    Args:
+        imp: ImagePlus stack
+        channel_index: Which channel to analyze (1-based)
+        sigma_multiplier: How many standard deviations above mean (default 3.0)
+    
+    Returns: threshold value (float)
+    """
+    try:
+        # Set to correct channel if multi-channel
+        if imp.getNChannels() > 1:
+            imp.setC(channel_index)
+        
+        # Get statistics from middle slice (representative)
+        mid_slice = imp.getNSlices() // 2
+        imp.setZ(mid_slice)
+        
+        stats = imp.getStatistics(ImageStatistics.MEAN + ImageStatistics.STD_DEV)
+        
+        # Calculate threshold: mean + N*sigma
+        threshold = stats.mean + (sigma_multiplier * stats.stdDev)
+        
+        logd(u"  Mean noise detection: mean={:.2f}, std={:.2f}, threshold={:.2f}".format(
+            stats.mean, stats.stdDev, threshold))
+        return float(threshold)
+        
+    except Exception as e:
+        logd(u"  Mean noise detection failed: {}".format(e))
+        return 0.0
+
+def detect_noise_threshold_sample(imp, channel_index=1, sample_size=0.1):
+    """
+    Fast noise detection using center region sampling
+    
+    Only analyzes center region of image (typically less noisy)
+    Much faster than full image statistics
+    
+    Args:
+        imp: ImagePlus stack
+        channel_index: Which channel to analyze (1-based)
+        sample_size: Fraction of image to sample (0.1 = 10% of pixels)
+    
+    Returns: threshold value (float)
+    """
+    try:
+        # Set to correct channel if multi-channel
+        if imp.getNChannels() > 1:
+            imp.setC(channel_index)
+        
+        # Get processor from middle slice
+        mid_slice = imp.getNSlices() // 2
+        imp.setZ(mid_slice)
+        ip = imp.getProcessor()
+        
+        width = ip.getWidth()
+        height = ip.getHeight()
+        
+        # Calculate center region
+        sample_frac = max(0.05, min(0.5, sample_size))  # Clamp to 5-50%
+        sample_width = int(width * sample_frac)
+        sample_height = int(height * sample_frac)
+        x_start = (width - sample_width) // 2
+        y_start = (height - sample_height) // 2
+        
+        # Sample pixels from center region
+        pixel_sum = 0.0
+        pixel_count = 0
+        
+        for y in range(y_start, y_start + sample_height):
+            for x in range(x_start, x_start + sample_width):
+                pixel_sum += ip.getPixelValue(x, y)
+                pixel_count += 1
+        
+        # Calculate mean of sample
+        sample_mean = pixel_sum / pixel_count if pixel_count > 0 else 0.0
+        
+        # Use sample mean as threshold (conservative)
+        threshold = sample_mean
+        
+        logd(u"  Sample noise detection: sampled {}x{} region, mean={:.2f}".format(
+            sample_width, sample_height, threshold))
+        return float(threshold)
+        
+    except Exception as e:
+        logd(u"  Sample noise detection failed: {}".format(e))
+        return 0.0
+
+def select_layers_by_threshold(imp, threshold_method="fast", user_threshold=None, 
+                                 sigma=3.0, channel_index=1):
+    """
+    Mode 3: Select layers based on mean pixel value above noise threshold
+    
+    Args:
+        imp: ImagePlus stack
+        threshold_method: "fast", "mean", "sample", or "user"
+        user_threshold: User-provided threshold value (if method="user")
+        sigma: Sigma multiplier for mean method (default 3.0)
+        channel_index: Which channel to analyze (1-based)
+    
+    Returns: (start_slice, stop_slice) or None if no layers meet threshold
+    """
+    total_slices = imp.getNSlices()
+    
+    log(u"")
+    log(u"=== THRESHOLD-BASED LAYER SELECTION ===")
+    log(u"  Total slices: {}".format(total_slices))
+    log(u"  Method: {}".format(threshold_method))
+    
+    # Determine threshold
+    if threshold_method == "user" and user_threshold is not None:
+        threshold = float(user_threshold)
+        log(u"  Using user threshold: {:.2f}".format(threshold))
+    elif threshold_method == "mean":
+        threshold = detect_noise_threshold_mean(imp, channel_index, sigma)
+        log(u"  Calculated mean+{}*sigma threshold: {:.2f}".format(sigma, threshold))
+    elif threshold_method == "sample":
+        threshold = detect_noise_threshold_sample(imp, channel_index, 0.1)
+        log(u"  Calculated sample threshold: {:.2f}".format(threshold))
+    else:  # "fast" is default
+        threshold = detect_noise_threshold_fast(imp, channel_index)
+        log(u"  Calculated fast threshold: {:.2f}".format(threshold))
+    
+    # Set to correct channel
+    if imp.getNChannels() > 1:
+        imp.setC(channel_index)
+    
+    # Scan all slices and find those above threshold
+    valid_slices = []
+    
+    for z in range(1, total_slices + 1):
+        imp.setZ(z)
+        stats = imp.getStatistics(ImageStatistics.MEAN)
+        
+        if stats.mean > threshold:
+            valid_slices.append(z)
+            if DEBUG:
+                logd(u"    Slice {}: mean={:.2f} > threshold={:.2f} [KEEP]".format(
+                    z, stats.mean, threshold))
+        else:
+            if DEBUG:
+                logd(u"    Slice {}: mean={:.2f} <= threshold={:.2f} [DISCARD]".format(
+                    z, stats.mean, threshold))
+    
+    if not valid_slices:
+        log(u"!!! ERROR: No slices meet threshold criteria")
+        return None
+    
+    # Find contiguous range (assume slices are sequential)
+    start = min(valid_slices)
+    stop = max(valid_slices)
+    
+    log(u"")
+    log(u"  Selected slices: {} to {} (total: {})".format(start, stop, stop - start + 1))
+    log(u"  Discarded: {} top, {} bottom".format(start - 1, total_slices - stop))
+    log(u"")
+    
+    return (start, stop)
+
+# ==============================================================================
+# PART 3: PROJECTION FUNCTIONS (from main.jy - proven patterns)
+# ==============================================================================
+
+def create_robust_projection(imp, projection_method, start_slice, stop_slice):
+    """
+    Create z-projection using proven channel-splitting method.
+    Based on working pipeline from main.jy v37.5
+    
+    Args:
+        imp: Source ImagePlus (must be multi-slice stack)
+        projection_method: String method name
+        start_slice: First slice to include (1-based)
+        stop_slice: Last slice to include (1-based)
+    
+    Returns:
+        ImagePlus with projection, or None if failed
+    """
+    try:
+        logd(u"  Creating robust projection using channel-splitting method...")
+        logd(u"  Slice range: {} to {}".format(start_slice, stop_slice))
+        
+        # Store original LUTs for color transfer
+        source_luts = None
+        if imp.isComposite():
+            source_luts = imp.getLuts()
+            logd(u"  Retrieved {} LUTs from source".format(len(source_luts) if source_luts else 0))
+        
+        # Create safe duplicate to work on
+        dup = Duplicator().run(imp)
+        
+        # SPLIT CHANNELS (CRITICAL STABILITY STEP)
+        # Processing single channels prevents composite-mode crashes
+        channels = ChannelSplitter.split(dup)
+        dup.close()  # Free memory
+        
+        logd(u"  Split into {} channels".format(len(channels)))
+        
+        # Map method name to ZProjector constant
+        method_map = {
+            "Max Intensity": ZProjector.MAX_METHOD,
+            "Average Intensity": ZProjector.AVG_METHOD,
+            "Sum Slices": ZProjector.SUM_METHOD,
+            "Standard Deviation": ZProjector.SD_METHOD,
+            "Median": ZProjector.MEDIAN_METHOD,
+            "Min Intensity": ZProjector.MIN_METHOD
+        }
+        method_id = method_map.get(projection_method, ZProjector.MAX_METHOD)
+        
+        # Project each channel individually
+        projected_channels = []
+        for i, c_imp in enumerate(channels):
+            zp = ZProjector(c_imp)
+            zp.setMethod(method_id)
+            zp.setStartSlice(start_slice)
+            zp.setStopSlice(stop_slice)
+            zp.doProjection()
+            projected_channels.append(zp.getProjection())
+            logd(u"    Channel {} projected".format(i + 1))
+        
+        # MERGE CHANNELS back to Composite
+        merged_proj = RGBStackMerge.mergeChannels(projected_channels, False)
+        
+        # Cleanup split channels to free RAM
+        for c_imp in channels:
+            c_imp.close()
+        System.gc()
+        
+        logd(u"  Channels merged, {} channels in result".format(merged_proj.getNChannels()))
+        
+        # Apply original LUTs if available
+        if source_luts and merged_proj.getNChannels() > 1:
+            # Convert to CompositeImage to apply LUTs
+            proj_comp = CompositeImage(merged_proj, CompositeImage.COMPOSITE)
+            
+            # Apply each LUT
+            for i, lut in enumerate(source_luts):
+                if i < proj_comp.getNChannels():
+                    proj_comp.setChannelLut(lut, i + 1)
+            
+            # Set COMPOSITE mode
+            proj_comp.setMode(CompositeImage.COMPOSITE)
+            proj_comp.updateAllChannelsAndDraw()
+            
+            logd(u"  >>> LUTs applied successfully")
+            return proj_comp
+        else:
+            logd(u"  Returning merged projection without LUT transfer")
+            return merged_proj
+            
+    except Exception as e:
+        log(u"!!! Robust projection failed: {}".format(e))
+        import traceback
+        for line in traceback.format_exc().split('\n'):
+            logd(u"  {}".format(line))
+        return None
+
+# ==============================================================================
+# PART 4: BATCH PROCESSING
+# ==============================================================================
+
+def process_batch(input_dir, output_dir, projection_method, layer_mode, 
+                  discard_top, discard_bottom, threshold_method, user_threshold,
+                  sigma, channel_index, do_show, do_save, file_filter):
+    """
+    Process all TIFF stacks in input directory
+    
+    Args:
+        input_dir: Directory containing TIFF stacks
+        output_dir: Where to save projections
+        projection_method: Projection method name
+        layer_mode: "all", "discard", or "threshold"
+        discard_top: Number of top slices to discard (for discard mode)
+        discard_bottom: Number of bottom slices to discard (for discard mode)
+        threshold_method: "fast", "mean", "sample", or "user" (for threshold mode)
+        user_threshold: User-provided threshold value
+        sigma: Sigma multiplier for mean method
+        channel_index: Which channel to analyze for threshold (1-based)
+        do_show: Whether to display projections
+        do_save: Whether to save projections
+        file_filter: Filter string for filenames (e.g., "*stitched" or "*projection")
+    """
+    log(u"")
+    log(u"=" * 70)
+    log(u"=== STARTING BATCH Z-PROJECTION ===")
+    log(u"=" * 70)
+    log(u"Input: {}".format(input_dir))
+    log(u"Output: {}".format(output_dir))
+    log(u"Method: {}".format(projection_method))
+    log(u"Layer Mode: {}".format(layer_mode))
+    log(u"File Filter: {}".format(file_filter if file_filter else "*.tif (all)"))
+    log(u"")
+    
+    # Find all TIFF files matching the filter
+    tif_files = []
+    for f in os.listdir(input_dir):
+        if not (f.lower().endswith(".tif") or f.lower().endswith(".tiff")):
+            continue
+        
+        # Apply filter if specified
+        if file_filter:
+            # Remove asterisk if present and convert to lowercase for comparison
+            filter_pattern = file_filter.strip().lstrip('*').lower()
+            f_lower = f.lower()
+            
+            # Check if filename contains the filter pattern (before the extension)
+            f_base = f_lower.replace('.tif', '').replace('.tiff', '')
+            if filter_pattern not in f_base:
+                continue
+        
+        tif_files.append(os.path.join(input_dir, f))
+    
+    if not tif_files:
+        if file_filter:
+            log(u"!!! No TIFF files found matching filter: {}".format(file_filter))
+        else:
+            log(u"!!! No TIFF files found in input directory")
+        return
+    
+    log(u"Found {} TIFF file(s) to process".format(len(tif_files)))
+    log_memory()
+    
+    proj_count = 0
+    skip_count = 0
+    error_count = 0
+    
+    for idx, tif_path in enumerate(tif_files):
+        try:
+            fname = os.path.basename(tif_path)
+            base_name = fname.replace(".tif", "").replace(".tiff", "")
+            
+            log(u"")
+            log(u"[{}/{}] Processing: {}".format(idx + 1, len(tif_files), fname))
+            
+            # Load image
+            imp = IJ.openImage(tif_path)
+            if imp is None:
+                log(u"  !!! Failed to load image, skipping")
+                error_count += 1
+                continue
+            
+            num_slices = imp.getNSlices()
+            num_channels = imp.getNChannels()
+            
+            log(u"  Loaded: {} slices, {} channels".format(num_slices, num_channels))
+            
+            if num_slices <= 1:
+                log(u"  Only {} slice(s), skipping projection".format(num_slices))
+                imp.close()
+                skip_count += 1
+                continue
+            
+            # Determine slice range based on mode
+            slice_range = None
+            
+            if layer_mode == "all":
+                slice_range = select_all_layers(imp)
+                log(u"  Mode: Using all {} slices".format(num_slices))
+                
+            elif layer_mode == "discard":
+                slice_range = select_discard_layers(imp, discard_top, discard_bottom)
+                if slice_range is None:
+                    log(u"  !!! Invalid discard parameters, skipping")
+                    imp.close()
+                    error_count += 1
+                    continue
+                    
+            elif layer_mode == "threshold":
+                slice_range = select_layers_by_threshold(
+                    imp, threshold_method, user_threshold, sigma, channel_index)
+                if slice_range is None:
+                    log(u"  !!! No slices meet threshold, skipping")
+                    imp.close()
+                    skip_count += 1
+                    continue
+            
+            start_slice, stop_slice = slice_range
+            num_used_slices = stop_slice - start_slice + 1
+            
+            # Create projection
+            proj_imp = create_robust_projection(imp, projection_method, start_slice, stop_slice)
+            
+            if proj_imp is None:
+                log(u"  !!! Projection creation failed, skipping")
+                imp.close()
+                error_count += 1
+                continue
+            
+            # Create filename with detailed operation modifier
+            # Format: basename_<method>_<operation>.tif
+            # Examples: 
+            #   - sample_stitched_max_all_32.tif (all 32 slices, max projection)
+            #   - sample_stitched_avg_z6to22.tif (slices 6-22, average projection)
+            #   - sample_stitched_sum_discard2-3.tif (discarded 2 top, 3 bottom, sum projection)
+            
+            # Method abbreviation
+            method_abbrev = {
+                "Max Intensity": "max",
+                "Average Intensity": "avg",
+                "Sum Slices": "sum",
+                "Standard Deviation": "sd",
+                "Median": "med",
+                "Min Intensity": "min"
+            }.get(projection_method, "max")
+            
+            # Operation descriptor
+            if num_used_slices == num_slices:
+                # Used all slices
+                operation = u"all_{}".format(num_slices)
+            elif layer_mode == "discard":
+                # Discard mode - record what was discarded
+                operation = u"z{}to{}_discard{}-{}".format(
+                    start_slice, stop_slice, discard_top, discard_bottom)
+            elif layer_mode == "threshold":
+                # Threshold mode - record slice range
+                operation = u"z{}to{}_thr".format(start_slice, stop_slice)
+            else:
+                # Generic slice range
+                operation = u"z{}to{}".format(start_slice, stop_slice)
+            
+            proj_filename = u"{}_{}_{}_{}.tif".format(base_name, method_abbrev, operation, num_used_slices)
+            
+            proj_imp.setTitle(proj_filename.replace(".tif", ""))
+            
+            # Auto brightness/contrast adjustment
+            try:
+                if proj_imp.isComposite():
+                    log(u"  Applying auto brightness/contrast...")
+                    for c in range(1, proj_imp.getNChannels() + 1):
+                        proj_imp.setC(c)
+                        IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    proj_imp.setC(1)  # Reset to first channel
+                    log(u"  >>> Auto B&C applied to all channels")
+                else:
+                    IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    log(u"  >>> Auto B&C applied")
+            except Exception as e:
+                logd(u"  Auto B&C failed: {}".format(e))
+            
+            # Save if requested
+            if do_save:
+                proj_out = os.path.join(output_dir, proj_filename)
+                try:
+                    IJ.saveAs(proj_imp, "Tiff", proj_out)
+                    log(u"  >>> Saved: {}".format(proj_filename))
+                    proj_count += 1
+                except Exception as e:
+                    log(u"  !!! Save failed: {}".format(e))
+                    error_count += 1
+            
+            # Show if requested
+            if do_show:
+                proj_imp.show()
+                log(u"  >>> Displayed projection")
+            elif not do_save:
+                proj_imp.close()
+            
+            # Close source image
+            imp.close()
+            
+            # Garbage collection
+            System.gc()
+            
+        except Exception as e:
+            log(u"  !!! Processing failed: {}".format(e))
+            import traceback
+            traceback.print_exc()
+            error_count += 1
+    
+    log(u"")
+    log(u"=" * 70)
+    log(u"=== BATCH COMPLETE ===")
+    log(u"  Processed: {}".format(proj_count))
+    log(u"  Skipped: {}".format(skip_count))
+    log(u"  Errors: {}".format(error_count))
+    log(u"=" * 70)
+    log(u"")
+    log_memory()
+
+# ==============================================================================
+# PART 5: MAIN ENTRY POINT
+# ==============================================================================
+
+def show_splash():
+    """Display ASCII art splash screen"""
+    splash = u"""
+      +---+---+---+
+      |   Z   |   |    BATCH Z-PROJECTION v1.0
+      +---+---+---+     ========================
+      | P | r | o |    > Standalone Tool
+      +---+---+---+     > Layer Selection
+      | j | e | c |    > Noise Filtering
+      +---+---+---+     > Batch Processing
+
+      [Standalone] Independent from main.jy
+      [Based on] CZI-Stitcher v37.5 patterns
+      [Status] Initializing...
+    """
+    log(splash)
+
+def main():
+    """Main entry point"""
+    IJ.log("\\Clear")
+    show_splash()
+    
+    # Load config
+    _config = _load_config()
+    
+    _home = os.path.expanduser("~")
+    _last_in = _config.get("last_input_dir", "") or _home
+    _last_out = _config.get("last_output_dir", "") or _home
+    
+    if not os.path.isdir(_last_in): 
+        _last_in = _home
+    if not os.path.isdir(_last_out): 
+        _last_out = _home
+    
+    # Parameter dialog
+    gd = GenericDialog("Batch Z-Projection - Parameters v1.0")
+    
+    gd.addMessage("=== Directory Paths ===")
+    gd.addStringField("Input Folder (TIFF stacks):", _last_in, 50)
+    gd.addStringField("Output Folder (Projections):", _last_out, 50)
+    
+    gd.addMessage("=== File Filter ===")
+    gd.addStringField("Filter files containing (leave empty for all):", "stitched", 30)
+    gd.addMessage("  Examples: 'stitched', 'projection', 'sample01'")
+    gd.addMessage("  Use '*stitched' or just 'stitched' (both work)")
+    gd.addMessage("  Leave empty to process ALL .tif files")
+    
+    gd.addMessage("=== Projection Method ===")
+    gd.addChoice("Method", ["Max Intensity", "Average Intensity", "Sum Slices", 
+                            "Standard Deviation", "Median", "Min Intensity"], 
+                 "Max Intensity")
+    
+    gd.addMessage("=== Layer Selection Mode ===")
+    gd.addChoice("Mode", ["Use all layers", "Discard top/bottom", "Threshold-based"], 
+                 "Use all layers")
+    
+    gd.addMessage("--- Discard Mode Options ---")
+    gd.addNumericField("Discard top N slices:", 0, 0)
+    gd.addNumericField("Discard bottom N slices:", 0, 0)
+    
+    gd.addMessage("--- Threshold Mode Options ---")
+    gd.addChoice("Noise detection method", ["Fast (histogram min)", 
+                                             "Mean + sigma (thorough)", 
+                                             "Sample center (fast)",
+                                             "User-defined threshold"],
+                 "Fast (histogram min)")
+    gd.addNumericField("User threshold (if user-defined):", 0.0, 2)
+    gd.addNumericField("Sigma multiplier (for mean method):", 3.0, 1)
+    gd.addNumericField("Analyze channel (1-based):", 1, 0)
+    
+    gd.addMessage("=== Output Options ===")
+    gd.addCheckbox("Save Projections", True)
+    gd.addCheckbox("Show Projections", False)
+    
+    gd.showDialog()
+    
+    if gd.wasCanceled():
+        log("User cancelled. Exiting.")
+        return
+    
+    # Get parameters
+    in_path = gd.getNextString().strip()
+    out_path = gd.getNextString().strip()
+    file_filter = gd.getNextString().strip()
+    
+    # Validate paths
+    if not in_path or not os.path.isdir(in_path):
+        log(u"!!! Error: Input folder '{}' does not exist or is invalid.".format(in_path))
+        return
+    if not out_path or not os.path.isdir(out_path):
+        log(u"!!! Error: Output folder '{}' does not exist or is invalid.".format(out_path))
+        return
+    
+    # Save config
+    _config["last_input_dir"] = in_path
+    _config["last_output_dir"] = out_path
+    _save_config(_config)
+    
+    projection_method = gd.getNextChoice()
+    layer_mode_choice = gd.getNextChoice()
+    
+    # Map choice to internal mode name
+    if layer_mode_choice == "Use all layers":
+        layer_mode = "all"
+    elif layer_mode_choice == "Discard top/bottom":
+        layer_mode = "discard"
+    else:
+        layer_mode = "threshold"
+    
+    discard_top = int(gd.getNextNumber())
+    discard_bottom = int(gd.getNextNumber())
+    
+    threshold_method_choice = gd.getNextChoice()
+    # Map choice to internal method name
+    if "Fast" in threshold_method_choice:
+        threshold_method = "fast"
+    elif "Mean" in threshold_method_choice:
+        threshold_method = "mean"
+    elif "Sample" in threshold_method_choice:
+        threshold_method = "sample"
+    else:
+        threshold_method = "user"
+    
+    user_threshold = float(gd.getNextNumber())
+    sigma = float(gd.getNextNumber())
+    channel_index = int(gd.getNextNumber())
+    
+    do_save = (int(gd.getNextBoolean()) == 1)
+    do_show = (int(gd.getNextBoolean()) == 1)
+    
+    # Validate output options
+    if not do_save and not do_show:
+        log(u"!!! Error: At least one output option must be enabled")
+        return
+    
+    # Log parameters
+    log(u"")
+    log(u"Parameters:")
+    log(u"  File Filter: {}".format(file_filter if file_filter else "None (all .tif files)"))
+    log(u"  Projection Method: {}".format(projection_method))
+    log(u"  Layer Mode: {}".format(layer_mode))
+    
+    if layer_mode == "discard":
+        log(u"  Discard: {} top, {} bottom".format(discard_top, discard_bottom))
+    elif layer_mode == "threshold":
+        log(u"  Threshold Method: {}".format(threshold_method))
+        if threshold_method == "user":
+            log(u"  User Threshold: {:.2f}".format(user_threshold))
+        elif threshold_method == "mean":
+            log(u"  Sigma Multiplier: {:.1f}".format(sigma))
+        log(u"  Analyze Channel: {}".format(channel_index))
+    
+    log(u"  Save: {} | Show: {}".format(do_save, do_show))
+    log(u"")
+    
+    # Process batch
+    batch_start = time.time()
+    
+    process_batch(in_path, out_path, projection_method, layer_mode,
+                  discard_top, discard_bottom, threshold_method, user_threshold,
+                  sigma, channel_index, do_show, do_save, file_filter)
+    
+    batch_elapsed = time.time() - batch_start
+    log(u"")
+    log(u"Total processing time: {:.1f} seconds ({:.1f} minutes)".format(
+        batch_elapsed, batch_elapsed / 60.0))
+    log(u"")
+    log(u">>> Batch Z-Projection Complete!")
+
+# Run main
+if __name__ in [None, "__main__", "__builtin__"]:
+    main()
