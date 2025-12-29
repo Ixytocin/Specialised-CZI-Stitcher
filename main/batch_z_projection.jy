@@ -270,7 +270,7 @@ class DiscoveryTask(Callable):
         self.sigma = sigma
         self.channel_index = channel_index
         self.temp_dir = temp_dir
-        self.fname = os.path.basename(tif_path)
+        self.fname = safe_unicode(os.path.basename(tif_path))
     
     def call(self):
         """Execute discovery for this file"""
@@ -290,7 +290,7 @@ class DiscoveryTask(Callable):
             # Load image (read-only for discovery)
             imp = IJ.openImage(self.tif_path)
             if imp is None:
-                result['error'] = "Failed to load image"
+                result['error'] = safe_unicode("Failed to load image")
                 return result
             
             result['num_slices'] = imp.getNSlices()
@@ -299,7 +299,7 @@ class DiscoveryTask(Callable):
             # Check if projection is needed
             if result['num_slices'] <= 1:
                 result['skip'] = True
-                result['skip_reason'] = "Only {} slice(s)".format(result['num_slices'])
+                result['skip_reason'] = safe_unicode("Only {} slice(s)".format(result['num_slices']))
                 imp.close()
                 return result
             
@@ -311,7 +311,7 @@ class DiscoveryTask(Callable):
             elif self.layer_mode == "discard":
                 slice_range = select_discard_layers(imp, self.discard_top, self.discard_bottom)
                 if slice_range is None:
-                    result['error'] = "Invalid discard parameters"
+                    result['error'] = safe_unicode("Invalid discard parameters")
                 else:
                     result['slice_range'] = slice_range
                     result['success'] = True
@@ -322,7 +322,7 @@ class DiscoveryTask(Callable):
                     self.sigma, self.channel_index)
                 if slice_range is None:
                     result['skip'] = True
-                    result['skip_reason'] = "No slices meet threshold"
+                    result['skip_reason'] = safe_unicode("No slices meet threshold")
                 else:
                     result['slice_range'] = slice_range
                     result['success'] = True
@@ -334,7 +334,7 @@ class DiscoveryTask(Callable):
             # Write result to temp file
             if result['success'] or result['skip']:
                 temp_file = os.path.join(self.temp_dir, "{}.json".format(
-                    self.fname.replace('.tif', '').replace('.tiff', '')))
+                    safe_unicode(self.fname).replace('.tif', '').replace('.tiff', '')))
                 with codecs.open(temp_file, 'w', encoding='utf-8') as f:
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 result['temp_file'] = temp_file
@@ -342,7 +342,7 @@ class DiscoveryTask(Callable):
             return result
             
         except Exception as e:
-            result['error'] = str(e)
+            result['error'] = safe_unicode(str(e))
             return result
 
 def run_discovery_phase(tif_files, layer_mode, discard_top, discard_bottom,
@@ -399,25 +399,25 @@ def run_discovery_phase(tif_files, layer_mode, discard_top, discard_bottom,
             discovery_results.append(result)
             completed += 1
             
-            # Log progress
-            fname = os.path.basename(tif_path)
+            # Log progress with proper unicode handling
+            fname = safe_unicode(os.path.basename(tif_path))
             if result.get('success'):
                 log(u"  [{}/{}] >>> {} - Discovered: slices {}".format(
                     completed, len(tif_files), fname, result.get('slice_range')))
             elif result.get('skip'):
                 log(u"  [{}/{}] SKIP {} - {}".format(
-                    completed, len(tif_files), fname, result.get('skip_reason')))
+                    completed, len(tif_files), fname, safe_unicode(result.get('skip_reason'))))
             elif result.get('error'):
                 log(u"  [{}/{}] !!! {} - ERROR: {}".format(
-                    completed, len(tif_files), fname, result.get('error')))
+                    completed, len(tif_files), fname, safe_unicode(result.get('error'))))
             
         except Exception as e:
-            log(u"  !!! Discovery task failed for {}: {}".format(os.path.basename(tif_path), e))
+            log(u"  !!! Discovery task failed for {}: {}".format(safe_unicode(os.path.basename(tif_path)), safe_unicode(e)))
             discovery_results.append({
                 'file': tif_path,
-                'fname': os.path.basename(tif_path),
+                'fname': safe_unicode(os.path.basename(tif_path)),
                 'success': False,
-                'error': str(e)
+                'error': safe_unicode(str(e))
             })
             completed += 1
     
