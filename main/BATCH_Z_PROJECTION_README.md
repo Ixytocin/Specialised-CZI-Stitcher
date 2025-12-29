@@ -1,6 +1,8 @@
-# Batch Z-Projection Tool v1.0
+# Batch Z-Projection Tool v1.1
 
-> **Purpose**: Batch process multiple TIFF stacks with flexible Z-layer selection and noise filtering
+> **Purpose**: Batch process multiple TIFF stacks with flexible Z-layer selection and advanced noise filtering
+> 
+> **NEW in v1.1**: Optimized for Apotome/Structured Illumination Microscopy with Otsu & Triangle thresholding
 
 ---
 
@@ -14,11 +16,15 @@
   1. **Use All Layers**: Process entire Z-stack (fastest)
   2. **Discard Top/Bottom**: Manually trim specific number of slices
   3. **Threshold-Based**: Automatically select layers above noise level
-- **Multiple Noise Detection Methods**:
-  - Fast (histogram min) - fastest
-  - Mean + sigma (3-sigma above mean) - thorough
-  - Sample center (10% region) - fast alternative
-  - User-defined threshold - full control
+- **Advanced Noise Detection Methods (NEW in v1.1)**:
+  - **Otsu on Z-profile** - RECOMMENDED for Apotome (scale-invariant, parameter-free)
+  - **Triangle on focus scores** - RECOMMENDED for Apotome (detects peak vs tail)
+  - **Coefficient of Variation (CV)** - For structured detail detection
+  - Fast (histogram min) - Simple baseline
+  - Mean + sigma - DEPRECATED (fails for Apotome data)
+  - Sample center - Fast alternative
+  - User-defined threshold - Full control
+- **Automatic Artifact Rejection (NEW in v1.1)**: Filters out slices with mean=0 (fusion artifacts)
 - **LUT Preservation**: Maintains original channel colors
 - **Auto Brightness/Contrast**: Optimizes visibility automatically
 - **Detailed Filenames**: Records exact operation performed
