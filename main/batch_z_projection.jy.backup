@@ -1,4 +1,4 @@
-# BATCH Z-PROJECTION v1.3
+# BATCH Z-PROJECTION v1.2
 # Standalone tool for batch Z-projection with layer selection
 # INDEPENDENT from main.jy - this is a separate pipeline tool
 #
@@ -14,26 +14,13 @@
 #     * Weighted Otsu (for rare signal)
 #     * Triangle thresholding on focus scores
 #     * Coefficient of Variation (CV)
-#   - Threaded discovery phase (dynamic thread allocation based on available RAM)
-#   - Phased processing (Discovery → Projection → Display)
 #   - Automatic rejection of fusion artifacts (mean=0 slices)
 #   - Hardening constraints (sigma check, percentile padding, SNR gate)
-#   - Excludes already-projected files (avoids re-projecting projections)
 #   - Batch processing with progress tracking
 #   - Preserves channel colors (LUTs)
-#   - Improved brightness/contrast (fixed for channel 1, less bright)
 #
 # BASED ON: Established patterns from main.jy v37.5
 # AVOIDS: All documented pitfalls from TECHDOC/PITFALLS.md
-#
-# v1.3 CHANGES:
-# - Added threaded discovery phase with dynamic thread allocation (up to 80% free RAM)
-# - Phased processing: Discovery (parallel) → Projection → Display (deferred)
-# - Excludes already-projected files (_max_, _avg_, etc. suffixes)
-# - Fixed brightness/contrast application for channel 1 on large files (added 100ms delay)
-# - Reduced brightness: saturated=0.10 instead of 0.35 (less bright colors)
-# - Memory cleanup after each phase
-# - Temp files written during discovery, cleaned up after completion
 #
 # v1.2 CHANGES:
 # - Added Valley-Emphasis Otsu for extreme class imbalance (90% baseline + 10% signal)
@@ -62,7 +49,7 @@ from java.io import File
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v1.3"
+VERSION = "v1.2"
 MICRO = u"\u00b5"
 
 # Debug flags
@@ -143,30 +130,6 @@ def logd(msg):
     """Debug logging"""
     if DEBUG:
         log(u"[DEBUG] {}".format(msg))
-
-def format_elapsed_time(seconds):
-    """
-    Format elapsed time in minutes, seconds, milliseconds
-    
-    Args:
-        seconds: Elapsed time in seconds (float)
-    
-    Returns: Formatted string like "5m 23s 456ms" or "45s 123ms"
-    """
-    total_ms = int(seconds * 1000)
-    
-    minutes = total_ms // 60000
-    remaining_ms = total_ms % 60000
-    
-    secs = remaining_ms // 1000
-    ms = remaining_ms % 1000
-    
-    if minutes > 0:
-        return u"{}m {}s {}ms".format(minutes, secs, ms)
-    elif secs > 0:
-        return u"{}s {}ms".format(secs, ms)
-    else:
-        return u"{}ms".format(ms)
 
 def log_memory():
     """Log current memory usage"""
@@ -1213,76 +1176,11 @@ def create_robust_projection(imp, projection_method, start_slice, stop_slice):
 # PART 4: BATCH PROCESSING
 # ==============================================================================
 
-def is_already_projected(filename):
-    """
-    Check if filename appears to be an already-projected file
-    
-    ONLY checks if projection pattern appears as SUFFIX (at the end before .tif)
-    This avoids false positives like "Max svz.czi" where Max is a sample name.
-    
-    Looks for projection method abbreviations in filename suffix:
-    - _max_, _avg_, _sum_, _sd_, _med_, _min_
-    - Followed by operation indicators: _all_, _z, _discard, _thr
-    - Must appear near the end of filename (before extension)
-    
-    Examples of projected files to exclude:
-    - sample_stitched_max_all_32.tif  (EXCLUDE)
-    - brain_avg_z6to22_17.tif         (EXCLUDE)
-    - tissue_sum_z1to28_discard2-2_30.tif (EXCLUDE)
-    
-    Examples that should NOT be excluded:
-    - Max svz.czi                     (KEEP - Max is sample name prefix)
-    - brain_max_intensity.tif         (KEEP - doesn't match suffix pattern)
-    - sample_avg.tif                  (KEEP - no operation indicator)
-    
-    Args:
-        filename: Filename to check (just the name, not full path)
-    
-    Returns: True if file appears to be already projected, False otherwise
-    """
-    # Remove extension to get base name
-    fname_lower = filename.lower()
-    if fname_lower.endswith('.tif'):
-        base = fname_lower[:-4]
-    elif fname_lower.endswith('.tiff'):
-        base = fname_lower[:-5]
-    else:
-        base = fname_lower
-    
-    # Projection method abbreviations with underscores (must be bounded)
-    methods = ['_max_', '_avg_', '_sum_', '_sd_', '_med_', '_min_']
-    
-    # Check if any method abbreviation is in the LAST portion of filename
-    # We look at the last 50 characters to focus on suffix
-    suffix_check = base[-50:] if len(base) > 50 else base
-    
-    for method in methods:
-        if method in suffix_check:
-            # Find position of method in suffix
-            method_pos = suffix_check.rfind(method)
-            
-            # Get everything after the method
-            after_method = suffix_check[method_pos + len(method):]
-            
-            # Check for operation indicators after the method
-            # These patterns are specific to our projection output format
-            if any(indicator in after_method for indicator in ['all_', 'z', 'discard', 'thr']):
-                # Also check that numbers follow (like all_32, z6to22, etc.)
-                # This makes it even more specific to projection output
-                if any(c.isdigit() for c in after_method):
-                    return True
-    
-    return False
-
 def process_batch(input_dir, output_dir, projection_method, layer_mode, 
                   discard_top, discard_bottom, threshold_method, user_threshold,
                   sigma, channel_index, do_show, do_save, file_filter):
     """
-    Process all TIFF stacks in input directory using phased approach
-    
-    PHASE 1: Discovery - Parallel Z-profile calculation (threaded based on available RAM)
-    PHASE 2: Projection - Create projections from discovered slice ranges
-    PHASE 3: Display - Show images if requested (after all projections complete)
+    Process all TIFF stacks in input directory
     
     Args:
         input_dir: Directory containing TIFF stacks
@@ -1291,7 +1189,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
         layer_mode: "all", "discard", or "threshold"
         discard_top: Number of top slices to discard (for discard mode)
         discard_bottom: Number of bottom slices to discard (for discard mode)
-        threshold_method: Threshold detection method
+        threshold_method: "fast", "mean", "sample", or "user" (for threshold mode)
         user_threshold: User-provided threshold value
         sigma: Sigma multiplier for mean method
         channel_index: Which channel to analyze for threshold (1-based)
@@ -1301,7 +1199,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     """
     log(u"")
     log(u"=" * 70)
-    log(u"=== STARTING BATCH Z-PROJECTION (PHASED) ===")
+    log(u"=== STARTING BATCH Z-PROJECTION ===")
     log(u"=" * 70)
     log(u"Input: {}".format(input_dir))
     log(u"Output: {}".format(output_dir))
@@ -1310,37 +1208,24 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     log(u"File Filter: {}".format(file_filter if file_filter else "*.tif (all)"))
     log(u"")
     
-    # Start timing
-    batch_start_time = time.time()
-    
     # Find all TIFF files matching the filter
     tif_files = []
-    excluded_count = 0
-    
     for f in os.listdir(input_dir):
         if not (f.lower().endswith(".tif") or f.lower().endswith(".tiff")):
             continue
         
-        # EXCLUDE already-projected files (check suffix pattern only)
-        if is_already_projected(f):
-            log(u"  EXCLUDED (already projected): {}".format(f))
-            excluded_count += 1
-            continue
-        
         # Apply filter if specified
         if file_filter:
+            # Remove asterisk if present and convert to lowercase for comparison
             filter_pattern = file_filter.strip().lstrip('*').lower()
             f_lower = f.lower()
+            
+            # Check if filename contains the filter pattern (before the extension)
             f_base = f_lower.replace('.tif', '').replace('.tiff', '')
             if filter_pattern not in f_base:
                 continue
         
         tif_files.append(os.path.join(input_dir, f))
-    
-    if excluded_count > 0:
-        log(u"")
-        log(u">>> Excluded {} already-projected file(s) (suffix pattern matched)".format(excluded_count))
-        log(u"")
     
     if not tif_files:
         if file_filter:
@@ -1352,44 +1237,9 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     log(u"Found {} TIFF file(s) to process".format(len(tif_files)))
     log_memory()
     
-    # Estimate file size for thread calculation (use first file as reference)
-    try:
-        first_file_size_mb = os.path.getsize(tif_files[0]) / (1024.0 * 1024.0)
-        log(u"Estimated file size: {:.1f}MB".format(first_file_size_mb))
-    except:
-        first_file_size_mb = 1000.0  # Default 1GB estimate
-    
-    # Calculate optimal threads
-    num_threads = calculate_optimal_threads(first_file_size_mb, target_ram_usage_percent=0.8)
-    log(u"Using {} thread(s) for discovery phase".format(num_threads))
-    log(u"")
-    
-    # PHASE 1: DISCOVERY (Parallel Z-profile calculation for threshold methods)
-    discovery_results = None
-    temp_dir = None
-    discovery_time = 0.0
-    
-    if layer_mode == "threshold" and num_threads > 1:
-        discovery_start = time.time()
-        discovery_results, temp_dir = run_discovery_phase(
-            tif_files, layer_mode, discard_top, discard_bottom,
-            threshold_method, user_threshold, sigma, channel_index,
-            num_threads)
-        discovery_time = time.time() - discovery_start
-        log(u"Discovery phase completed in: {}".format(format_elapsed_time(discovery_time)))
-    
-    # PHASE 2: PROJECTION (Create projections)
-    projection_start = time.time()
-    log(u"")
-    log(u"=" * 70)
-    log(u"=== PROJECTION PHASE: Creating Z-Projections ===")
-    log(u"=" * 70)
-    log(u"")
-    
     proj_count = 0
     skip_count = 0
     error_count = 0
-    saved_files = []  # Track saved files for display phase
     
     for idx, tif_path in enumerate(tif_files):
         try:
@@ -1397,24 +1247,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             base_name = fname.replace(".tif", "").replace(".tiff", "")
             
             log(u"")
-            log(u"[{}/{}] Projecting: {}".format(idx + 1, len(tif_files), fname))
-            
-            # Check if discovery was done for this file
-            if discovery_results:
-                result = next((r for r in discovery_results if r['file'] == tif_path), None)
-                if result:
-                    if result.get('skip'):
-                        log(u"  SKIP - {}".format(result.get('skip_reason')))
-                        skip_count += 1
-                        continue
-                    if result.get('error'):
-                        log(u"  !!! ERROR - {}".format(result.get('error')))
-                        error_count += 1
-                        continue
-                    if not result.get('success'):
-                        log(u"  !!! No valid discovery result, skipping")
-                        error_count += 1
-                        continue
+            log(u"[{}/{}] Processing: {}".format(idx + 1, len(tif_files), fname))
             
             # Load image
             imp = IJ.openImage(tif_path)
@@ -1434,41 +1267,29 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 skip_count += 1
                 continue
             
-            # Determine slice range
+            # Determine slice range based on mode
             slice_range = None
             
-            if discovery_results and layer_mode == "threshold":
-                # Use discovered range
-                result = next((r for r in discovery_results if r['file'] == tif_path), None)
-                if result and result.get('slice_range'):
-                    slice_range = tuple(result['slice_range'])
-                    log(u"  Using discovered range: slices {} to {}".format(slice_range[0], slice_range[1]))
-            else:
-                # Calculate range now (for "all" or "discard" modes, or if discovery failed)
-                if layer_mode == "all":
-                    slice_range = select_all_layers(imp)
-                    log(u"  Mode: Using all {} slices".format(num_slices))
-                elif layer_mode == "discard":
-                    slice_range = select_discard_layers(imp, discard_top, discard_bottom)
-                    if slice_range is None:
-                        log(u"  !!! Invalid discard parameters, skipping")
-                        imp.close()
-                        error_count += 1
-                        continue
-                elif layer_mode == "threshold":
-                    slice_range = select_layers_by_threshold(
-                        imp, threshold_method, user_threshold, sigma, channel_index)
-                    if slice_range is None:
-                        log(u"  !!! No slices meet threshold, skipping")
-                        imp.close()
-                        skip_count += 1
-                        continue
-            
-            if not slice_range:
-                log(u"  !!! Could not determine slice range, skipping")
-                imp.close()
-                error_count += 1
-                continue
+            if layer_mode == "all":
+                slice_range = select_all_layers(imp)
+                log(u"  Mode: Using all {} slices".format(num_slices))
+                
+            elif layer_mode == "discard":
+                slice_range = select_discard_layers(imp, discard_top, discard_bottom)
+                if slice_range is None:
+                    log(u"  !!! Invalid discard parameters, skipping")
+                    imp.close()
+                    error_count += 1
+                    continue
+                    
+            elif layer_mode == "threshold":
+                slice_range = select_layers_by_threshold(
+                    imp, threshold_method, user_threshold, sigma, channel_index)
+                if slice_range is None:
+                    log(u"  !!! No slices meet threshold, skipping")
+                    imp.close()
+                    skip_count += 1
+                    continue
             
             start_slice, stop_slice = slice_range
             num_used_slices = stop_slice - start_slice + 1
@@ -1483,6 +1304,13 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 continue
             
             # Create filename with detailed operation modifier
+            # Format: basename_<method>_<operation>.tif
+            # Examples: 
+            #   - sample_stitched_max_all_32.tif (all 32 slices, max projection)
+            #   - sample_stitched_avg_z6to22.tif (slices 6-22, average projection)
+            #   - sample_stitched_sum_discard2-3.tif (discarded 2 top, 3 bottom, sum projection)
+            
+            # Method abbreviation
             method_abbrev = {
                 "Max Intensity": "max",
                 "Average Intensity": "avg",
@@ -1494,45 +1322,35 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             
             # Operation descriptor
             if num_used_slices == num_slices:
+                # Used all slices
                 operation = u"all_{}".format(num_slices)
             elif layer_mode == "discard":
+                # Discard mode - record what was discarded
                 operation = u"z{}to{}_discard{}-{}".format(
                     start_slice, stop_slice, discard_top, discard_bottom)
             elif layer_mode == "threshold":
+                # Threshold mode - record slice range
                 operation = u"z{}to{}_thr".format(start_slice, stop_slice)
             else:
+                # Generic slice range
                 operation = u"z{}to{}".format(start_slice, stop_slice)
             
             proj_filename = u"{}_{}_{}_{}.tif".format(base_name, method_abbrev, operation, num_used_slices)
+            
             proj_imp.setTitle(proj_filename.replace(".tif", ""))
             
-            # Auto brightness/contrast adjustment (IMPROVED FOR CHANNEL 1 AND LARGE FILES)
+            # Auto brightness/contrast adjustment
             try:
                 if proj_imp.isComposite():
-                    log(u"  Applying auto brightness/contrast per channel...")
-                    comp_imp = proj_imp
-                    
-                    # Process each channel individually with proper timing
-                    for c in range(1, comp_imp.getNChannels() + 1):
-                        comp_imp.setC(c)
-                        
-                        # Give ImageJ time to update, especially important for channel 1 and large files
-                        Thread.sleep(100)  # 100ms delay for ImageJ to catch up
-                        
-                        # Use more conservative saturation for less bright output (0.10 instead of 0.35)
-                        IJ.run(comp_imp, "Enhance Contrast", "saturated=0.10")
-                        
-                        logd(u"    Channel {}: B&C applied (saturated=0.10)".format(c))
-                    
-                    # Reset to first channel
-                    comp_imp.setC(1)
-                    Thread.sleep(50)
-                    
-                    log(u"  >>> Auto B&C applied to all {} channels (saturated=0.10)".format(comp_imp.getNChannels()))
+                    log(u"  Applying auto brightness/contrast...")
+                    for c in range(1, proj_imp.getNChannels() + 1):
+                        proj_imp.setC(c)
+                        IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    proj_imp.setC(1)  # Reset to first channel
+                    log(u"  >>> Auto B&C applied to all channels")
                 else:
-                    # Single channel - also use conservative saturation
-                    IJ.run(proj_imp, "Enhance Contrast", "saturated=0.10")
-                    log(u"  >>> Auto B&C applied (saturated=0.10)")
+                    IJ.run(proj_imp, "Enhance Contrast", "saturated=0.35")
+                    log(u"  >>> Auto B&C applied")
             except Exception as e:
                 logd(u"  Auto B&C failed: {}".format(e))
             
@@ -1543,21 +1361,21 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     IJ.saveAs(proj_imp, "Tiff", proj_out)
                     log(u"  >>> Saved: {}".format(proj_filename))
                     proj_count += 1
-                    saved_files.append(proj_out)
                 except Exception as e:
                     log(u"  !!! Save failed: {}".format(e))
                     error_count += 1
             
-            # Don't show yet - save for phase 3
-            if not do_show:
+            # Show if requested
+            if do_show:
+                proj_imp.show()
+                log(u"  >>> Displayed projection")
+            elif not do_save:
                 proj_imp.close()
-            else:
-                saved_files.append((proj_imp, proj_filename))
             
             # Close source image
             imp.close()
             
-            # Garbage collection after each file
+            # Garbage collection
             System.gc()
             
         except Exception as e:
@@ -1568,93 +1386,14 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     
     log(u"")
     log(u"=" * 70)
-    log(u"=== PROJECTION PHASE COMPLETE ===")
-    
-    projection_time = time.time() - projection_start
-    
-    log(u"  Processed: {}".format(proj_count))
-    log(u"  Skipped: {}".format(skip_count))
-    log(u"  Errors: {}".format(error_count))
-    log(u"  Projection Time: {}".format(format_elapsed_time(projection_time)))
-    log(u"=" * 70)
-    log(u"")
-    
-    # Clean memory after projection phase
-    System.gc()
-    log_memory()
-    
-    # PHASE 3: DISPLAY (Open files only if requested)
-    display_time = 0.0
-    
-    if do_show and saved_files:
-        display_start = time.time()
-        
-        log(u"")
-        log(u"=" * 70)
-        log(u"=== DISPLAY PHASE: Opening Projections ===")
-        log(u"=" * 70)
-        log(u"")
-        
-        for item in saved_files:
-            try:
-                if isinstance(item, tuple):
-                    # Already have ImagePlus object
-                    proj_imp, proj_filename = item
-                    proj_imp.show()
-                    log(u"  >>> Displayed: {}".format(proj_filename))
-                else:
-                    # Need to open file
-                    proj_path = item
-                    proj_filename = os.path.basename(proj_path)
-                    proj_imp = IJ.openImage(proj_path)
-                    if proj_imp:
-                        proj_imp.show()
-                        log(u"  >>> Opened: {}".format(proj_filename))
-                    else:
-                        log(u"  !!! Failed to open: {}".format(proj_filename))
-            except Exception as e:
-                log(u"  !!! Display failed: {}".format(e))
-        
-        display_time = time.time() - display_start
-        
-        log(u"")
-        log(u"=== DISPLAY COMPLETE ===")
-        log(u"  Display Time: {}".format(format_elapsed_time(display_time)))
-        log(u"")
-    
-    # Cleanup temp directory if discovery was used
-    if temp_dir and os.path.exists(temp_dir):
-        try:
-            import shutil
-            shutil.rmtree(temp_dir)
-            logd(u"Cleaned up temp directory: {}".format(temp_dir))
-        except Exception as e:
-            logd(u"Failed to cleanup temp directory: {}".format(e))
-    
-    log(u"")
-    log(u"=" * 70)
     log(u"=== BATCH COMPLETE ===")
-    
-    # Calculate elapsed time
-    batch_end_time = time.time()
-    batch_elapsed = batch_end_time - batch_start_time
-    
-    log(u"  Files Found: {}".format(len(tif_files) + excluded_count))
-    log(u"  Already-Projected (Excluded): {}".format(excluded_count))
     log(u"  Processed: {}".format(proj_count))
     log(u"  Skipped: {}".format(skip_count))
     log(u"  Errors: {}".format(error_count))
-    log(u"")
-    log(u"  --- Timing ---")
-    if discovery_time > 0:
-        log(u"  Discovery Phase: {}".format(format_elapsed_time(discovery_time)))
-    log(u"  Projection Phase: {}".format(format_elapsed_time(projection_time)))
-    if display_time > 0:
-        log(u"  Display Phase: {}".format(format_elapsed_time(display_time)))
-    log(u"  Total Time: {}".format(format_elapsed_time(batch_elapsed)))
     log(u"=" * 70)
     log(u"")
     log_memory()
+
 # ==============================================================================
 # PART 5: MAIN ENTRY POINT
 # ==============================================================================
@@ -1663,16 +1402,16 @@ def show_splash():
     """Display ASCII art splash screen"""
     splash = u"""
       +---+---+---+
-      |   Z   |   |    BATCH Z-PROJECTION v1.3
+      |   Z   |   |    BATCH Z-PROJECTION v1.2
       +---+---+---+     ========================
       | P | r | o |    > Standalone Tool
-      +---+---+---+     > Threaded Discovery
+      +---+---+---+     > Layer Selection
       | j | e | c |    > Valley-Emphasis Otsu
-      +---+---+---+     > Phased Processing
+      +---+---+---+     > Batch Processing
 
       [Standalone] Independent from main.jy
       [Based on] CZI-Stitcher v37.5 patterns
-      [New in v1.3] Threaded discovery + improved UI
+      [New in v1.2] Valley-Emphasis for class imbalance
       [Status] Initializing...
     """
     log(splash)
@@ -1695,7 +1434,7 @@ def main():
         _last_out = _home
     
     # Parameter dialog
-    gd = GenericDialog("Batch Z-Projection - Parameters v1.3")
+    gd = GenericDialog("Batch Z-Projection - Parameters v1.2")
     
     gd.addMessage("=== Directory Paths ===")
     gd.addStringField("Input Folder (TIFF stacks):", _last_in, 50)
@@ -1740,10 +1479,8 @@ def main():
     gd.addNumericField("Analyze channel (1-based):", 1, 0)
     
     gd.addMessage("=== Output Options ===")
-    gd.addChoice("Output", ["Save only", "Save and Show", "Show only (testing)"], "Save only")
-    gd.addMessage("  'Save only': Best for batch processing")
-    gd.addMessage("  'Save and Show': Opens files after all projections complete")
-    gd.addMessage("  'Show only': For testing (projections NOT saved)")
+    gd.addCheckbox("Save Projections", True)
+    gd.addCheckbox("Show Projections", False)
     
     gd.showDialog()
     
@@ -1808,17 +1545,13 @@ def main():
     sigma = float(gd.getNextNumber())
     channel_index = int(gd.getNextNumber())
     
-    # Get output options from dropdown
-    output_choice = gd.getNextChoice()
-    if "Save only" in output_choice:
-        do_save = True
-        do_show = False
-    elif "Save and Show" in output_choice:
-        do_save = True
-        do_show = True
-    else:  # Show only
-        do_save = False
-        do_show = True
+    do_save = (int(gd.getNextBoolean()) == 1)
+    do_show = (int(gd.getNextBoolean()) == 1)
+    
+    # Validate output options
+    if not do_save and not do_show:
+        log(u"!!! Error: At least one output option must be enabled")
+        return
     
     # Log parameters
     log(u"")
