@@ -1,6 +1,6 @@
-# Specialised CZI Stitcher v37.5 (Stable)
+# Specialised CZI Stitcher v37.6 (Stable)
 
-> **Enhanced Release with Robust Z-Projection and Smart Progress Tracking**
+> **Enhanced Release with Simplified Workflow and Dedicated Projection Tool**
 >
 > **Development Method:** Vibe Coding  
 > **Vision & Validation:** [Ixytocin](https://github.com/Ixytocin)  
@@ -14,15 +14,17 @@
 
 ```
 your-folder/
-├── main.jy                    ← Main script (run this in Fiji)
-└── metadata_correction.py     ← Required module (same folder!)
+├── main.jy                    ← Main stitching script (run this in Fiji)
+├── metadata_correction.py     ← Required module (same folder!)
+└── batch_z_projection.jy      ← Optional: Advanced Z-projection tool
 ```
 
 **Verification:** When you run `main.jy`, check Fiji's log window:
 - ✅ **Success:** `[DEBUG] Metadata correction module loaded successfully`
 - ❌ **Error:** `[DEBUG] Metadata correction module not available`
 
-📖 **Full Installation Guide:** See [METADATA_CORRECTION_README.md](METADATA_CORRECTION_README.md)
+📖 **Full Installation Guide:** See [main/METADATA_CORRECTION_README.md](main/METADATA_CORRECTION_README.md)
+📖 **Z-Projection Guide:** See [main/BATCH_Z_PROJECTION_README.md](main/BATCH_Z_PROJECTION_README.md)
 
 ---
 
@@ -47,16 +49,19 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 - **Pixel Size Accuracy**: Extracts correct scaling from OME-XML (avoiding 10x errors)
 - **Rolling Ball Background Subtraction**: Optional per-tile shading correction
 
-### New in v37.5
+### New in v37.6
+- **Simplified Tool**: Removed integrated Z-projection (now separate dedicated tool)
+- **Faster Stitching**: ~200 lines of code removed, clearer focus on stitching
+- **Cleaner Interface**: Fewer parameter options, easier to use
+- **Tool Separation**: Stitching (main.jy) and projection (batch_z_projection.jy) are independent
+
+### Workflow Features
 - **Three-Folder System**: Separate input, output, and processing/temp directories
 - **Configurable Paths**: All paths saved in unique settings file (`.specialised_czi_stitcher_config.json`)
-- **Robust Z-Projection Batch**: Separate post-processing batch using proven channel-splitting method
-- **Enhanced Filenames**: Projections include z-count (e.g., `file_15z_Max.tif`)
 - **Smart BigTIFF**: Automatically uses BigTIFF format only for large files (>3.5GB)
 - **Memory Management**: Garbage collection between major processing steps
 - **Parameter Validation**: Popup dialogs guide users back to fix invalid settings
 - **Smart Progress Messages**: Emoji feedback on estimate accuracy at 100% completion
-- **Auto Brightness/Contrast**: Projections automatically enhanced for optimal visibility
 - **Batch Time Prediction**: Composite linear model estimates completion time accurately
 - **Metadata Correction System**: Adaptive correction for stage positioning errors (backlash, scale, skew)
 
@@ -74,6 +79,28 @@ Designed for ApoTome imaging and large-scale brain section reconstruction.
 - **Smart Feedback**: Emoji-based deviation messages (`:)`, `:|`, `o.O`)
 - **Configurable Defaults**: Auto-adjust OFF, user controls parameters
 - **Path Memory**: Remembers last used folders for quick workflow
+
+---
+
+## Batch Z-Projection Tool
+
+For advanced Z-projection needs, use the separate **batch_z_projection.jy** script:
+
+### Features
+- **9 Detection Methods**: Valley-Emphasis Otsu, Triangle, CV, and more for Apotome data
+- **Threaded Processing**: Dynamic thread allocation based on available RAM
+- **Smart File Exclusion**: Avoids re-processing with intelligent pattern matching
+- **Detection Method Tracing**: Filenames include method acronyms (VEO, TT, CV)
+- **Full Unicode Support**: Handles international characters
+- **Comprehensive Logging**: Detailed timing and progress information
+
+### Why Separate Tool?
+- **Focus**: Each tool does one thing well
+- **Advanced Features**: Projection tool has specialized Apotome algorithms
+- **Flexibility**: Run only what you need, when you need it
+- **Maintainability**: Simpler codebase = fewer bugs
+
+📖 **See [main/BATCH_Z_PROJECTION_README.md](main/BATCH_Z_PROJECTION_README.md) for complete documentation**
 
 ---
 
@@ -102,11 +129,11 @@ No additional installation required if using recent Fiji distribution.
 ### Basic Workflow
 
 1. **Start the script**
-   - Splash screen shows version v37.5
+   - Splash screen shows version v37.6
    - "Initializing environment..." message appears
    - "Loading filesystem..." warning for sleeping HDDs
 
-2. **Select directories** (NEW in v37.5)
+2. **Select directories**
    - **Input Folder**: Folder containing .czi files
    - **Output Folder**: Where to save stitched results
    - **Processing/Temp Folder**: Where temporary files are created
@@ -121,8 +148,6 @@ No additional installation required if using recent Fiji distribution.
    - **Max Displacement**: 5.0 pixels (default, controls tile overlap search)
    - **Show Results**: Preview stitched image
    - **Save Results**: Save to output folder
-   - **Create Z-Projection**: Optional flattened projection
-   - **Z-Projection Method**: Max Intensity, Average, Sum, SD, Median, or Min
    - **Cleanup Temp Files**: Remove temporary files after processing
    - **Auto-adjust**: OFF (default, user controls brightness/contrast)
    - **Correction Factor**: 10.0 (only applied to fallback metadata, NOT OME-XML)
@@ -135,9 +160,12 @@ No additional installation required if using recent Fiji distribution.
 
 5. **Check results**
    - Stitched images saved in output directory as `*_stitched.tif`
-   - Optional projections saved as `*_projection.tif`
    - Check if colors match original Zeiss data
    - Verify pixel size and scaling
+
+6. **Optional: Run Z-projection** (separate tool)
+   - Use `batch_z_projection.jy` for advanced projection needs
+   - See [main/BATCH_Z_PROJECTION_README.md](main/BATCH_Z_PROJECTION_README.md) for details
 
 ---
 
@@ -168,13 +196,12 @@ No additional installation required if using recent Fiji distribution.
 
 ## Known Limitations
 
-### Current Scope (v37.5 Beta)
+### Current Scope (v37.6)
 - **Tested**: Zeiss .czi files from ApoTome systems
 - **Tested**: Multi-channel (1-4 channels), multi-tile, 3D stacks
 - **Tested**: German file paths with special characters
 - **Not Tested**: Files >100 tiles, files >4 channels
 - **Not Tested**: Non-Zeiss formats (other .czi variants)
-- **Not Tested**: Z-projection with >4 channels
 
 ### Technical Constraints
 - **Jython 2.7**: Limited to Fiji's built-in Jython version
@@ -264,9 +291,17 @@ If you encounter issues, please include:
 
 ## Version History
 
-### v37.5 (Current - Enhanced Beta)
+### v37.6 (Current - Streamlined Release)
+- **Removed integrated Z-projection** - now in separate batch_z_projection.jy tool
+- **Simplified codebase** - removed ~234 lines of projection code
+- **Cleaner UI** - fewer parameters, clearer focus on stitching
+- **Tool separation** - stitching and projection are now independent workflows
+- **Updated documentation** - reflects new architecture
+- Status: Stable with simplified, focused workflow
+
+### v37.5 (Enhanced Beta)
 - Added three-folder system (input, output, processing/temp)
-- Added optional z-projection with 6 methods
+- Added integrated z-projection with 6 methods (removed in v37.6)
 - Added automatic garbage collection between major steps
 - Added smart BigTIFF (automatic based on file size >3.5GB)
 - Changed settings file to `.specialised_czi_stitcher_config.json`
@@ -274,7 +309,7 @@ If you encounter issues, please include:
 - Improved memory management to prevent RAM overflow
 - Status: Enhanced beta with improved workflow
 
-### v37.4 (Previous Stable Beta)
+### v37.4 (Stable Beta)
 - Added comprehensive debug logging with visual markers
 - Fixed critical silent exception in 3D stack saving
 - Added exception logging for stage label extraction
