@@ -1213,33 +1213,47 @@ def create_robust_projection(imp, projection_method, start_slice, stop_slice):
 # PART 4: BATCH PROCESSING
 # ==============================================================================
 
-def is_already_projected(filename):
+def is_already_projected(filename, current_method, current_layer_mode):
     """
-    Check if filename appears to be an already-projected file
+    Check if filename appears to be already-projected with SAME method AND layer selection
     
-    ONLY checks if projection pattern appears as SUFFIX (at the end before .tif)
-    This avoids false positives like "Max svz.czi" where Max is a sample name.
+    ONLY excludes if BOTH the projection method AND layer selection mode match.
+    This allows:
+    - Different methods: sample_max_all_32.tif can be re-projected as avg
+    - Different layer selection: sample_max_all_32.tif can be re-projected with z6to22
     
-    Looks for projection method abbreviations in filename suffix:
-    - _max_, _avg_, _sum_, _sd_, _med_, _min_
-    - Followed by operation indicators: _all_, _z, _discard, _thr
-    - Must appear near the end of filename (before extension)
+    Layer selection indicators:
+    - all_ : Use all layers
+    - discard : Discard top/bottom
+    - z : Threshold-based (e.g., z6to22, z1to28_thr)
     
-    Examples of projected files to exclude:
-    - sample_stitched_max_all_32.tif  (EXCLUDE)
-    - brain_avg_z6to22_17.tif         (EXCLUDE)
-    - tissue_sum_z1to28_discard2-2_30.tif (EXCLUDE)
-    
-    Examples that should NOT be excluded:
-    - Max svz.czi                     (KEEP - Max is sample name prefix)
-    - brain_max_intensity.tif         (KEEP - doesn't match suffix pattern)
-    - sample_avg.tif                  (KEEP - no operation indicator)
+    Examples:
+    - sample_max_all_32.tif + (Max, all) -> EXCLUDE (same method+mode)
+    - sample_max_all_32.tif + (Avg, all) -> ALLOW (different method)
+    - sample_max_all_32.tif + (Max, discard) -> ALLOW (different layer mode)
+    - sample_max_all_32.tif + (Max, threshold) -> ALLOW (different layer mode)
     
     Args:
         filename: Filename to check (just the name, not full path)
+        current_method: Current projection method (e.g., "Max Intensity")
+        current_layer_mode: Current layer mode ("all", "discard", "threshold")
     
-    Returns: True if file appears to be already projected, False otherwise
+    Returns: True if file appears to be already projected with SAME method+mode
     """
+    # Map current method to abbreviation
+    method_map = {
+        "Max Intensity": "_max_",
+        "Average Intensity": "_avg_",
+        "Sum Slices": "_sum_",
+        "Standard Deviation": "_sd_",
+        "Median": "_med_",
+        "Min Intensity": "_min_"
+    }
+    
+    current_abbrev = method_map.get(current_method, "").lower()
+    if not current_abbrev:
+        return False  # Unknown method, don't exclude
+    
     # Remove extension to get base name
     fname_lower = filename.lower()
     if fname_lower.endswith('.tif'):
@@ -1249,28 +1263,37 @@ def is_already_projected(filename):
     else:
         base = fname_lower
     
-    # Projection method abbreviations with underscores (must be bounded)
-    methods = ['_max_', '_avg_', '_sum_', '_sd_', '_med_', '_min_']
-    
-    # Check if any method abbreviation is in the LAST portion of filename
+    # Check if the CURRENT method abbreviation is in the LAST portion of filename
     # We look at the last 50 characters to focus on suffix
     suffix_check = base[-50:] if len(base) > 50 else base
     
-    for method in methods:
-        if method in suffix_check:
-            # Find position of method in suffix
-            method_pos = suffix_check.rfind(method)
-            
-            # Get everything after the method
-            after_method = suffix_check[method_pos + len(method):]
-            
-            # Check for operation indicators after the method
-            # These patterns are specific to our projection output format
-            if any(indicator in after_method for indicator in ['all_', 'z', 'discard', 'thr']):
-                # Also check that numbers follow (like all_32, z6to22, etc.)
-                # This makes it even more specific to projection output
-                if any(c.isdigit() for c in after_method):
-                    return True
+    if current_abbrev in suffix_check:
+        # Find position of method in suffix
+        method_pos = suffix_check.rfind(current_abbrev)
+        
+        # Get everything after the method
+        after_method = suffix_check[method_pos + len(current_abbrev):]
+        
+        # Check for operation indicators matching current layer mode
+        mode_match = False
+        
+        if current_layer_mode == "all":
+            # Looking for _all_ pattern
+            if 'all_' in after_method and any(c.isdigit() for c in after_method):
+                mode_match = True
+        elif current_layer_mode == "discard":
+            # Looking for _discard pattern
+            if 'discard' in after_method and any(c.isdigit() for c in after_method):
+                mode_match = True
+        elif current_layer_mode == "threshold":
+            # Looking for z pattern (z6to22, z1to28_thr, etc.)
+            if 'z' in after_method and any(c.isdigit() for c in after_method):
+                # Make sure it's not _all_ (which also has digits)
+                if 'all_' not in after_method:
+                    mode_match = True
+        
+        if mode_match:
+            return True
     
     return False
 
@@ -1321,9 +1344,9 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
         if not (f.lower().endswith(".tif") or f.lower().endswith(".tiff")):
             continue
         
-        # EXCLUDE already-projected files (check suffix pattern only)
-        if is_already_projected(f):
-            log(u"  EXCLUDED (already projected): {}".format(f))
+        # EXCLUDE already-projected files with SAME method AND layer selection
+        if is_already_projected(f, projection_method, layer_mode):
+            log(u"  EXCLUDED (already projected with same method+mode): {}".format(safe_unicode(f)))
             excluded_count += 1
             continue
         
@@ -1393,8 +1416,8 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     
     for idx, tif_path in enumerate(tif_files):
         try:
-            fname = os.path.basename(tif_path)
-            base_name = fname.replace(".tif", "").replace(".tiff", "")
+            fname = safe_unicode(os.path.basename(tif_path))
+            base_name = fname.replace(u".tif", u"").replace(u".tiff", u"")
             
             log(u"")
             log(u"[{}/{}] Projecting: {}".format(idx + 1, len(tif_files), fname))
@@ -1404,11 +1427,11 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 result = next((r for r in discovery_results if r['file'] == tif_path), None)
                 if result:
                     if result.get('skip'):
-                        log(u"  SKIP - {}".format(result.get('skip_reason')))
+                        log(u"  SKIP - {}".format(safe_unicode(result.get('skip_reason'))))
                         skip_count += 1
                         continue
                     if result.get('error'):
-                        log(u"  !!! ERROR - {}".format(result.get('error')))
+                        log(u"  !!! ERROR - {}".format(safe_unicode(result.get('error'))))
                         error_count += 1
                         continue
                     if not result.get('success'):
@@ -1541,11 +1564,11 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 proj_out = os.path.join(output_dir, proj_filename)
                 try:
                     IJ.saveAs(proj_imp, "Tiff", proj_out)
-                    log(u"  >>> Saved: {}".format(proj_filename))
+                    log(u"  >>> Saved: {}".format(safe_unicode(proj_filename)))
                     proj_count += 1
                     saved_files.append(proj_out)
                 except Exception as e:
-                    log(u"  !!! Save failed: {}".format(e))
+                    log(u"  !!! Save failed: {}".format(safe_unicode(e)))
                     error_count += 1
             
             # Don't show yet - save for phase 3
@@ -1561,7 +1584,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             System.gc()
             
         except Exception as e:
-            log(u"  !!! Processing failed: {}".format(e))
+            log(u"  !!! Processing failed: {}".format(safe_unicode(e)))
             import traceback
             traceback.print_exc()
             error_count += 1
@@ -1601,11 +1624,11 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     # Already have ImagePlus object
                     proj_imp, proj_filename = item
                     proj_imp.show()
-                    log(u"  >>> Displayed: {}".format(proj_filename))
+                    log(u"  >>> Displayed: {}".format(safe_unicode(proj_filename)))
                 else:
                     # Need to open file
                     proj_path = item
-                    proj_filename = os.path.basename(proj_path)
+                    proj_filename = safe_unicode(os.path.basename(proj_path))
                     proj_imp = IJ.openImage(proj_path)
                     if proj_imp:
                         proj_imp.show()
@@ -1613,7 +1636,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     else:
                         log(u"  !!! Failed to open: {}".format(proj_filename))
             except Exception as e:
-                log(u"  !!! Display failed: {}".format(e))
+                log(u"  !!! Display failed: {}".format(safe_unicode(e)))
         
         display_time = time.time() - display_start
         
@@ -1713,31 +1736,30 @@ def main():
                  "Max Intensity")
     
     gd.addMessage("=== Layer Selection Mode ===")
-    gd.addChoice("Mode", ["Use all layers", "Discard top/bottom", "Threshold-based"], 
-                 "Use all layers")
+    gd.addChoice("Mode", [
+        "Use all layers",
+        "Discard top/bottom",
+        "Valley-Emphasis Otsu (BEST for Apotome)", 
+        "Weighted Otsu (for rare signal)",
+        "Otsu (standard)",
+        "Triangle (focus scores)",
+        "CV (coefficient of variation)",
+        "Fast (histogram min)", 
+        "Mean + sigma (DEPRECATED)", 
+        "Sample center (fast)",
+        "User-defined threshold"
+    ], "Use all layers")
+    gd.addMessage("  All: Fastest, uses every slice")
+    gd.addMessage("  Discard: Manual trimming (remove top/bottom slices)")
+    gd.addMessage("  Detection methods: Automatic threshold-based selection")
+    gd.addMessage("  Valley-Emphasis: BEST for Apotome with 90% baseline + 10% signal")
     
-    gd.addMessage("--- Discard Mode Options ---")
-    gd.addNumericField("Discard top N slices:", 0, 0)
-    gd.addNumericField("Discard bottom N slices:", 0, 0)
-    
-    gd.addMessage("--- Threshold Mode Options ---")
-    gd.addMessage("  BEST for Apotome with class imbalance: Valley-Emphasis Otsu")
-    gd.addChoice("Noise detection method", ["Valley-Emphasis Otsu (BEST for Apotome)", 
-                                             "Weighted Otsu (for rare signal)",
-                                             "Otsu (standard)",
-                                             "Triangle (focus scores)",
-                                             "CV (coefficient of variation)",
-                                             "Fast (histogram min)", 
-                                             "Mean + sigma (DEPRECATED)", 
-                                             "Sample center (fast)",
-                                             "User-defined threshold"],
-                 "Valley-Emphasis Otsu (BEST for Apotome)")
-    gd.addMessage("  Valley-Emphasis: Handles 90% baseline + 10% signal")
-    gd.addMessage("  Includes hardening constraints (sigma check, SNR gate)")
-    gd.addMessage("  Note: Mean+sigma fails for Apotome data")
-    gd.addNumericField("User threshold (if user-defined):", 0.0, 2)
-    gd.addNumericField("Sigma multiplier (for mean method):", 3.0, 1)
-    gd.addNumericField("Analyze channel (1-based):", 1, 0)
+    gd.addMessage("--- Mode Parameters ---")
+    gd.addNumericField("Discard top N slices (discard mode):", 0, 0)
+    gd.addNumericField("Discard bottom N slices (discard mode):", 0, 0)
+    gd.addNumericField("User threshold (user-defined mode):", 0.0, 2)
+    gd.addNumericField("Sigma multiplier (mean+sigma mode):", 3.0, 1)
+    gd.addNumericField("Analyze channel (detection modes, 1-based):", 1, 0)
     
     gd.addMessage("=== Output Options ===")
     gd.addChoice("Output", ["Save only", "Save and Show", "Show only (testing)"], "Save only")
@@ -1770,40 +1792,41 @@ def main():
     _save_config(_config)
     
     projection_method = gd.getNextChoice()
-    layer_mode_choice = gd.getNextChoice()
+    mode_choice = gd.getNextChoice()
     
-    # Map choice to internal mode name
-    if layer_mode_choice == "Use all layers":
+    # Map choice to internal mode name and threshold method
+    if mode_choice == "Use all layers":
         layer_mode = "all"
-    elif layer_mode_choice == "Discard top/bottom":
+        threshold_method = "valley_otsu"  # Default, won't be used
+    elif mode_choice == "Discard top/bottom":
         layer_mode = "discard"
+        threshold_method = "valley_otsu"  # Default, won't be used
     else:
+        # It's a threshold method
         layer_mode = "threshold"
+        
+        # Map choice to internal threshold method name
+        if "Valley-Emphasis" in mode_choice:
+            threshold_method = "valley_otsu"
+        elif "Weighted Otsu" in mode_choice:
+            threshold_method = "weighted_otsu"
+        elif "Otsu" in mode_choice:
+            threshold_method = "otsu"
+        elif "Triangle" in mode_choice:
+            threshold_method = "triangle"
+        elif "CV" in mode_choice or "coefficient" in mode_choice:
+            threshold_method = "cv"
+        elif "Fast" in mode_choice:
+            threshold_method = "fast"
+        elif "Mean" in mode_choice:
+            threshold_method = "mean"
+        elif "Sample" in mode_choice:
+            threshold_method = "sample"
+        else:  # User-defined
+            threshold_method = "user"
     
     discard_top = int(gd.getNextNumber())
     discard_bottom = int(gd.getNextNumber())
-    
-    threshold_method_choice = gd.getNextChoice()
-    # Map choice to internal method name
-    if "Valley-Emphasis" in threshold_method_choice:
-        threshold_method = "valley_otsu"
-    elif "Weighted Otsu" in threshold_method_choice:
-        threshold_method = "weighted_otsu"
-    elif "Otsu" in threshold_method_choice:
-        threshold_method = "otsu"
-    elif "Triangle" in threshold_method_choice:
-        threshold_method = "triangle"
-    elif "CV" in threshold_method_choice or "coefficient" in threshold_method_choice:
-        threshold_method = "cv"
-    elif "Fast" in threshold_method_choice:
-        threshold_method = "fast"
-    elif "Mean" in threshold_method_choice:
-        threshold_method = "mean"
-    elif "Sample" in threshold_method_choice:
-        threshold_method = "sample"
-    else:
-        threshold_method = "user"
-    
     user_threshold = float(gd.getNextNumber())
     sigma = float(gd.getNextNumber())
     channel_index = int(gd.getNextNumber())
