@@ -1,4 +1,4 @@
-# Specialised CZI Stitcher v37.5 - User Guide
+# Specialised CZI Stitcher v37.6 - User Guide
 
 ## Quick Start
 
@@ -9,12 +9,13 @@
 5. Adjust parameters if needed (defaults usually work)
 6. Click OK
 7. Monitor log window for progress
+8. **(Optional)** Run `batch_z_projection.jy` for advanced Z-projections
 
 ---
 
 ## Parameter Explanations
 
-### Directory Selection (NEW in v37.5)
+### Directory Selection
 
 #### Input Folder
 **What it is**: Folder containing your .czi files
@@ -32,7 +33,7 @@
 - Must have write permissions
 - Needs enough free space for stitched results
 
-#### Processing/Temp Folder (NEW in v37.5)
+#### Processing/Temp Folder
 **What it is**: Where temporary files are stored during processing
 
 **Default**: Can be same as output folder
@@ -117,79 +118,33 @@
 
 **Turn OFF if**: Only want to preview without saving
 
-### Create Z-Projection (NEW in v37.5)
-**What it is**: Optionally create flattened 2D projection from 3D stack
-
-**Default**: Unchecked (OFF)
-
-**Turn ON if**: You want a 2D overview image in addition to 3D stack
-
-**Output**: Saved as `*_projection.tif` in output folder
-
-**Note**: Only created if stack has multiple z-slices
-
-### Z-Projection Method (NEW in v37.5)
-**What it is**: How to combine z-slices into single 2D image
-
-**Options**:
-- **Max Intensity** (default): Brightest pixel at each position
-- **Average Intensity**: Mean intensity across slices
-- **Sum Slices**: Total intensity (sum) across slices
-- **Standard Deviation**: Variability across slices
-- **Median**: Median intensity across slices
-- **Min Intensity**: Dimmest pixel at each position
-
-**Recommendation**: Use Max Intensity for most fluorescence microscopy
-
-**When to use others**:
-- Average: For quantification with less noise
-- Sum: For total signal intensity
-- SD: To visualize where signal varies across z
-- Median: For robust average with outlier rejection
-- Min: Rarely used (background levels)
-
-### Output Options (NEW in v37.5)
+### Output Options (v37.6)
 
 **What they are**: Control what outputs are created
 
 **Options**:
 - **Save Stitched Stack**: Save the 3D stitched result to file
 - **Show Stitched Stack**: Display the 3D stitched result in Fiji
-- **Save Z-Projection**: Save a 2D flattened projection to file
-- **Show Z-Projection**: Display the 2D projection in Fiji
 
 **Requirements**:
 - At least one option must be enabled
-- To create projections, "Save Stitched Stack" MUST be enabled
-- Projections are created from saved files in a separate batch after stitching
 
 **Validation**:
 - If no options selected → popup dialog with error, returns to parameters
-- If projection enabled without save stack → popup dialog with error, returns to parameters
 
-### Z-Projection Method (NEW in v37.5)
+### Z-Projection (Removed in v37.6)
 
-**What it is**: How z-slices are flattened into 2D projection
+**Note**: Z-projection functionality has been removed from main.jy and moved to a dedicated tool.
 
-**Options**:
-- **Max Intensity**: Brightest pixel at each position (default, best for most imaging)
-- **Average Intensity**: Mean pixel value (smoother, reduces noise)
-- **Sum Slices**: Adds all pixel values (increases signal but also noise)
-- **Standard Deviation**: Shows variation across z-stack
-- **Median**: Middle value (good for removing outliers)
-- **Min Intensity**: Darkest pixel (rarely used)
+**For Z-projection needs**, use the separate **batch_z_projection.jy** script which provides:
+- 9 advanced detection methods (Valley-Emphasis Otsu, Triangle, CV, etc.)
+- Threaded processing with dynamic RAM allocation
+- Smart file exclusion
+- Detection method tracing in filenames
 
-**When projections are created**:
-- AFTER all stitching completes
-- Processes only `*_stitched.tif` files from output folder
-- Uses robust channel-splitting method for color preservation
-- Auto brightness/contrast adjustment applied for optimal visibility
+📖 See [main/BATCH_Z_PROJECTION_README.md](main/BATCH_Z_PROJECTION_README.md) for complete documentation
 
-**Output filename format**:
-- `basename_<num>z_<method>.tif`
-- Example: `Sample01_15z_Max.tif` (15 z-slices, Max Intensity projection)
-
-**Recommendation**: Use Max Intensity for fluorescence microscopy
+### Cleanup Temp Files
 **What it is**: Delete temporary files after processing completes
 
 **Default**: Checked (ON)
@@ -513,11 +468,16 @@ Finished fusion (33493 ms)
 
 **Release Date**: December 2025
 
-**Status**: Beta - suitable for testing and evaluation
+**Status**: Stable - production ready
 
-**What's New in v37.5**:
+**What's New in v37.6**:
+- **Removed integrated Z-projection** - now in separate batch_z_projection.jy tool
+- **Simplified interface** - fewer parameters, clearer focus
+- **Streamlined codebase** - ~234 lines of code removed
+- Tool separation for better maintainability
+
+**What Was in v37.5**:
 - Three-folder system for better organization
-- Optional z-projection with 6 methods
 - Automatic garbage collection for memory management
 - Smart BigTIFF selection based on file size
 - RAM disk support via manual folder selection
@@ -527,7 +487,6 @@ Finished fusion (33493 ms)
 - Not tested with > 4 channels
 - Not tested with non-Zeiss .czi files
 - LUT color application works but needs user validation
-- Z-projection not tested with >4 channels
 
 **Recommended Use**:
 - Research microscopy labs
