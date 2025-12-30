@@ -216,7 +216,7 @@ def log_memory():
         log(u"[MEMORY] Used: {:.1f}MB / Total: {:.1f}MB / Max: {:.1f}MB".format(used_mb, total_mb, max_mb))
         return (used_mb, total_mb, max_mb, free_mb)
     except Exception as e:
-        logd(u"Memory logging failed: {}".format(e))
+        logd(u"Memory logging failed: {}".format(safe_unicode(e)))
         return (0, 0, 0, 0)
 
 def calculate_optimal_threads(file_size_mb, target_ram_usage_percent=0.8):
@@ -257,7 +257,7 @@ def calculate_optimal_threads(file_size_mb, target_ram_usage_percent=0.8):
         return optimal_threads
         
     except Exception as e:
-        logd(u"  Thread calculation failed: {}, defaulting to 1 thread".format(e))
+        logd(u"  Thread calculation failed: {}, defaulting to 1 thread".format(safe_unicode(e)))
         return 1
 
 def _load_config():
@@ -272,7 +272,7 @@ def _load_config():
         else:
             logd(u"Config file does not exist, using defaults")
     except Exception as e:
-        logd(u"Config load failed: {}".format(e))
+        logd(u"Config load failed: {}".format(safe_unicode(e)))
     return {}
 
 def _save_config(cfg):
@@ -283,7 +283,7 @@ def _save_config(cfg):
             json.dump(cfg, f, ensure_ascii=False, indent=2)
             logd(u"Config saved successfully")
     except Exception as e:
-        logd(u"Config save failed: {}".format(e))
+        logd(u"Config save failed: {}".format(safe_unicode(e)))
 
 # ==============================================================================
 # PART 2: DISCOVERY PHASE (Parallel Z-Profile Calculation)
@@ -746,7 +746,7 @@ def detect_noise_threshold_fast(imp, channel_index=1):
         return float(threshold)
         
     except Exception as e:
-        logd(u"  Fast noise detection failed: {}".format(e))
+        logd(u"  Fast noise detection failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def detect_noise_threshold_mean(imp, channel_index=1, sigma_multiplier=3.0):
@@ -786,7 +786,7 @@ def detect_noise_threshold_mean(imp, channel_index=1, sigma_multiplier=3.0):
         return float(threshold)
         
     except Exception as e:
-        logd(u"  Mean noise detection failed: {}".format(e))
+        logd(u"  Mean noise detection failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def detect_noise_threshold_otsu(imp, channel_index=1, weighted=False, valley_emphasis=False, apply_constraints=True):
@@ -883,7 +883,7 @@ def detect_noise_threshold_otsu(imp, channel_index=1, weighted=False, valley_emp
         return float(threshold)
         
     except Exception as e:
-        logd(u"  Otsu thresholding failed: {}".format(e))
+        logd(u"  Otsu thresholding failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def detect_noise_threshold_triangle(imp, channel_index=1):
@@ -936,7 +936,7 @@ def detect_noise_threshold_triangle(imp, channel_index=1):
             return float(threshold)
         
     except Exception as e:
-        logd(u"  Triangle thresholding failed: {}".format(e))
+        logd(u"  Triangle thresholding failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def detect_noise_threshold_cv(imp, channel_index=1):
@@ -993,7 +993,7 @@ def detect_noise_threshold_cv(imp, channel_index=1):
             return float(threshold)
         
     except Exception as e:
-        logd(u"  CV thresholding failed: {}".format(e))
+        logd(u"  CV thresholding failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def detect_noise_threshold_sample(imp, channel_index=1, sample_size=0.1):
@@ -1050,7 +1050,7 @@ def detect_noise_threshold_sample(imp, channel_index=1, sample_size=0.1):
         return float(threshold)
         
     except Exception as e:
-        logd(u"  Sample noise detection failed: {}".format(e))
+        logd(u"  Sample noise detection failed: {}".format(safe_unicode(e)))
         return 0.0
 
 def select_layers_by_threshold(imp, threshold_method="valley_otsu", user_threshold=None, 
@@ -1240,7 +1240,7 @@ def create_robust_projection(imp, projection_method, start_slice, stop_slice):
             return merged_proj
             
     except Exception as e:
-        log(u"!!! Robust projection failed: {}".format(e))
+        log(u"!!! Robust projection failed: {}".format(safe_unicode(e)))
         import traceback
         for line in traceback.format_exc().split('\n'):
             logd(u"  {}".format(line))
@@ -1647,7 +1647,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     IJ.run(proj_imp, "Enhance Contrast", "saturated=0.10")
                     log(u"  >>> Auto B&C applied (saturated=0.10)")
             except Exception as e:
-                logd(u"  Auto B&C failed: {}".format(e))
+                logd(u"  Auto B&C failed: {}".format(safe_unicode(e)))
             
             # Save if requested
             if do_save:
@@ -1742,7 +1742,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             shutil.rmtree(temp_dir)
             logd(u"Cleaned up temp directory: {}".format(temp_dir))
         except Exception as e:
-            logd(u"Failed to cleanup temp directory: {}".format(e))
+            logd(u"Failed to cleanup temp directory: {}".format(safe_unicode(e)))
     
     log(u"")
     log(u"=" * 70)
