@@ -1,4 +1,4 @@
-# BATCH Z-PROJECTION v1.3
+# BATCH Z-PROJECTION v1.4
 # Standalone tool for batch Z-projection with layer selection
 # INDEPENDENT from main.jy - this is a separate pipeline tool
 #
@@ -10,21 +10,41 @@
 #     2. Discard top/bottom layers (manual trimming)
 #     3. Threshold-based selection (noise filtering)
 #   - Advanced noise detection for Apotome/SIM data:
-#     * Valley-Emphasis Otsu (BEST for class imbalance)
-#     * Weighted Otsu (for rare signal)
-#     * Triangle thresholding on focus scores
-#     * Coefficient of Variation (CV)
+#     * Valley-Emphasis Otsu (BEST for class imbalance) - VEO
+#     * Weighted Otsu (for rare signal) - WO
+#     * Standard Otsu - O
+#     * Triangle thresholding on focus scores - TT
+#     * Coefficient of Variation (CV) - CV
+#     * Fast, Sample center, Mean+sigma, User-defined - F, S, M, U
+#   - Detection method acronyms in output filenames for traceability
 #   - Threaded discovery phase (dynamic thread allocation based on available RAM)
 #   - Phased processing (Discovery → Projection → Display)
 #   - Automatic rejection of fusion artifacts (mean=0 slices)
 #   - Hardening constraints (sigma check, percentile padding, SNR gate)
-#   - Excludes already-projected files (avoids re-projecting projections)
+#   - Smart file exclusion (checks method + mode + detection method)
 #   - Batch processing with progress tracking
 #   - Preserves channel colors (LUTs)
 #   - Improved brightness/contrast (fixed for channel 1, less bright)
+#   - Full unicode support for international filenames
+#
+# FILENAME FORMAT:
+#   {base}_{method}_{operation}_{num_slices}.tif
+#   Examples:
+#     - sample_stitched_max_all_32.tif          (all layers, max projection)
+#     - brain_avg_z6to22_VEO_17.tif             (Valley-Emphasis Otsu, avg projection)
+#     - tissue_max_z1to28_TT_28.tif             (Triangle thresholding, max projection)
+#     - cells_sum_z5to20_CV_16.tif              (Coefficient of Variation, sum projection)
+#     - sample_sd_z10to25_discard2-3_14.tif     (manual discard, SD projection)
 #
 # BASED ON: Established patterns from main.jy v37.5
 # AVOIDS: All documented pitfalls from TECHDOC/PITFALLS.md
+#
+# v1.4 CHANGES:
+# - Added detection method acronyms to filenames (VEO, TT, CV, WO, O, F, S, M, U)
+# - Updated smart exclusion to check detection method in threshold mode
+# - Filenames now include method signage for full traceability
+# - Fixed unicode handling throughout (äüßö support)
+# - Simplified UI with single consolidated dropdown
 #
 # v1.3 CHANGES:
 # - Added threaded discovery phase with dynamic thread allocation (up to 80% free RAM)
@@ -62,7 +82,7 @@ from java.io import File
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v1.3"
+VERSION = "v1.4"
 MICRO = u"\u00b5"
 
 # Debug flags
@@ -1213,32 +1233,48 @@ def create_robust_projection(imp, projection_method, start_slice, stop_slice):
 # PART 4: BATCH PROCESSING
 # ==============================================================================
 
-def is_already_projected(filename, current_method, current_layer_mode):
+def is_already_projected(filename, current_method, current_layer_mode, current_threshold_method=None):
     """
     Check if filename appears to be already-projected with SAME method AND layer selection
     
     ONLY excludes if BOTH the projection method AND layer selection mode match.
+    For threshold mode, also checks detection method acronym (VEO, TT, CV, etc.)
+    
     This allows:
     - Different methods: sample_max_all_32.tif can be re-projected as avg
     - Different layer selection: sample_max_all_32.tif can be re-projected with z6to22
+    - Different detection: sample_max_z6to22_VEO_17.tif can be re-projected with TT
     
     Layer selection indicators:
-    - all_ : Use all layers
-    - discard : Discard top/bottom
-    - z : Threshold-based (e.g., z6to22, z1to28_thr)
+    - all : Use all layers (e.g., max_all_32)
+    - discard : Discard top/bottom (e.g., z1to28_discard2-2)
+    - z with acronym : Threshold-based (e.g., z6to22_VEO, z1to28_TT)
+    
+    Detection method acronyms (threshold mode):
+    - VEO : Valley-Emphasis Otsu
+    - WO : Weighted Otsu
+    - O : Standard Otsu
+    - TT : Triangle Thresholding
+    - CV : Coefficient of Variation
+    - F : Fast (histogram min)
+    - M : Mean+sigma
+    - S : Sample center
+    - U : User-defined
     
     Examples:
     - sample_max_all_32.tif + (Max, all) -> EXCLUDE (same method+mode)
     - sample_max_all_32.tif + (Avg, all) -> ALLOW (different method)
     - sample_max_all_32.tif + (Max, discard) -> ALLOW (different layer mode)
-    - sample_max_all_32.tif + (Max, threshold) -> ALLOW (different layer mode)
+    - sample_max_z6to22_VEO_17.tif + (Max, threshold, VEO) -> EXCLUDE (same all)
+    - sample_max_z6to22_VEO_17.tif + (Max, threshold, TT) -> ALLOW (different detection)
     
     Args:
         filename: Filename to check (just the name, not full path)
         current_method: Current projection method (e.g., "Max Intensity")
         current_layer_mode: Current layer mode ("all", "discard", "threshold")
+        current_threshold_method: Current detection method (e.g., "valley_otsu", "triangle")
     
-    Returns: True if file appears to be already projected with SAME method+mode
+    Returns: True if file appears to be already projected with SAME method+mode+detection
     """
     # Map current method to abbreviation
     method_map = {
@@ -1278,19 +1314,44 @@ def is_already_projected(filename, current_method, current_layer_mode):
         mode_match = False
         
         if current_layer_mode == "all":
-            # Looking for _all_ pattern
-            if 'all_' in after_method and any(c.isdigit() for c in after_method):
-                mode_match = True
+            # Looking for _all_ pattern (now just "all" without trailing underscore)
+            if 'all' in after_method and any(c.isdigit() for c in after_method):
+                # Make sure it's not part of "discard_all" or similar
+                if 'discard' not in after_method:
+                    mode_match = True
         elif current_layer_mode == "discard":
             # Looking for _discard pattern
             if 'discard' in after_method and any(c.isdigit() for c in after_method):
                 mode_match = True
         elif current_layer_mode == "threshold":
-            # Looking for z pattern (z6to22, z1to28_thr, etc.)
+            # Looking for z pattern with detection method acronym
             if 'z' in after_method and any(c.isdigit() for c in after_method):
                 # Make sure it's not _all_ (which also has digits)
-                if 'all_' not in after_method:
-                    mode_match = True
+                if 'all' not in after_method and 'discard' not in after_method:
+                    # Check detection method acronym if provided
+                    if current_threshold_method:
+                        method_acronym_map = {
+                            "valley_otsu": "veo",
+                            "weighted_otsu": "wo",
+                            "otsu": "_o_",  # Use _o_ to avoid matching "to" in z6to22
+                            "triangle": "tt",
+                            "cv": "cv",
+                            "fast": "_f_",
+                            "mean": "_m_",
+                            "sample": "_s_",
+                            "user": "_u_"
+                        }
+                        current_acronym = method_acronym_map.get(current_threshold_method, "").lower()
+                        if current_acronym:
+                            # Check if the specific detection method acronym is present
+                            if current_acronym in after_method:
+                                mode_match = True
+                        else:
+                            # Unknown detection method, match any threshold pattern
+                            mode_match = True
+                    else:
+                        # No specific detection method provided, match any threshold pattern
+                        mode_match = True
         
         if mode_match:
             return True
@@ -1345,7 +1406,7 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             continue
         
         # EXCLUDE already-projected files with SAME method AND layer selection
-        if is_already_projected(f, projection_method, layer_mode):
+        if is_already_projected(f, projection_method, layer_mode, threshold_method):
             log(u"  EXCLUDED (already projected with same method+mode): {}".format(safe_unicode(f)))
             excluded_count += 1
             continue
@@ -1515,14 +1576,26 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 "Min Intensity": "min"
             }.get(projection_method, "max")
             
-            # Operation descriptor
+            # Operation descriptor with detection method signage
             if num_used_slices == num_slices:
-                operation = u"all_{}".format(num_slices)
+                operation = u"all"
             elif layer_mode == "discard":
                 operation = u"z{}to{}_discard{}-{}".format(
                     start_slice, stop_slice, discard_top, discard_bottom)
             elif layer_mode == "threshold":
-                operation = u"z{}to{}_thr".format(start_slice, stop_slice)
+                # Add detection method acronym to filename
+                method_acronym = {
+                    "valley_otsu": "VEO",      # Valley-Emphasis Otsu
+                    "weighted_otsu": "WO",     # Weighted Otsu
+                    "otsu": "O",               # Standard Otsu
+                    "triangle": "TT",          # Triangle Thresholding
+                    "cv": "CV",                # Coefficient of Variation
+                    "fast": "F",               # Fast (histogram min)
+                    "mean": "M",               # Mean+sigma (deprecated)
+                    "sample": "S",             # Sample center
+                    "user": "U"                # User-defined
+                }.get(threshold_method, "THR")
+                operation = u"z{}to{}_{}".format(start_slice, stop_slice, method_acronym)
             else:
                 operation = u"z{}to{}".format(start_slice, stop_slice)
             
