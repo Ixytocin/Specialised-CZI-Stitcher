@@ -1,4 +1,4 @@
-# BATCH Z-PROJECTION v1.4
+# BATCH Z-PROJECTION v1.5
 # Standalone tool for batch Z-projection with layer selection
 # INDEPENDENT from main.jy - this is a separate pipeline tool
 #
@@ -38,6 +38,12 @@
 #
 # BASED ON: Established patterns from main.jy v37.5
 # AVOIDS: All documented pitfalls from TECHDOC/PITFALLS.md
+#
+# v1.5 CHANGES:
+# - Fixed unicode encoding errors for German characters (äüßö) throughout
+# - Enhanced safe_unicode() to handle Exception objects with unicode in args
+# - Removed str(e) calls that caused ASCII codec errors
+# - Now properly handles filenames like "Färbung2025-07" in error messages
 #
 # v1.4 CHANGES:
 # - Added detection method acronyms to filenames (VEO, TT, CV, WO, O, F, S, M, U)
@@ -82,7 +88,7 @@ from java.io import File
 # ==============================================================================
 # VERSION AND CONFIGURATION
 # ==============================================================================
-VERSION = "v1.4"
+VERSION = "v1.5"
 MICRO = u"\u00b5"
 
 # Debug flags
@@ -128,6 +134,17 @@ def ensure_unicode(o):
 
 def safe_unicode(o):
     """Safe unicode conversion with fallback"""
+    # Special handling for exceptions - they may contain unicode filenames
+    if isinstance(o, Exception):
+        try:
+            # Try to get the args which may contain unicode
+            if hasattr(o, 'args') and o.args:
+                return u" ".join([safe_unicode(arg) for arg in o.args])
+            else:
+                return u"{}".format(type(o).__name__)
+        except:
+            pass
+    
     try:
         return ensure_unicode(o)
     except:
@@ -362,7 +379,7 @@ class DiscoveryTask(Callable):
             return result
             
         except Exception as e:
-            result['error'] = safe_unicode(str(e))
+            result['error'] = safe_unicode(e)
             return result
 
 def run_discovery_phase(tif_files, layer_mode, discard_top, discard_bottom,
@@ -437,7 +454,7 @@ def run_discovery_phase(tif_files, layer_mode, discard_top, discard_bottom,
                 'file': tif_path,
                 'fname': safe_unicode(os.path.basename(tif_path)),
                 'success': False,
-                'error': safe_unicode(str(e))
+                'error': safe_unicode(e)
             })
             completed += 1
     
