@@ -1,3 +1,121 @@
+# Migration History
+
+This document tracks breaking changes and significant updates across versions.
+
+---
+
+# Migration Guide: v37.5 → v37.6
+
+## Overview
+
+Version 37.6 simplifies the stitching workflow by removing integrated Z-projection functionality and moving it to a dedicated tool (`batch_z_projection.jy`). This improves code maintainability, reduces complexity, and provides more advanced projection features through the specialized tool.
+
+---
+
+## What Changed
+
+### 1. Z-Projection Removed from main.jy (BREAKING CHANGE)
+
+**Old (v37.5)**: Integrated Z-projection with 6 methods in main.jy  
+**New (v37.6)**: Z-projection removed, use separate batch_z_projection.jy tool
+
+**Action Required**: 
+- If you used the integrated Z-projection feature, switch to using `batch_z_projection.jy` after stitching
+- Update any automated workflows that relied on automatic projection
+
+**Why**: 
+- **Simplified codebase**: Removed ~234 lines of projection code
+- **Better tool separation**: Stitching and projection are independent workflows
+- **Advanced features**: Dedicated tool has 9 detection methods, threaded processing, smart exclusion
+
+### 2. Parameter Dialog Simplified
+
+**Removed Parameters**:
+- ❌ "Save Z-Projection" checkbox
+- ❌ "Show Z-Projection" checkbox
+- ❌ "Z-Projection Method" dropdown
+
+**Unchanged Parameters**:
+- ✅ All stitching parameters remain the same
+- ✅ Directory selection unchanged
+- ✅ Output options for stitched stacks unchanged
+
+### 3. Output Files
+
+**Old (v37.5)**: 
+- `*_stitched.tif` (stitched 3D stack)
+- `*_15z_Max.tif` (optional projection from main.jy)
+
+**New (v37.6)**:
+- `*_stitched.tif` (stitched 3D stack only)
+- For projections: Run `batch_z_projection.jy` separately
+  - Creates files like `*_max_all_32.tif`, `*_avg_z6to22_VEO_17.tif`, etc.
+
+### 4. Version Number
+
+**Old**: v37.5  
+**New**: v37.6
+
+**Splash Screen**: Now shows "CZI-STITCHER v37.6" with note about batch_z_projection.jy
+
+---
+
+## New Workflow
+
+**Old Workflow (v37.5)**:
+```
+1. Run main.jy
+2. Enable "Save Z-Projection" checkbox
+3. Select projection method
+4. Stitching + projection done automatically
+```
+
+**New Workflow (v37.6)**:
+```
+1. Run main.jy
+2. Stitching completes → saves *_stitched.tif files
+3. (Optional) Run batch_z_projection.jy
+4. Select advanced projection options
+5. Projection batch processes all *_stitched.tif files
+```
+
+---
+
+## Advantages of New Approach
+
+1. **More Advanced Features**: 9 detection methods vs 6 basic methods
+2. **Better Performance**: Threaded processing with dynamic RAM allocation
+3. **Smart File Management**: Intelligent exclusion of already-projected files
+4. **Full Traceability**: Detection method acronyms in filenames (VEO, TT, CV)
+5. **Cleaner Codebase**: Each tool does one thing well
+6. **Flexibility**: Run projections only when needed
+
+---
+
+## Compatibility
+
+- **Input Files**: No changes, same .czi compatibility
+- **Output Files**: `*_stitched.tif` format unchanged
+- **Settings**: No config file changes
+- **Dependencies**: No new requirements
+
+---
+
+## Where to Get batch_z_projection.jy
+
+The dedicated projection tool is included in the same repository:
+```
+your-folder/
+├── main.jy                    ← Stitching tool (v37.6)
+├── batch_z_projection.jy      ← Projection tool (v1.5)
+├── metadata_correction.py     ← Required module
+└── BATCH_Z_PROJECTION_README.md
+```
+
+📖 **Full documentation**: [main/BATCH_Z_PROJECTION_README.md](main/BATCH_Z_PROJECTION_README.md)
+
+---
+
 # Migration Guide: v37.4 → v37.5
 
 ## Overview
