@@ -1243,7 +1243,7 @@ def create_robust_projection(imp, projection_method, start_slice, stop_slice):
         log(u"!!! Robust projection failed: {}".format(safe_unicode(e)))
         import traceback
         for line in traceback.format_exc().split('\n'):
-            logd(u"  {}".format(line))
+            logd(u"  {}".format(safe_unicode(line)))
         return None
 
 # ==============================================================================
