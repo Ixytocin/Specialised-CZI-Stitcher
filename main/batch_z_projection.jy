@@ -325,10 +325,15 @@ class DiscoveryTask(Callable):
         self.sigma = sigma
         self.channel_index = channel_index
         self.temp_dir = temp_dir
+        # TRACE: Extract filename from path
+        logd(u"[TRACE-DISCOVERY] Init: path={}".format(safe_unicode(tif_path[:80])))
         self.fname = safe_unicode(os.path.basename(tif_path))
+        logd(u"[TRACE-DISCOVERY]   fname type={}, value={}".format(
+            type(self.fname).__name__, safe_unicode(self.fname)))
     
     def call(self):
         """Execute discovery for this file"""
+        logd(u"[TRACE-DISCOVERY] call() for: {}".format(safe_unicode(self.fname)))
         result = {
             'file': self.tif_path,
             'fname': self.fname,
@@ -343,9 +348,14 @@ class DiscoveryTask(Callable):
         
         try:
             # Load image (read-only for discovery)
-            # Ensure path is properly encoded as unicode for ImageJ
+            # TRACE: Ensure path is properly encoded as unicode for ImageJ
+            logd(u"[TRACE-DISCOVERY] Converting path to unicode...")
+            logd(u"[TRACE-DISCOVERY]   tif_path type: {}".format(type(self.tif_path).__name__))
             tif_path_unicode = ensure_unicode(self.tif_path)
+            logd(u"[TRACE-DISCOVERY]   tif_path_unicode type: {}".format(type(tif_path_unicode).__name__))
+            logd(u"[TRACE-DISCOVERY] Opening image with IJ.openImage()...")
             imp = IJ.openImage(tif_path_unicode)
+            logd(u"[TRACE-DISCOVERY] Image opened successfully" if imp else u"[TRACE-DISCOVERY] Image open returned None")
             if imp is None:
                 result['error'] = safe_unicode("Failed to load image")
                 return result
@@ -388,13 +398,18 @@ class DiscoveryTask(Callable):
             imp.close()
             System.gc()
             
-            # Write result to temp file
+            # TRACE: Write result to temp file
             if result['success'] or result['skip']:
-                temp_file = os.path.join(self.temp_dir, "{}.json".format(
-                    safe_unicode(self.fname).replace('.tif', '').replace('.tiff', '')))
+                logd(u"[TRACE-DISCOVERY] Creating temp file path...")
+                fname_base = safe_unicode(self.fname).replace('.tif', '').replace('.tiff', '')
+                logd(u"[TRACE-DISCOVERY]   temp_dir type={}, fname_base type={}".format(
+                    type(self.temp_dir).__name__, type(fname_base).__name__))
+                temp_file = os.path.join(self.temp_dir, "{}.json".format(fname_base))
+                logd(u"[TRACE-DISCOVERY]   temp_file: {}".format(safe_unicode(temp_file[:80])))
                 with codecs.open(temp_file, 'w', encoding='utf-8') as f:
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 result['temp_file'] = temp_file
+                logd(u"[TRACE-DISCOVERY] Temp file written successfully")
             
             return result
             
@@ -1435,11 +1450,14 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     batch_start_time = time.time()
     
     # Find all TIFF files matching the filter
+    logd(u"[TRACE-FILELIST] Scanning directory: {}".format(safe_unicode(input_dir)))
     tif_files = []
     excluded_count = 0
     
     for f in os.listdir(input_dir):
+        logd(u"[TRACE-FILELIST] Checking file: {} (type={})".format(safe_unicode(f), type(f).__name__))
         if not (f.lower().endswith(".tif") or f.lower().endswith(".tiff")):
+            logd(u"[TRACE-FILELIST]   Skipping (not TIFF)")
             continue
         
         # EXCLUDE already-projected files with SAME method AND layer selection
@@ -1453,10 +1471,15 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             filter_pattern = file_filter.strip().lstrip('*').lower()
             f_lower = f.lower()
             f_base = f_lower.replace('.tif', '').replace('.tiff', '')
+            logd(u"[TRACE-FILELIST]   Filter check: pattern='{}' in base='{}'".format(
+                safe_unicode(filter_pattern), safe_unicode(f_base)))
             if filter_pattern not in f_base:
+                logd(u"[TRACE-FILELIST]   Skipping (no filter match)")
                 continue
         
-        tif_files.append(os.path.join(input_dir, f))
+        full_path = os.path.join(input_dir, f)
+        logd(u"[TRACE-FILELIST]   Adding: {} (type={})".format(safe_unicode(full_path[:80]), type(full_path).__name__))
+        tif_files.append(full_path)
     
     if excluded_count > 0:
         log(u"")
@@ -1514,8 +1537,18 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
     
     for idx, tif_path in enumerate(tif_files):
         try:
+            # TRACE: Extract filename from path
+            logd(u"[TRACE-PROJECTION] Processing file {}/{}".format(idx + 1, len(tif_files)))
+            logd(u"[TRACE-PROJECTION]   tif_path type={}, value={}".format(
+                type(tif_path).__name__, safe_unicode(tif_path[:80])))
+            
             fname = safe_unicode(os.path.basename(tif_path))
+            logd(u"[TRACE-PROJECTION]   fname type={}, value={}".format(
+                type(fname).__name__, safe_unicode(fname)))
+            
             base_name = fname.replace(u".tif", u"").replace(u".tiff", u"")
+            logd(u"[TRACE-PROJECTION]   base_name type={}, value={}".format(
+                type(base_name).__name__, safe_unicode(base_name)))
             
             log(u"")
             log(u"[{}/{}] Projecting: {}".format(idx + 1, len(tif_files), fname))
@@ -1538,9 +1571,14 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                         continue
             
             # Load image
-            # Ensure path is properly encoded as unicode for ImageJ
+            # TRACE: Ensure path is properly encoded as unicode for ImageJ
+            logd(u"[TRACE-PROJECTION] Loading image...")
+            logd(u"[TRACE-PROJECTION]   Pre-conversion tif_path type: {}".format(type(tif_path).__name__))
             tif_path_unicode = ensure_unicode(tif_path)
+            logd(u"[TRACE-PROJECTION]   Post-conversion type: {}".format(type(tif_path_unicode).__name__))
+            logd(u"[TRACE-PROJECTION]   Calling IJ.openImage()...")
             imp = IJ.openImage(tif_path_unicode)
+            logd(u"[TRACE-PROJECTION]   IJ.openImage() returned: {}".format("ImagePlus" if imp else "None"))
             if imp is None:
                 log(u"  !!! Failed to load image, skipping")
                 error_count += 1
@@ -1620,14 +1658,19 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 "Median": "med",
                 "Min Intensity": "min"
             }.get(projection_method, "max")
+            logd(u"[TRACE-PROJECTION]   method_abbrev type={}, value={}".format(
+                type(method_abbrev).__name__, safe_unicode(method_abbrev)))
             
             # Operation descriptor with detection method signage
             if num_used_slices == num_slices:
                 operation = u"all"
+                logd(u"[TRACE-PROJECTION]   operation mode: all (using all slices)")
             elif layer_mode == "discard":
                 operation = u"z{}to{}_discard{}-{}".format(
                     start_slice, stop_slice, discard_top, discard_bottom)
+                logd(u"[TRACE-PROJECTION]   operation mode: discard")
             elif layer_mode == "threshold":
+                logd(u"[TRACE-PROJECTION]   operation mode: threshold")
                 # Add detection method acronym to filename
                 method_acronym = {
                     "valley_otsu": "VEO",      # Valley-Emphasis Otsu
@@ -1640,9 +1683,26 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     "sample": "S",             # Sample center
                     "user": "U"                # User-defined
                 }.get(threshold_method, "THR")
+                logd(u"[TRACE-PROJECTION]   method_acronym type={}, value={}".format(
+                    type(method_acronym).__name__, safe_unicode(method_acronym)))
                 operation = u"z{}to{}_{}".format(start_slice, stop_slice, method_acronym)
             else:
                 operation = u"z{}to{}".format(start_slice, stop_slice)
+                logd(u"[TRACE-PROJECTION]   operation mode: default")
+            
+            logd(u"[TRACE-PROJECTION]   operation type={}, value={}".format(
+                type(operation).__name__, safe_unicode(operation)))
+            
+            # TRACE: Construct final filename
+            logd(u"[TRACE-PROJECTION] Constructing final filename from components:")
+            logd(u"[TRACE-PROJECTION]   base_name: {} (type={})".format(
+                safe_unicode(base_name), type(base_name).__name__))
+            logd(u"[TRACE-PROJECTION]   method_abbrev: {} (type={})".format(
+                safe_unicode(method_abbrev), type(method_abbrev).__name__))
+            logd(u"[TRACE-PROJECTION]   operation: {} (type={})".format(
+                safe_unicode(operation), type(operation).__name__))
+            logd(u"[TRACE-PROJECTION]   num_used_slices: {} (type={})".format(
+                num_used_slices, type(num_used_slices).__name__))
             
             proj_filename = u"{}_{}_{}_{}.tif".format(base_name, method_abbrev, operation, num_used_slices)
             logd(u"  [DEBUG]   proj_filename type: {}, value: {}".format(
@@ -1651,8 +1711,11 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             # Set title - this might fail with unicode
             try:
                 title_str = proj_filename.replace(".tif", "")
-                logd(u"  [DEBUG] Setting image title: {}".format(safe_unicode(title_str[:30])))
+                logd(u"[TRACE-PROJECTION] Setting image title...")
+                logd(u"[TRACE-PROJECTION]   title_str type={}, value={}".format(
+                    type(title_str).__name__, safe_unicode(title_str[:30])))
                 proj_imp.setTitle(title_str)
+                logd(u"[TRACE-PROJECTION]   setTitle() succeeded")
             except Exception as e:
                 logd(u"  [DEBUG] setTitle failed: {}".format(safe_unicode(e)))
                 # Continue anyway - title is not critical
@@ -1777,14 +1840,26 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 if isinstance(item, tuple):
                     # Already have ImagePlus object
                     proj_imp, proj_filename = item
+                    logd(u"[TRACE-DISPLAY] Showing already-loaded image: {}".format(
+                        safe_unicode(proj_filename)))
                     proj_imp.show()
                     log(u"  >>> Displayed: {}".format(safe_unicode(proj_filename)))
                 else:
                     # Need to open file
                     proj_path = item
+                    logd(u"[TRACE-DISPLAY] Opening saved file...")
+                    logd(u"[TRACE-DISPLAY]   proj_path type={}, value={}".format(
+                        type(proj_path).__name__, safe_unicode(proj_path[:80])))
+                    
                     proj_filename = safe_unicode(os.path.basename(proj_path))
-                    # Ensure path is properly encoded as unicode for ImageJ
+                    logd(u"[TRACE-DISPLAY]   proj_filename type={}, value={}".format(
+                        type(proj_filename).__name__, safe_unicode(proj_filename)))
+                    
+                    # TRACE: Ensure path is properly encoded as unicode for ImageJ
+                    logd(u"[TRACE-DISPLAY]   Converting to unicode for ImageJ...")
                     proj_path_unicode = ensure_unicode(proj_path)
+                    logd(u"[TRACE-DISPLAY]   proj_path_unicode type={}".format(
+                        type(proj_path_unicode).__name__))
                     proj_imp = IJ.openImage(proj_path_unicode)
                     if proj_imp:
                         proj_imp.show()
