@@ -1597,6 +1597,8 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             num_used_slices = stop_slice - start_slice + 1
             
             # Create projection
+            logd(u"  [DEBUG] Creating projection: method={}, start={}, stop={}".format(
+                safe_unicode(projection_method), start_slice, stop_slice))
             proj_imp = create_robust_projection(imp, projection_method, start_slice, stop_slice)
             
             if proj_imp is None:
@@ -1606,6 +1608,10 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 continue
             
             # Create filename with detailed operation modifier
+            logd(u"  [DEBUG] Constructing filename...")
+            logd(u"  [DEBUG]   base_name type: {}, value: {}".format(
+                type(base_name).__name__, safe_unicode(base_name[:30] if len(base_name) > 30 else base_name)))
+            
             method_abbrev = {
                 "Max Intensity": "max",
                 "Average Intensity": "avg",
@@ -1639,7 +1645,17 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 operation = u"z{}to{}".format(start_slice, stop_slice)
             
             proj_filename = u"{}_{}_{}_{}.tif".format(base_name, method_abbrev, operation, num_used_slices)
-            proj_imp.setTitle(proj_filename.replace(".tif", ""))
+            logd(u"  [DEBUG]   proj_filename type: {}, value: {}".format(
+                type(proj_filename).__name__, safe_unicode(proj_filename[:50] if len(proj_filename) > 50 else proj_filename)))
+            
+            # Set title - this might fail with unicode
+            try:
+                title_str = proj_filename.replace(".tif", "")
+                logd(u"  [DEBUG] Setting image title: {}".format(safe_unicode(title_str[:30])))
+                proj_imp.setTitle(title_str)
+            except Exception as e:
+                logd(u"  [DEBUG] setTitle failed: {}".format(safe_unicode(e)))
+                # Continue anyway - title is not critical
             
             # Auto brightness/contrast adjustment (IMPROVED FOR CHANNEL 1 AND LARGE FILES)
             try:
@@ -1673,17 +1689,34 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             
             # Save if requested
             if do_save:
-                proj_out = os.path.join(output_dir, proj_filename)
                 try:
+                    # Construct output path with proper unicode handling
+                    logd(u"  [DEBUG] Constructing output path...")
+                    logd(u"  [DEBUG]   output_dir type: {}".format(type(output_dir).__name__))
+                    logd(u"  [DEBUG]   proj_filename type: {}".format(type(proj_filename).__name__))
+                    
+                    # Ensure both are unicode before joining
+                    output_dir_unicode = ensure_unicode(output_dir)
+                    proj_filename_unicode = ensure_unicode(proj_filename)
+                    
+                    proj_out = os.path.join(output_dir_unicode, proj_filename_unicode)
+                    logd(u"  [DEBUG]   proj_out type: {}".format(type(proj_out).__name__))
+                    
                     # Ensure path is properly encoded for ImageJ
-                    # Convert unicode path to string that ImageJ can handle
                     proj_out_str = ensure_unicode(proj_out)
+                    logd(u"  [DEBUG] Saving to: {}".format(safe_unicode(proj_out_str[:50])))
+                    
                     IJ.saveAs(proj_imp, "Tiff", proj_out_str)
                     log(u"  >>> Saved: {}".format(safe_unicode(proj_filename)))
                     proj_count += 1
                     saved_files.append(proj_out)
                 except Exception as e:
-                    log(u"  !!! Save failed: {}".format(safe_unicode(e)))
+                    log(u"  !!! Save failed at step: {}".format(safe_unicode(e)))
+                    # Log full traceback for debugging
+                    import traceback
+                    for line in traceback.format_exc().split('\n'):
+                        if line.strip():
+                            logd(u"  TRACE: {}".format(safe_unicode(line)))
                     error_count += 1
             
             # Don't show yet - save for phase 3
@@ -1700,8 +1733,14 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             
         except Exception as e:
             log(u"  !!! Processing failed: {}".format(safe_unicode(e)))
+            log(u"  !!! Error type: {}".format(type(e).__name__))
+            
+            # Log full traceback to understand where exactly the error occurred
             import traceback
-            traceback.print_exc()
+            log(u"  !!! Full traceback:")
+            for line in traceback.format_exc().split('\n'):
+                if line.strip():
+                    log(u"      {}".format(safe_unicode(line)))
             error_count += 1
     
     log(u"")
