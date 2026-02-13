@@ -137,7 +137,25 @@ def safe_unicode(o):
     # Special handling for exceptions - they may contain unicode filenames
     if isinstance(o, Exception):
         try:
-            # Try to get the args which may contain unicode
+            # Handle UnicodeEncodeError and UnicodeDecodeError specially
+            if isinstance(o, (UnicodeEncodeError, UnicodeDecodeError)):
+                # For unicode errors, create a meaningful message
+                if hasattr(o, 'reason'):
+                    return u"{}: {}".format(type(o).__name__, ensure_unicode(o.reason))
+                else:
+                    return u"{}".format(type(o).__name__)
+            
+            # For other exceptions, try to get the message
+            if hasattr(o, 'message') and o.message:
+                return ensure_unicode(o.message)
+            
+            # Try converting the exception to string via ensure_unicode
+            try:
+                return ensure_unicode(str(o))
+            except:
+                pass
+            
+            # Last resort: join args with safe conversion
             if hasattr(o, 'args') and o.args:
                 return u" ".join([safe_unicode(arg) for arg in o.args])
             else:
