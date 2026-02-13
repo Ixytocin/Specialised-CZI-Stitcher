@@ -404,8 +404,13 @@ class DiscoveryTask(Callable):
                 fname_base = safe_unicode(self.fname).replace('.tif', '').replace('.tiff', '')
                 logd(u"[TRACE-DISCOVERY]   temp_dir type={}, fname_base type={}".format(
                     type(self.temp_dir).__name__, type(fname_base).__name__))
-                temp_file = os.path.join(self.temp_dir, "{}.json".format(fname_base))
-                logd(u"[TRACE-DISCOVERY]   temp_file: {}".format(safe_unicode(temp_file[:80])))
+                
+                # FIX: Convert temp_dir to unicode before joining to prevent UnicodeEncodeError
+                # when fname_base contains non-ASCII characters (e.g., German ä, ü, ß, ö)
+                temp_dir_unicode = ensure_unicode(self.temp_dir)
+                temp_file = os.path.join(temp_dir_unicode, u"{}.json".format(fname_base))
+                logd(u"[TRACE-DISCOVERY]   temp_file type={}, value={}".format(
+                    type(temp_file).__name__, safe_unicode(temp_file[:80])))
                 with codecs.open(temp_file, 'w', encoding='utf-8') as f:
                     json.dump(result, f, ensure_ascii=False, indent=2)
                 result['temp_file'] = temp_file
