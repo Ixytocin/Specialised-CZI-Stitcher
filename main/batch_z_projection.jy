@@ -343,7 +343,9 @@ class DiscoveryTask(Callable):
         
         try:
             # Load image (read-only for discovery)
-            imp = IJ.openImage(self.tif_path)
+            # Ensure path is properly encoded as unicode for ImageJ
+            tif_path_unicode = ensure_unicode(self.tif_path)
+            imp = IJ.openImage(tif_path_unicode)
             if imp is None:
                 result['error'] = safe_unicode("Failed to load image")
                 return result
@@ -1536,7 +1538,9 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                         continue
             
             # Load image
-            imp = IJ.openImage(tif_path)
+            # Ensure path is properly encoded as unicode for ImageJ
+            tif_path_unicode = ensure_unicode(tif_path)
+            imp = IJ.openImage(tif_path_unicode)
             if imp is None:
                 log(u"  !!! Failed to load image, skipping")
                 error_count += 1
@@ -1671,7 +1675,10 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
             if do_save:
                 proj_out = os.path.join(output_dir, proj_filename)
                 try:
-                    IJ.saveAs(proj_imp, "Tiff", proj_out)
+                    # Ensure path is properly encoded for ImageJ
+                    # Convert unicode path to string that ImageJ can handle
+                    proj_out_str = ensure_unicode(proj_out)
+                    IJ.saveAs(proj_imp, "Tiff", proj_out_str)
                     log(u"  >>> Saved: {}".format(safe_unicode(proj_filename)))
                     proj_count += 1
                     saved_files.append(proj_out)
@@ -1737,7 +1744,9 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                     # Need to open file
                     proj_path = item
                     proj_filename = safe_unicode(os.path.basename(proj_path))
-                    proj_imp = IJ.openImage(proj_path)
+                    # Ensure path is properly encoded as unicode for ImageJ
+                    proj_path_unicode = ensure_unicode(proj_path)
+                    proj_imp = IJ.openImage(proj_path_unicode)
                     if proj_imp:
                         proj_imp.show()
                         log(u"  >>> Opened: {}".format(proj_filename))
