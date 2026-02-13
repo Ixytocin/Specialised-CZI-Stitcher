@@ -1637,7 +1637,53 @@ def process_batch(input_dir, output_dir, projection_method, layer_mode,
                 continue
             
             start_slice, stop_slice = slice_range
+            
+            # CRITICAL FIX: Validate and trim fusion artifacts from slice range
+            # The range may include slices with mean=0 (stitching errors) that were
+            # excluded from valid_slices but are within min/max bounds
+            logd(u"  [DEBUG] Validating slice range for fusion artifacts...")
+            if num_channels > 1:
+                imp.setC(channel_index if channel_index else 1)
+            
+            # Trim fusion artifacts from start of range
+            while start_slice <= stop_slice:
+                imp.setZ(start_slice)
+                stats = imp.getStatistics(ImageStatistics.MEAN)
+                if stats.mean > 0.0:
+                    break  # Found valid slice
+                logd(u"  [DEBUG] Trimming fusion artifact at slice {}".format(start_slice))
+                start_slice += 1
+            
+            # Trim fusion artifacts from end of range
+            while stop_slice >= start_slice:
+                imp.setZ(stop_slice)
+                stats = imp.getStatistics(ImageStatistics.MEAN)
+                if stats.mean > 0.0:
+                    break  # Found valid slice
+                logd(u"  [DEBUG] Trimming fusion artifact at slice {}".format(stop_slice))
+                stop_slice -= 1
+            
+            # Check if any valid slices remain
+            if start_slice > stop_slice:
+                log(u"  !!! All slices in range are fusion artifacts (mean=0), skipping")
+                imp.close()
+                skip_count += 1
+                continue
+            
+            # Check for fusion artifacts in middle of range (warn but continue)
+            has_mid_artifacts = False
+            for z in range(start_slice + 1, stop_slice):
+                imp.setZ(z)
+                stats = imp.getStatistics(ImageStatistics.MEAN)
+                if stats.mean <= 0.0:
+                    has_mid_artifacts = True
+                    logd(u"  !!! WARNING: Fusion artifact at slice {} (within range) - may cause issues".format(z))
+            
             num_used_slices = stop_slice - start_slice + 1
+            log(u"  Validated range: {} to {} (total: {} slices)".format(
+                start_slice, stop_slice, num_used_slices))
+            if has_mid_artifacts:
+                log(u"  !!! WARNING: Range contains fusion artifacts - projection may have artifacts")
             
             # Create projection
             logd(u"  [DEBUG] Creating projection: method={}, start={}, stop={}".format(
